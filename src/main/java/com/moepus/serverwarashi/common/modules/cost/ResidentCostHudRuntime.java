@@ -90,7 +90,7 @@ public final class ResidentCostHudRuntime {
         }
         // 一次遍历获取 ACTIVE_ONLY 与 ALL 两个视图，避免双全量扫描
         OwnerChunks.BothMaps both = OwnerChunks.collectBothMaps(level);
-        // 锚点计数用 ALL 宇宙：分析按钮的 startSingle 按 ALL 判多 owner，ACTIVE_ONLY 计数会发出点击即拒绝的按钮
+        // 锚点计数按 ALL 全集（含已暂停 owner）：分析按钮的 startSingle 就是按 ALL 判定多 owner；若按 ACTIVE_ONLY 计数，发出的按钮点击后会因多 owner 被拒绝
         return Optional.of(CostReport.build(
                 level,
                 both.activeOnly(),

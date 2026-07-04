@@ -36,7 +36,7 @@ public final class TableReportTableRenderer {
             return y;
         }
 
-        // 算列宽 → 画表头 → 逐行画并回调装饰（行内按钮）
+        // 先计算各列宽度，再绘制表头，然后逐行绘制，每行绘制后调用 rowDecorator 补画行内按钮
         int[] widths = TableReportLayout.computeColumnWidths(section.columns(), section.rows(),
                 font::width, tableMaxW);
         int tableW = Math.min(tableMaxW, TableReportLayout.sum(widths));

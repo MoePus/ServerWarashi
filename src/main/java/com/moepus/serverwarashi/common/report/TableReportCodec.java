@@ -69,7 +69,7 @@ public final class TableReportCodec {
     }
 
     private static void writeRowButtons(RegistryFriendlyByteBuf buffer, List<List<TableReport.Button>> rowButtons) {
-        // 行数 → 每行(按钮数 → 各按钮)
+        // 先写总行数，再逐行写入该行的按钮列表（每行先写按钮数，再写各按钮内容）
         buffer.writeVarInt(rowButtons.size());
         for (List<TableReport.Button> row : rowButtons) {
             BUTTON_ROW_CODEC.encode(buffer, row);

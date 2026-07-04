@@ -97,7 +97,7 @@ public final class OwnerChunks {
     public static Map<TicketOwner, Set<Long>> collectMap(ServerLevel level, PauseMode pauseMode) {
         Map<TicketOwner, Set<Long>> ownerMap = new HashMap<>();
         TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
-            // resolve 可能触发实体/玩家查找，系统 ticket 仅在最终兜底时才 resolve 一次
+            // resolve 可能触发实体/玩家查找，开销大；系统 ticket 先只挑一张候补，仅当该 chunk 没有其他 owner 时才 resolve 这一次
             Ticket<?> fallback = null;
             int fallbackPriority = Integer.MAX_VALUE;
             boolean addedNonSystemOwner = false;
@@ -179,7 +179,7 @@ public final class OwnerChunks {
     }
 
     public static Map<TicketOwner, Set<Long>> resolveOwnersAt(ServerLevel level, long chunkPos, PauseMode pauseMode) {
-        // 不清点 BE/E，调用方按需对命中者调 stats
+        // 解析chunk命中的owner
         Map<TicketOwner, Set<Long>> owners = new HashMap<>();
         for (var owner : collectMap(level, pauseMode).entrySet()) {
             if (owner.getValue().contains(chunkPos)) {

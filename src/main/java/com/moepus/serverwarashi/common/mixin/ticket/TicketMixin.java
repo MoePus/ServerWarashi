@@ -51,7 +51,7 @@ public abstract class TicketMixin implements IPauseableTicket {
 
     @Inject(method = "getTicketLevel", at = @At("HEAD"), cancellable = true)
     private void onGetTicketLevel(CallbackInfoReturnable<Integer> cir) {
-        // 已暂停时把 ticket level 改报为 33（保持加载但停 tick）——降负载真正生效点
+        // 已暂停时对外返回 ticket level 33（区块保持加载但不再 tick）——降负载真正生效的地方
         if (serverWarashi$pauseMask != 0) {
             cir.setReturnValue(TicketUtils.PAUSED_TICKET_LEVEL);
         }

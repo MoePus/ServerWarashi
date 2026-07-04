@@ -80,7 +80,7 @@ public final class TicketPauseBatch {
             // 旧 level 取 tracker 当前值；新 level 取该 chunk 全票的 masked 最小
             int oldLevel = distanceManager.getTicketTracker().getLevel(chunkPos);
             int newLevel = getTicketLevel(ticketSet);
-            // 新 level 更小表示在"降级/恢复"方向
+            // 新 level 数值更小 = 加载强度上升（对应恢复/解除暂停方向），作为 tracker.update 的 isDecreasing 实参
             boolean isDecreasing = newLevel < oldLevel;
             distanceManager.getTicketTracker().update(chunkPos, newLevel, isDecreasing);
             // 仍有 ticket 时同步更新 ticking tracker

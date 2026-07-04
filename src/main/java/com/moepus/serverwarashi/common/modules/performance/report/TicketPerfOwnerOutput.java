@@ -55,7 +55,7 @@ public final class TicketPerfOwnerOutput {
         List<OwnerChunks.Entry> owners = OwnerChunks.collectFromMap(level, targetMap).stream()
                 .sorted(sortMode.comparator())
                 .toList();
-        // 锚点唯一性必须在 ALL 宇宙判定：分析按钮执行的 startSingle 按 ALL 判多 owner
+        // 锚点唯一性必须按 ALL 全集（含已暂停 owner）判定：分析按钮执行的 startSingle 就是按 ALL 判定是否多 owner
         Long2IntOpenHashMap ownerCounts = OwnerChunks.ownerCountByChunk(both.all().values());
         List<List<String>> rows = new ArrayList<>();
         List<List<TableReport.Button>> rowButtons = new ArrayList<>();

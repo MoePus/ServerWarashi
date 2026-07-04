@@ -78,7 +78,7 @@ final class TableReportActions {
     }
 
     static ActionHit hitAction(List<ActionHit> hits, double mouseX, double mouseY) {
-        // 命中测试：返回鼠标所在的动作命中，无则 null
+        // 返回鼠标位置命中的那个 ActionHit；都未命中则返回 null
         for (ActionHit hit : hits) {
             if (contains(hit.bounds(), mouseX, mouseY)) {
                 return hit;

@@ -20,7 +20,7 @@ public final class WarashiNetwork {
 
     @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        // optional：双方都装了才启用，缺失不报错
+        // 注册为可选通道：服务端和客户端都装了本 mod 才启用，一方没装也不报错
         event.registrar(NETWORK_VERSION)
                 .optional()
                 // 服务端→客户端：报告 payload，主线程上分发给处理器

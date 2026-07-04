@@ -21,7 +21,7 @@ public final class TicketPerfMixinHooks {
     private TicketPerfMixinHooks() {
     }
 
-    //E tick分析
+    // 实体 tick 挂点：分析会话期间对被跟踪 chunk 换成计时包装，否则按需换成驻留成本采样包装
     public static <T extends Entity> Consumer<T> wrapEntityTickConsumer(ServerLevel level, Consumer<T> original, T entity) {
         boolean hasActiveSession = TicketPerfSessionController.hasActiveSession(level);
         if (hasActiveSession) {
@@ -44,7 +44,7 @@ public final class TicketPerfMixinHooks {
         return new ResidentCostEntityConsumer<>(level, original, entityPos);
     }
 
-    //BE tick分析
+    // 方块实体 tick 挂点：分析会话期间换成计时迭代器，否则按需换成驻留成本采样迭代器
     public static Iterator<TickingBlockEntity> wrapBlockEntityIterator(Level level, Iterator<TickingBlockEntity> original) {
         if (level.isClientSide) {
             return original;
@@ -61,7 +61,7 @@ public final class TicketPerfMixinHooks {
         return new ResidentCostBlockEntityIterator(serverLevel, original);
     }
 
-    //Chunk tick分析
+    // 区块 tick 挂点：分析会话期间对被跟踪 chunk 计时，否则按需走驻留成本采样
     public static void profileChunkTick(ServerLevel level,
                                         LevelChunk chunk,
                                         int randomTickSpeed,

@@ -7,7 +7,7 @@ final class TicketBucketOwnerState {
     long lastFlipTick;
     long lastActiveCycle = -1L;
     final long firstSeenCycle;
-    // 最近一次在候选集中出现的 cycle；用于墓碑+TTL 回收，避免瞬时消失的 owner 立刻丢失滞后状态（见 bug-02）。
+    // 最近一次在候选集中出现的 cycle；调度器据此只回收长期缺席的 owner 状态，避免瞬时消失的 owner 立刻丢失滞后状态（见 bug-02）。
     long lastSeenCycle;
 
     TicketBucketOwnerState(long age, long firstSeenCycle) {

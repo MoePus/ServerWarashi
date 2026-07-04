@@ -415,7 +415,7 @@ final class OwnerPerfAnalyzer {
         final Object2LongOpenHashMap<String> spikeNanos = new Object2LongOpenHashMap<>();
         final Map<String, String> spikeLabels = new HashMap<>();
         long totalNanos;
-        // 按 chunk 暂存待冲账的纳秒耗时；MIN_VALUE 表示当前无暂存 chunk
+        // 按 chunk 暂存尚未计入汇总的纳秒耗时；MIN_VALUE 表示当前没有暂存中的 chunk
         long pendingChunkPos = Long.MIN_VALUE;
         long pendingNanos;
 

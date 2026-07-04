@@ -35,7 +35,7 @@ final class TicketBucketScheduler {
                 statesByLevel.computeIfAbsent(level.dimension(), ignored -> new HashMap<>());
 
         SchedulerConfig config = SchedulerConfig.read(age);
-        // 墓碑+TTL 回收：清掉长期缺席的 owner 状态，保留短暂缺席者（bug-02）
+        // 只回收缺席超过保留周期数（tombstoneTtlCycles）的 owner 状态，短暂缺席者保留（bug-02）
         pruneStaleStates(states, ownerTickets.keySet(), config.cycle(),
                 tombstoneTtlCycles(config.minHoldTicks(), config.runEvery()));
         CostAwareSelection costAwareSelection = ChunkCostRuntime.hasCostData(level)
@@ -133,7 +133,7 @@ final class TicketBucketScheduler {
         if (!hasKnownCostData) {
             return CostAwareSelection.none();
         }
-        // 每个 owner 算分(年龄优先−成本惩罚)，按分降序、稳定键、hash 作 tie-break，取前 budget 名为活跃
+        // 每个 owner 算分(年龄优先−成本惩罚)，按分降序排序，同分先比稳定键再比 hash 定先后，取前 budget 名为活跃
         Set<TicketOwnerKey> activeOwners = candidates.stream()
                 .sorted(Comparator.comparingLong(CostCandidate::score).reversed()
                         .thenComparing(candidate -> candidate.owner().stableSortKey())
@@ -271,7 +271,7 @@ final class TicketBucketScheduler {
                                TicketPauseBatch pauseBatch) {
         // 批数取 min(配置批数, owner 内 ticket 数)，避免空批
         int batches = Math.min(Math.max(1, config.wakeBatches()), Math.max(1, entries.size()));
-        // 本轮处理第 wakeBatchIndex 批：解除该批 ticket 的 AUTO，分批恢复以防惊群重载
+        // 本轮处理第 wakeBatchIndex 批：解除该批 ticket 的 AUTO 暂停；分批恢复，避免全部 chunk 在同一 tick 恢复造成瞬时卡顿
         int batch = state.wakeBatchIndex % batches;
         for (int i = 0; i < entries.size(); i++) {
             if (i % batches == batch) {

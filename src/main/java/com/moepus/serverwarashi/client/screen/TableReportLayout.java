@@ -100,7 +100,7 @@ final class TableReportLayout {
     }
 
     private static void forceFitColumns(int[] widths, int maxTableW) {
-        // 兜底：仍超限时逐列各减 1 px 循环收缩（上游保证 maxTableW > 0，每轮至少减 1px 必然终止）
+        // 最后手段：前面按列收缩后仍超限时，逐列各减 1 px 循环收缩（上游保证 maxTableW > 0，每轮至少减 1px 必然终止）
         while (sum(widths) > maxTableW) {
             for (int column = 0; column < widths.length && sum(widths) > maxTableW; column++) {
                 if (widths[column] > 0) {

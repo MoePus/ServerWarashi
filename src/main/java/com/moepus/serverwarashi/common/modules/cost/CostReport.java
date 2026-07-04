@@ -38,7 +38,7 @@ public final class CostReport {
                 .toList();
         List<OwnerCost> costs = TopN.select(allCosts, maxOwners, costOrder);
 
-        // 逐 owner 拼成表格行 + 行内传送/分析按钮；仅对入选 Top-N 调 statsProvider 清点 BE/E（昂贵）
+        // 逐 owner 拼成表格行 + 行内传送/分析按钮；只对入选 Top-N 的 owner 清点方块实体/实体数量（这一步昂贵）
         List<List<String>> rows = new ArrayList<>();
         List<List<TableReport.Button>> rowButtons = new ArrayList<>();
         for (OwnerCost cost : costs) {
