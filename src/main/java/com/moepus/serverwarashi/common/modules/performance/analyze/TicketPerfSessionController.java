@@ -67,8 +67,8 @@ public final class TicketPerfSessionController {
         return ANALYZER.hasActiveSession();
     }
 
-    public static boolean hasActiveSession(ServerLevel level) {
-        return ANALYZER.hasActiveSession(level.dimension());
+    public static boolean hasActiveSessionIn(ServerLevel level) {
+        return ANALYZER.hasActiveSessionIn(level.dimension());
     }
 
     public static boolean isAllOwnersSession() {

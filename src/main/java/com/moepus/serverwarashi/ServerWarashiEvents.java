@@ -57,7 +57,7 @@ public final class ServerWarashiEvents {
     public static void onLevelTickPre(LevelTickEvent.Pre event) {
         // 仅服务端维度参与：执行该维度的自动分桶主循环（降负载核心链路）
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            TicketBucketRuntime.onLevelTickPre(serverLevel, TicketPerfSessionController.hasActiveSession(serverLevel));
+            TicketBucketRuntime.onLevelTickPre(serverLevel, TicketPerfSessionController.hasActiveSessionIn(serverLevel));
         }
     }
 

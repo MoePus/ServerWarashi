@@ -84,7 +84,7 @@ final class OwnerPerfAnalyzer {
         return activeSession != null;
     }
 
-    boolean hasActiveSession(ResourceKey<Level> dimension) {
+    boolean hasActiveSessionIn(ResourceKey<Level> dimension) {
         Session session = activeSession;
         return session != null && session.dimension.equals(dimension);
     }

@@ -23,7 +23,7 @@ public final class TicketPerfMixinHooks {
 
     // 实体 tick 挂点：分析会话期间对被跟踪 chunk 换成计时包装，否则按需换成驻留成本采样包装
     public static <T extends Entity> Consumer<T> wrapEntityTickConsumer(ServerLevel level, Consumer<T> original, T entity) {
-        boolean hasActiveSession = TicketPerfSessionController.hasActiveSession(level);
+        boolean hasActiveSession = TicketPerfSessionController.hasActiveSessionIn(level);
         if (hasActiveSession) {
             BlockPos entityPos = entity.blockPosition();
             long sessionId = TicketPerfSessionController.resolveTrackSessionId(level, entityPos);
@@ -52,7 +52,7 @@ public final class TicketPerfMixinHooks {
         if (!(level instanceof ServerLevel serverLevel)) {
             return original;
         }
-        if (TicketPerfSessionController.hasActiveSession(serverLevel)) {
+        if (TicketPerfSessionController.hasActiveSessionIn(serverLevel)) {
             return new ProfilingBlockEntityIterator(level, original);
         }
         if (!ChunkCostRuntime.enabled()) {
@@ -66,7 +66,7 @@ public final class TicketPerfMixinHooks {
                                         LevelChunk chunk,
                                         int randomTickSpeed,
                                         ChunkCostRuntime.ChunkTickInvoker original) {
-        boolean hasActiveSession = TicketPerfSessionController.hasActiveSession(level);
+        boolean hasActiveSession = TicketPerfSessionController.hasActiveSessionIn(level);
         if (hasActiveSession) {
             ChunkPos pos = chunk.getPos();
             long sessionId = TicketPerfSessionController.resolveTrackSessionId(level, pos.getWorldPosition());

@@ -1,7 +1,6 @@
 package com.moepus.serverwarashi.common.modules.cost;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
 import com.moepus.serverwarashi.common.config.OptimizationConfig;
 import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfSessionController;
 import com.moepus.serverwarashi.common.report.TableReport;
@@ -85,7 +84,7 @@ public final class ResidentCostHudRuntime {
 
     private static Optional<TableReport> buildReport(ServerLevel level) {
         // 成本未开或该维度正在性能分析时不出报告
-        if (!ChunkCostRuntime.enabled() || TicketPerfSessionController.hasActiveSession(level)) {
+        if (!ChunkCostRuntime.enabled() || TicketPerfSessionController.hasActiveSessionIn(level)) {
             return Optional.empty();
         }
         // 一次遍历获取 ACTIVE_ONLY 与 ALL 两个视图，避免双全量扫描
