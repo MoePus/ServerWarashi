@@ -24,7 +24,7 @@ public final class TicketScanService {
         Objects.requireNonNull(distanceManager, "distanceManager");
         Objects.requireNonNull(visitor, "visitor");
         for (Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry :
-                TicketUtils.getTickets(distanceManager).long2ObjectEntrySet()) {
+                distanceManager.getTickets().long2ObjectEntrySet()) {
             long chunkPos = entry.getLongKey();
             SortedArraySet<Ticket<?>> tickets = entry.getValue();
             if (tickets == null || tickets.isEmpty()) {

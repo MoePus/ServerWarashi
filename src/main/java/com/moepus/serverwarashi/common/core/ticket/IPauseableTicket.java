@@ -7,8 +7,6 @@ public interface IPauseableTicket {
     int serverWarashi$getPauseMask();
     void serverWarashi$setPauseMask(int mask);
     boolean serverWarashi$isPaused();
-    boolean serverWarashi$needUpdate();
-    void serverWarashi$clearDirty();
     int serverWarashi$getLevel();
     Object serverWarashi$getKey();
 }

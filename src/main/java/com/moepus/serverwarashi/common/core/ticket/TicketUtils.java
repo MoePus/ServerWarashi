@@ -69,8 +69,4 @@ public final class TicketUtils {
     public static DistanceManagerAccessor getDistanceManager(ServerLevel level) {
         return (DistanceManagerAccessor) level.getChunkSource().chunkMap.getDistanceManager();
     }
-
-    public static Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> getTickets(DistanceManagerAccessor accessor) {
-        return accessor.getTickets();
-    }
 }

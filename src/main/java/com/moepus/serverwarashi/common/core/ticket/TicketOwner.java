@@ -1,7 +1,10 @@
 package com.moepus.serverwarashi.common.core.ticket;
 
+import com.moepus.serverwarashi.common.report.ReportButtons;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.*;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 
 import java.util.Objects;
 
@@ -47,7 +50,7 @@ public final class TicketOwner {
         return getName() + "@" + position;
     }
 
-    public Component asComponent() {
+    public Component asComponent(ResourceKey<Level> dimension) {
         // 无坐标：仅文本，不可点击
         if (pos == null) {
             return Component.literal(getName() + "@null");
@@ -79,7 +82,7 @@ public final class TicketOwner {
                                 .withColor(TextColor.fromRgb(0xFFD700))
                                 .withClickEvent(new ClickEvent(
                                         ClickEvent.Action.RUN_COMMAND,
-                                        String.format("/tp @p %d %d %d", x, y, z)
+                                        "/" + ReportButtons.teleportCommand(dimension.location(), pos)
                                 ))
                 );
 

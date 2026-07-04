@@ -15,7 +15,6 @@ import java.util.Objects;
 public final class TicketPauseBatch {
     private final DistanceManagerAccessor distanceManager;
     private final LongOpenHashSet modifiedChunks = new LongOpenHashSet();
-    private final LongOpenHashSet updatedChunks = new LongOpenHashSet();
 
     private TicketPauseBatch(DistanceManagerAccessor distanceManager) {
         this.distanceManager = Objects.requireNonNull(distanceManager, "distanceManager");
@@ -33,52 +32,86 @@ public final class TicketPauseBatch {
      * 低层单 ticket 入口，调用方负责过滤系统 ticket。
      */
     public boolean apply(Ticket<?> ticket, long chunkPos, boolean paused, int reasonMask) {
-        if (!TicketPauseService.updateTicketPauseReason(ticket, paused, reasonMask)) {
+        if (!updateTicketPauseReason(ticket, paused, reasonMask)) {
             return false;
         }
         modifiedChunks.add(chunkPos);
-        updatedChunks.add(chunkPos);
         return true;
     }
 
-    public boolean applyChunkTickets(long chunkPos,
-                                     SortedArraySet<Ticket<?>> tickets,
-                                     boolean paused,
-                                     int reasonMask) {
-        if (tickets == null || tickets.isEmpty()) {
-            return false;
-        }
-
-        boolean changed = false;
-        for (Ticket<?> ticket : tickets) {
-            if (TicketUtils.isSystemTicket(ticket)) {
-                continue;
-            }
-            changed |= apply(ticket, chunkPos, paused, reasonMask);
-        }
-        return changed;
-    }
-
     public void applyChunks(Iterable<Long> chunks, boolean paused, int reasonMask) {
-        Long2ObjectMap<SortedArraySet<Ticket<?>>> ticketMap = TicketUtils.getTickets(distanceManager);
+        Long2ObjectMap<SortedArraySet<Ticket<?>>> ticketMap = distanceManager.getTickets();
         for (Long chunkPosObj : chunks) {
             long chunkPos = chunkPosObj;
             SortedArraySet<Ticket<?>> tickets = ticketMap.get(chunkPos);
-            applyChunkTickets(chunkPos, tickets, paused, reasonMask);
+            if (tickets == null || tickets.isEmpty()) {
+                continue;
+            }
+            for (Ticket<?> ticket : tickets) {
+                if (TicketUtils.isSystemTicket(ticket)) {
+                    continue;
+                }
+                apply(ticket, chunkPos, paused, reasonMask);
+            }
         }
     }
 
-    public void flush() {
-        if (!modifiedChunks.isEmpty()) {
-            TicketPauseService.updateChunkLevel(distanceManager, modifiedChunks);
+    public int flush() {
+        int count = modifiedChunks.size();
+        if (count > 0) {
+            updateChunkLevel(distanceManager, modifiedChunks);
             modifiedChunks.clear();
         }
+        return count;
     }
 
     /**
-     * 返回本批次中标记过刷新的不同 chunk 数。
+     * 根据实际 masked level 变化更新 tracker。
+     * 旧 level 取 tracker 当前值，新 level 取所有 ticket 的 masked 最小值；
+     * 暂停会让 source level 变大，恢复会让 source level 变小。
      */
-    public int updatedChunks() {
-        return updatedChunks.size();
+    public static void updateChunkLevel(DistanceManagerAccessor distanceManager, LongOpenHashSet modifiedChunks) {
+        var ticketMap = distanceManager.getTickets();
+        for (long chunkPos : modifiedChunks) {
+            SortedArraySet<Ticket<?>> ticketSet = ticketMap.get(chunkPos);
+            if (ticketSet == null) {
+                continue;
+            }
+            // 旧 level 取 tracker 当前值；新 level 取该 chunk 全票的 masked 最小
+            int oldLevel = distanceManager.getTicketTracker().getLevel(chunkPos);
+            int newLevel = getTicketLevel(ticketSet);
+            // 新 level 更小表示在"降级/恢复"方向
+            boolean isDecreasing = newLevel < oldLevel;
+            distanceManager.getTicketTracker().update(chunkPos, newLevel, isDecreasing);
+            // 仍有 ticket 时同步更新 ticking tracker
+            if (!ticketSet.isEmpty()) {
+                distanceManager.getTickingTicketsTracker().update(chunkPos, newLevel, isDecreasing);
+            }
+        }
+    }
+
+    private static int getTicketLevel(SortedArraySet<Ticket<?>> tickets) {
+        int level = TicketUtils.NO_TICKET_LEVEL;
+        for (Ticket<?> ticket : tickets) {
+            level = Math.min(level, ticket.getTicketLevel());
+        }
+        return level;
+    }
+
+    // 仅修改 pauseMask，不直接改原始 ticket level。
+    public static boolean updateTicketPauseReason(Ticket<?> ticket, boolean paused, int reasonMask) {
+        IPauseableTicket ticketInfo = (IPauseableTicket) (Object) ticket;
+        // 计算新旧掩码；无变化则直接返回 false
+        int before = ticketInfo.serverWarashi$getPauseMask();
+        int after = applyPauseMask(before, paused, reasonMask);
+        if (before == after) {
+            return false;
+        }
+        ticketInfo.serverWarashi$setPauseMask(after);
+        return true;
+    }
+
+    static int applyPauseMask(int before, boolean paused, int reasonMask) {
+        return paused ? (before | reasonMask) : (before & ~reasonMask);
     }
 }
