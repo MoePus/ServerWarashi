@@ -1,6 +1,7 @@
 package com.moepus.serverwarashi.common.modules.performance.analyze;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
+import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
 import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseService;
 import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfMessages;
@@ -37,15 +38,16 @@ final class OwnerPerfAnalyzer {
             return TicketPerfMessages.noOwnerAtPosition(pos.getX(), pos.getY(), pos.getZ());
         }
         if (ownersAt.size() > 1) {
-            return TicketPerfMessages.multipleOwnersAtPosition(
-                    pos.getX(),
-                    pos.getY(),
-                    pos.getZ(),
-                    ownersAt.size()
-            );
+            return TicketPerfMessages.multipleOwnersAtPosition(pos.getX(), pos.getY(), pos.getZ(), ownersAt.size());
         }
 
         var single = ownersAt.entrySet().iterator().next();
+        TicketPauseService.applyPauseReasonToChunks(
+                level,
+                single.getValue(),
+                false,
+                IPauseableTicket.PAUSE_REASON_AUTO
+        );
         OwnerChunks.Entry owner = new OwnerChunks.Entry(
                 single.getKey(),
                 single.getValue(),
