@@ -1,27 +1,29 @@
 package com.moepus.serverwarashi;
 
-import com.mojang.logging.LogUtils;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
+import com.moepus.serverwarashi.client.config.ClientConfig;
+import com.moepus.serverwarashi.common.config.Config;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import org.slf4j.Logger;
+import org.spongepowered.asm.mixin.Mixins;
 
+/**
+ * 模组主入口。
+ * 层级：入口层。
+ * 上游：NeoForge 加载器。下游：Config / ServerWarashiEvents。
+ */
 @Mod(Serverwarashi.MODID)
 public class Serverwarashi {
     public static final String MODID = "serverwarashi";
-    public static final Logger LOGGER = LogUtils.getLogger();
 
-    public Serverwarashi(IEventBus modEventBus, ModContainer modContainer) {
-        NeoForge.EVENT_BUS.register(this);
+    public Serverwarashi(ModContainer modContainer) {
+        // 仅当以 neoforge.gameTestServer 启动时，动态加入 GameTest 专用 mixin 配置
+        if (Boolean.getBoolean("neoforge.gameTestServer")) {
+            Mixins.addConfiguration("serverwarashi-gametest.mixins.json");
+        }
+        // 注册服务端配置 spec（分桶 / 冻结 / 性能等服务端项）
         modContainer.registerConfig(ModConfig.Type.SERVER, Config.SPEC);
-    }
-
-    @SubscribeEvent
-    public void onRegisterCommands(RegisterCommandsEvent event) {
-        WarashiCommands.register(event.getDispatcher());
+        // 注册客户端配置 spec（HUD 输出模式等客户端项）
+        modContainer.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
     }
 }
