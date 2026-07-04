@@ -1,22 +1,22 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.moepus.serverwarashi.mixin",
+  "package": "com.moepus.serverwarashi.common.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "DistanceManagerAccessor",
-    "EntitySectionStorageAccessor",
-    "PersistentEntitySectionManagerAccessor",
-    "ServerLevelAcessor",
-    "ServerWatchdogMixin",
-    "TicketMixin"
-  ],
-  "client": [
+    "accessor.DistanceManagerAccessor",
+    "accessor.PersistentEntitySectionManagerAccessor",
+    "accessor.ServerLevelAccessor",
+    "chunkperf.LevelBlockEntityTickMixin",
+    "chunkperf.LevelEntityTickMixin",
+    "chunkperf.ServerLevelChunkTickMixin",
+    "ticket.ChunkTicketTrackerMixin",
+    "ticket.DistanceManagerMixin",
+    "ticket.TicketMixin",
+    "ticket.TickingTrackerMixin",
+    "watchdog.ServerWatchdogMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "overwrites": {
-    "requireAnnotations": true
   }
 }
