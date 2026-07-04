@@ -118,9 +118,6 @@ public final class TicketPerfReportBuilder {
 
     private static List<List<String>> buildTopChunkRows(Long2LongOpenHashMap chunkLoadTotals,
                                                         long serverTickCount) {
-        if (chunkLoadTotals.isEmpty()) {
-            return List.of();
-        }
         List<List<String>> rows = new ArrayList<>();
         Comparator<Long2LongOpenHashMap.Entry> order = (a, b) -> Long.compare(b.getLongValue(), a.getLongValue());
         for (var entry : TopN.select(chunkLoadTotals.long2LongEntrySet(), TOP_ROW_LIMIT, order)) {
@@ -133,9 +130,6 @@ public final class TicketPerfReportBuilder {
 
     private static List<List<String>> buildSpikeRows(Object2LongOpenHashMap<String> spikeNanos,
                                                      Map<String, String> spikeLabels) {
-        if (spikeNanos.isEmpty()) {
-            return List.of();
-        }
         List<List<String>> rows = new ArrayList<>();
         List<Object2LongOpenHashMap.Entry<String>> candidates = spikeNanos.object2LongEntrySet().stream()
                 .filter(entry -> entry.getLongValue() >= SPIKE_MIN_NANOS)
@@ -151,9 +145,6 @@ public final class TicketPerfReportBuilder {
 
     private static List<List<String>> buildTopTypeRows(Object2LongOpenHashMap<String> totals,
                                                        long serverTickCount) {
-        if (totals.isEmpty()) {
-            return List.of();
-        }
         List<List<String>> rows = new ArrayList<>();
         for (var entry : TopN.select(totals.object2LongEntrySet(), TOP_ROW_LIMIT, BY_VALUE_DESC)) {
             double typeMspt = mspt(entry.getLongValue(), serverTickCount);

@@ -65,12 +65,16 @@ final class TicketBucketScheduler {
     }
 
     static int phaseFor(Object owner, int period) {
-        return Math.floorMod(owner.hashCode(), Math.max(1, period));
+        return phaseForNormalized(owner, Math.max(1, period));
     }
 
     static boolean isActivePhase(Object owner, long cycle, int period) {
         int normalizedPeriod = Math.max(1, period);
-        return phaseFor(owner, normalizedPeriod) == Math.floorMod(cycle, normalizedPeriod);
+        return phaseForNormalized(owner, normalizedPeriod) == Math.floorMod(cycle, normalizedPeriod);
+    }
+
+    private static int phaseForNormalized(Object owner, int normalizedPeriod) {
+        return Math.floorMod(owner.hashCode(), normalizedPeriod);
     }
 
     static boolean pauseAllowed(int inactiveRuns,
@@ -270,7 +274,7 @@ final class TicketBucketScheduler {
                                SchedulerConfig config,
                                TicketPauseBatch pauseBatch) {
         // 批数取 min(配置批数, owner 内 ticket 数)，避免空批
-        int batches = Math.min(Math.max(1, config.wakeBatches()), Math.max(1, entries.size()));
+        int batches = Math.min(Math.max(1, config.wakeBatches()), entries.size());
         // 本轮处理第 wakeBatchIndex 批：解除该批 ticket 的 AUTO 暂停；分批恢复，避免全部 chunk 在同一 tick 恢复造成瞬时卡顿
         int batch = state.wakeBatchIndex % batches;
         for (int i = 0; i < entries.size(); i++) {

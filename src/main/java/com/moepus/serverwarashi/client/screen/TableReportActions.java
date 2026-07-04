@@ -46,7 +46,7 @@ final class TableReportActions {
 
     static int actionAreaWidth(Font font, TableReport.Section section) {
         // 右侧动作区宽度 = max(Copy 按钮宽, 各行按钮组宽)
-        int width = !section.rows().isEmpty() ? buttonWidth(font, "Copy") : 0;
+        int width = buttonWidth(font, "Copy");
         for (int row = 0; row < section.rows().size(); row++) {
             width = Math.max(width, buttonsWidth(font, rowButtons(section, row)));
         }

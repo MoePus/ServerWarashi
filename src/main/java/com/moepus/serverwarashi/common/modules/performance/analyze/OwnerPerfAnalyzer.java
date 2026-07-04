@@ -14,7 +14,6 @@ import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -111,7 +110,7 @@ final class OwnerPerfAnalyzer {
         return stopSession(session);
     }
 
-    AutoAnalysisReport tickSessions(MinecraftServer server) {
+    AutoAnalysisReport tickSessions() {
         Session session = activeSession;
         if (session == null) {
             return null;

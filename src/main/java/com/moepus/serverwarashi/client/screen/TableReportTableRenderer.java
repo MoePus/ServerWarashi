@@ -59,15 +59,17 @@ public final class TableReportTableRenderer {
         }
 
         // 累加各非空段的高度 + 段间距
+        boolean hasRows = false;
         for (TableReport.Section section : report.sections()) {
             if (section.rows().isEmpty()) {
                 continue;
             }
+            hasRows = true;
             total += sectionHeight(section) + SECTION_GAP;
         }
 
         // 空报告/无可渲染段：留一行给 "No data"
-        if (report.isEmpty()) {
+        if (!hasRows) {
             total += ROW_H;
         }
         return Math.max(ROW_H, total);

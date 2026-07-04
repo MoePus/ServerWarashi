@@ -53,7 +53,7 @@ public final class TicketPerfSessionController {
         if (!ANALYZER.hasActiveSession()) {
             return;
         }
-        OwnerPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions(server);
+        OwnerPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions();
         if (report != null) {
             ReportDelivery.toPlayerOrConsole(server, report.playerId(), report.result());
         }

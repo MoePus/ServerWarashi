@@ -7,7 +7,6 @@ import com.moepus.serverwarashi.common.report.TableReport;
 import com.moepus.serverwarashi.common.report.TableReportRenderer;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,16 +18,6 @@ import java.util.Set;
  */
 public final class TicketPerfOwnerOutput {
     private TicketPerfOwnerOutput() {
-    }
-
-    /**
-     * 纯文本（无客户端 mod）回退视图：渲染与结构化报告同源的 owner 表，行内动作始终可点击。
-     */
-    public static Component listOwners(ServerLevel level,
-                                       OwnerChunks.PauseMode pauseMode,
-                                       String header,
-                                       OwnerChunks.SortMode sortMode) {
-        return TableReportRenderer.toComponent(ownerReport(level, pauseMode, header, sortMode));
     }
 
     /**

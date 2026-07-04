@@ -163,15 +163,17 @@ public abstract class TableReportPanelScreen extends Screen {
             y += SECTION_GAP;
         }
 
+        boolean hasRows = false;
         for (TableReport.Section section : report.sections()) {
             if (section.rows().isEmpty()) {
                 continue;
             }
+            hasRows = true;
             y = renderSection(graphics, geometry, section, y, mouseX, mouseY);
             y += SECTION_GAP;
         }
 
-        if (report.isEmpty()) {
+        if (!hasRows) {
             graphics.drawString(font, "No data", geometry.contentX, y, ROW_TEXT, true);
         }
     }

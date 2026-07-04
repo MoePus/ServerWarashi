@@ -70,10 +70,10 @@ public final class TicketOwnerResolver {
             }
         } else if (isPlayerTicket(ticket, typeName)) {
             Optional<ServerPlayer> nearestPlayer = nearestPlayer(level, rawKey);
-            cacheable = nearestPlayer.isPresent();
-            key = playerKey(typeName, nearestPlayer.orElse(null));
-            if (nearestPlayer.isPresent()) {
-                ServerPlayer player = nearestPlayer.get();
+            ServerPlayer player = nearestPlayer.orElse(null);
+            cacheable = player != null;
+            key = playerKey(typeName, player);
+            if (player != null) {
                 displayName = player.getName().getString();
                 displayPos = player.blockPosition();
             }

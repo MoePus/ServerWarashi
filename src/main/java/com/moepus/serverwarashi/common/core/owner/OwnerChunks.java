@@ -105,7 +105,7 @@ public final class OwnerChunks {
                 if (!accept(ticket, pauseMode)) {
                     continue;
                 }
-                if (TicketUtils.isSystemTicket(ticket)) {
+                if (TicketUtils.isChunkProtectionTicket(ticket)) {
                     int priority = ticket.getType() == TicketType.FORCED ? 0 : 255;
                     if (priority < fallbackPriority) {
                         fallback = ticket;
@@ -146,7 +146,7 @@ public final class OwnerChunks {
                 if (TicketUtils.getOriginLevel(ticket) > TicketUtils.MAX_PAUSEABLE_LEVEL) {
                     continue;
                 }
-                if (TicketUtils.isSystemTicket(ticket)) {
+                if (TicketUtils.isChunkProtectionTicket(ticket)) {
                     int priority = ticket.getType() == TicketType.FORCED ? 0 : 255;
                     if (priority < fallbackPriority) {
                         fallback = ticket;
