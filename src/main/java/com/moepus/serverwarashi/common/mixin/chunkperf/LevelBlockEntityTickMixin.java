@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.common.mixin.chunkperf;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.moepus.serverwarashi.common.modules.performance.TicketPerfMixinHooks;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,6 +26,9 @@ public abstract class LevelBlockEntityTickMixin {
                                                                Operation<Iterator<TickingBlockEntity>> original) {
         // 把方块实体迭代器交给 hooks 包装（仅在分析会话期间才真正计时）
         Level level = (Level) (Object) this;
-        return TicketPerfMixinHooks.wrapBlockEntityIterator(level, original.call(tickers));
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return original.call(tickers);
+        }
+        return TicketPerfMixinHooks.wrapBlockEntityIterator(serverLevel, original.call(tickers));
     }
 }

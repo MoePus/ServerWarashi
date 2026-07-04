@@ -8,7 +8,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
 
 import java.util.UUID;
 
@@ -17,6 +16,7 @@ import java.util.UUID;
  * 上游：ServerWarashiEvents / mixin hooks / PerfCommands。
  */
 public final class TicketPerfSessionController {
+    public static final long NO_SESSION_ID = OwnerPerfAnalyzer.NO_SESSION_ID;
     private static final OwnerPerfAnalyzer ANALYZER = new OwnerPerfAnalyzer();
     private static long nextSessionId = 1L;
 
@@ -27,7 +27,7 @@ public final class TicketPerfSessionController {
                                   BlockPos pos,
                                   int durationSec,
                                   UUID playerId) {
-        if (hasActiveSession()) {
+        if (activeSessionId() != NO_SESSION_ID) {
             return TicketPerfMessages.analysisAlreadyRunning();
         }
         long sessionId = nextSessionId++;
@@ -35,7 +35,7 @@ public final class TicketPerfSessionController {
     }
 
     public static Component startAll(ServerLevel level, int durationSec, UUID playerId) {
-        if (hasActiveSession()) {
+        if (activeSessionId() != NO_SESSION_ID) {
             return TicketPerfMessages.analysisAlreadyRunning();
         }
         long sessionId = nextSessionId++;
@@ -43,14 +43,14 @@ public final class TicketPerfSessionController {
     }
 
     public static TableReport.Result stopCurrentAnalysis() {
-        if (!ANALYZER.hasActiveSession()) {
+        if (activeSessionId() == NO_SESSION_ID) {
             return new TableReport.Result(TicketPerfMessages.noActiveAnalysis(), null);
         }
         return ANALYZER.stopCurrentAnalysis();
     }
 
     public static void tickSessions(MinecraftServer server) {
-        if (!ANALYZER.hasActiveSession()) {
+        if (activeSessionId() == NO_SESSION_ID) {
             return;
         }
         OwnerPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions();
@@ -59,16 +59,16 @@ public final class TicketPerfSessionController {
         }
     }
 
-    public static long resolveTrackSessionId(Level level, BlockPos pos) {
+    public static long resolveTrackSessionId(ServerLevel level, BlockPos pos) {
         return ANALYZER.resolveTrackSessionId(level, pos);
     }
 
-    public static boolean hasActiveSession() {
-        return ANALYZER.hasActiveSession();
+    public static long activeSessionId() {
+        return ANALYZER.activeSessionId();
     }
 
-    public static boolean hasActiveSessionIn(ServerLevel level) {
-        return ANALYZER.hasActiveSessionIn(level.dimension());
+    public static long activeSessionIdIn(ServerLevel level) {
+        return ANALYZER.activeSessionIdIn(level.dimension());
     }
 
     public static boolean isAllOwnersSession() {
@@ -87,14 +87,16 @@ public final class TicketPerfSessionController {
                                     long durationNanos,
                                     boolean isBlockEntity,
                                     long sessionId) {
-        if (sessionId < 0L || !ANALYZER.acceptsSessionId(sessionId)) {
+        long activeSessionId = activeSessionId();
+        if (activeSessionId == NO_SESSION_ID || sessionId != activeSessionId) {
             return;
         }
         ANALYZER.onEntityTick(pos, type, sourceId, sourceLabel, durationNanos, isBlockEntity);
     }
 
     public static void onChunkTick(ChunkPos pos, long durationNanos, long sessionId) {
-        if (sessionId < 0L || !ANALYZER.acceptsSessionId(sessionId)) {
+        long activeSessionId = activeSessionId();
+        if (activeSessionId == NO_SESSION_ID || sessionId != activeSessionId) {
             return;
         }
         ANALYZER.onChunkTick(pos, durationNanos);

@@ -84,7 +84,8 @@ public final class ResidentCostHudRuntime {
 
     private static Optional<TableReport> buildReport(ServerLevel level) {
         // 成本未开或该维度正在性能分析时不出报告
-        if (!ChunkCostRuntime.enabled() || TicketPerfSessionController.hasActiveSessionIn(level)) {
+        if (!ChunkCostRuntime.enabled()
+                || TicketPerfSessionController.activeSessionIdIn(level) != TicketPerfSessionController.NO_SESSION_ID) {
             return Optional.empty();
         }
         // 一次遍历获取 ACTIVE_ONLY 与 ALL 两个视图，避免双全量扫描

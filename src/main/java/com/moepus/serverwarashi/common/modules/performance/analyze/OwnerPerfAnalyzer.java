@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 
 final class OwnerPerfAnalyzer {
+    static final long NO_SESSION_ID = -1L;
     private Session activeSession;
 
     Component startSingle(ServerLevel level, BlockPos pos, int durationSec, UUID playerId, long sessionId) {
@@ -80,18 +81,14 @@ final class OwnerPerfAnalyzer {
         );
     }
 
-    boolean hasActiveSession() {
-        return activeSession != null;
+    long activeSessionId() {
+        Session session = activeSession;
+        return session == null ? NO_SESSION_ID : session.id;
     }
 
-    boolean hasActiveSessionIn(ResourceKey<Level> dimension) {
+    long activeSessionIdIn(ResourceKey<Level> dimension) {
         Session session = activeSession;
-        return session != null && session.dimension.equals(dimension);
-    }
-
-    boolean acceptsSessionId(long sessionId) {
-        Session session = activeSession;
-        return session != null && session.id == sessionId;
+        return session != null && session.dimension.equals(dimension) ? session.id : NO_SESSION_ID;
     }
 
     boolean isAllOwnersSession() {
@@ -104,36 +101,24 @@ final class OwnerPerfAnalyzer {
     }
 
     TableReport.Result stopCurrentAnalysis() {
-        Session session = activeSession;
-        if (session == null) {
-            return new TableReport.Result(TicketPerfMessages.noActiveAnalysis(), null);
-        }
-        // 维度消失时会话已失效，直接清空
-        return stopSession(session);
+        return stopSession(activeSession);
     }
 
     AutoAnalysisReport tickSessions() {
         Session session = activeSession;
-        if (session == null) {
-            return null;
-        }
         session.serverTickCount++;
         if (System.nanoTime() < session.endAtNanos) {
             return null;
         }
-        // 超时自动停止，维度消失时会话已失效
         return new AutoAnalysisReport(session.playerId, stopSession(session));
     }
 
-    long resolveTrackSessionId(Level level, BlockPos pos) {
-        if (!(level instanceof ServerLevel serverLevel) || pos == null) {
-            return -1L;
-        }
+    long resolveTrackSessionId(ServerLevel level, BlockPos pos) {
         Session session = activeSession;
-        if (session == null || !session.dimension.equals(serverLevel.dimension())) {
-            return -1L;
+        if (!session.dimension.equals(level.dimension())) {
+            return NO_SESSION_ID;
         }
-        return session.isTrackedChunk(ChunkPos.asLong(pos)) ? session.id : -1L;
+        return session.isTrackedChunk(ChunkPos.asLong(pos)) ? session.id : NO_SESSION_ID;
     }
 
     void onEntityTick(BlockPos pos,
@@ -142,21 +127,26 @@ final class OwnerPerfAnalyzer {
                       String sourceLabel,
                       long durationNanos,
                       boolean isBlockEntity) {
-        if (pos == null) {
-            return;
-        }
         Session session = activeSession;
-        if (session == null) {
-            return;
+        long chunkPos = ChunkPos.asLong(pos);
+        ActorTimingStats stats = session.actorStats(isBlockEntity);
+        if (!session.allOwnersReport) {
+            stats.typeTotals.addTo(type, durationNanos);
+            long currentSpikeNanos = stats.spikeNanos.getLong(sourceId);
+            if (durationNanos > currentSpikeNanos) {
+                stats.spikeNanos.put(sourceId, durationNanos);
+                stats.spikeLabels.put(sourceId, sourceLabel);
+            }
         }
-        recordEntityTick(session, ChunkPos.asLong(pos), type, sourceId, sourceLabel, durationNanos, isBlockEntity);
+        if (stats.pendingChunkPos != chunkPos) {
+            flushPending(stats);
+            stats.pendingChunkPos = chunkPos;
+        }
+        stats.pendingNanos += durationNanos;
     }
 
     void onChunkTick(ChunkPos pos, long durationNanos) {
         Session session = activeSession;
-        if (session == null) {
-            return;
-        }
         session.chunkTickNanos.addTo(pos.toLong(), durationNanos);
     }
 
@@ -165,25 +155,6 @@ final class OwnerPerfAnalyzer {
         flushPending(session.blockEntityStats);
         flushPending(session.entityStats);
         return new TableReport.Result(null, session.allOwnersReport ? buildAllReport(session) : buildSingleReport(session));
-    }
-
-    private void recordEntityTick(Session session,
-                                  long chunkPos,
-                                  String type,
-                                  String sourceId,
-                                  String sourceLabel,
-                                  long durationNanos,
-                                  boolean isBlockEntity) {
-        ActorTimingStats stats = session.actorStats(isBlockEntity);
-        if (!session.allOwnersReport) {
-            stats.typeTotals.addTo(type, durationNanos);
-            updateSpike(stats.spikeNanos, stats.spikeLabels, sourceId, sourceLabel, durationNanos);
-        }
-        if (stats.pendingChunkPos != chunkPos) {
-            flushPending(stats);
-            stats.pendingChunkPos = chunkPos;
-        }
-        stats.pendingNanos += durationNanos;
     }
 
     private TableReport buildAllReport(Session session) {
@@ -286,18 +257,6 @@ final class OwnerPerfAnalyzer {
         }
         stats.pendingChunkPos = Long.MIN_VALUE;
         stats.pendingNanos = 0L;
-    }
-
-    private void updateSpike(Object2LongOpenHashMap<String> spikeNanos,
-                             Map<String, String> spikeLabels,
-                             String sourceId,
-                             String sourceLabel,
-                             long durationNanos) {
-        long current = spikeNanos.getLong(sourceId);
-        if (durationNanos > current) {
-            spikeNanos.put(sourceId, durationNanos);
-            spikeLabels.put(sourceId, sourceLabel);
-        }
     }
 
     private static long endAt(int durationSec) {

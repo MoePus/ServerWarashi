@@ -5,7 +5,6 @@ import com.moepus.serverwarashi.common.modules.cost.ChunkCostRuntime;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -23,11 +22,10 @@ public final class TicketPerfMixinHooks {
 
     // 实体 tick 挂点：分析会话期间对被跟踪 chunk 换成计时包装，否则按需换成驻留成本采样包装
     public static <T extends Entity> Consumer<T> wrapEntityTickConsumer(ServerLevel level, Consumer<T> original, T entity) {
-        boolean hasActiveSession = TicketPerfSessionController.hasActiveSessionIn(level);
-        if (hasActiveSession) {
+        if (TicketPerfSessionController.activeSessionIdIn(level) != TicketPerfSessionController.NO_SESSION_ID) {
             BlockPos entityPos = entity.blockPosition();
             long sessionId = TicketPerfSessionController.resolveTrackSessionId(level, entityPos);
-            if (sessionId < 0L) {
+            if (sessionId == TicketPerfSessionController.NO_SESSION_ID) {
                 return original;
             }
             return new ProfilingEntityConsumer<>(original, entity, entityPos, sessionId);
@@ -45,15 +43,9 @@ public final class TicketPerfMixinHooks {
     }
 
     // 方块实体 tick 挂点：分析会话期间换成计时迭代器，否则按需换成驻留成本采样迭代器
-    public static Iterator<TickingBlockEntity> wrapBlockEntityIterator(Level level, Iterator<TickingBlockEntity> original) {
-        if (level.isClientSide) {
-            return original;
-        }
-        if (!(level instanceof ServerLevel serverLevel)) {
-            return original;
-        }
-        if (TicketPerfSessionController.hasActiveSessionIn(serverLevel)) {
-            return new ProfilingBlockEntityIterator(level, original);
+    public static Iterator<TickingBlockEntity> wrapBlockEntityIterator(ServerLevel serverLevel, Iterator<TickingBlockEntity> original) {
+        if (TicketPerfSessionController.activeSessionIdIn(serverLevel) != TicketPerfSessionController.NO_SESSION_ID) {
+            return new ProfilingBlockEntityIterator(serverLevel, original);
         }
         if (!ChunkCostRuntime.enabled()) {
             return original;
@@ -66,11 +58,10 @@ public final class TicketPerfMixinHooks {
                                         LevelChunk chunk,
                                         int randomTickSpeed,
                                         ChunkCostRuntime.ChunkTickInvoker original) {
-        boolean hasActiveSession = TicketPerfSessionController.hasActiveSessionIn(level);
-        if (hasActiveSession) {
+        if (TicketPerfSessionController.activeSessionIdIn(level) != TicketPerfSessionController.NO_SESSION_ID) {
             ChunkPos pos = chunk.getPos();
             long sessionId = TicketPerfSessionController.resolveTrackSessionId(level, pos.getWorldPosition());
-            if (sessionId < 0L) {
+            if (sessionId == TicketPerfSessionController.NO_SESSION_ID) {
                 original.tick(level, chunk, randomTickSpeed);
                 return;
             }
@@ -136,7 +127,7 @@ public final class TicketPerfMixinHooks {
         }
     }
 
-    private record ProfilingBlockEntityIterator(Level level,
+    private record ProfilingBlockEntityIterator(ServerLevel level,
                                                 Iterator<TickingBlockEntity> delegate) implements Iterator<TickingBlockEntity> {
 
         @Override
@@ -150,7 +141,7 @@ public final class TicketPerfMixinHooks {
             BlockPos pos = next.getPos();
 
             long sessionId = TicketPerfSessionController.resolveTrackSessionId(level, pos);
-            if (sessionId < 0L) {
+            if (sessionId == TicketPerfSessionController.NO_SESSION_ID) {
                 return next;
             }
 
