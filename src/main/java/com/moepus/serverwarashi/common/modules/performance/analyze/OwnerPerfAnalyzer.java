@@ -9,7 +9,6 @@ import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfRepo
 import com.moepus.serverwarashi.common.report.TableReport;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -33,7 +32,6 @@ final class OwnerPerfAnalyzer {
     private Session activeSession;
 
     Component startSingle(ServerLevel level, BlockPos pos, int durationSec, UUID playerId, long sessionId) {
-        int effectiveDuration = Math.max(durationSec, 1);
         long chunkPos = new ChunkPos(pos).toLong();
         Map<TicketOwner, Set<Long>> ownersAt = OwnerChunks.resolveOwnersAt(level, chunkPos, OwnerChunks.PauseMode.ALL);
         if (ownersAt.isEmpty()) {
@@ -54,7 +52,7 @@ final class OwnerPerfAnalyzer {
                 single.getValue(),
                 OwnerChunks.stats(level, single.getValue())
         );
-        activeSession = Session.single(sessionId, level.dimension(), owner, endAt(effectiveDuration), playerId);
+        activeSession = Session.single(sessionId, level.dimension(), owner, endAt(durationSec), playerId);
         OwnerChunks.Stats stats = owner.stats();
         return TicketPerfMessages.sessionStarted(
                 level.dimension(),
@@ -62,23 +60,22 @@ final class OwnerPerfAnalyzer {
                 stats.chunkCount(),
                 stats.blockEntityCount(),
                 stats.entityCount(),
-                effectiveDuration
+                durationSec
         );
     }
 
     Component startAll(ServerLevel level, int durationSec, UUID playerId, long sessionId) {
-        int effectiveDuration = Math.max(durationSec, 1);
         TicketPauseService.clearAutoPause(level);
         List<OwnerChunks.Entry> owners = OwnerChunks.collect(level, OwnerChunks.PauseMode.ALL);
         if (owners.isEmpty()) {
             return TicketPerfMessages.noTicketOwnersFound();
         }
 
-        activeSession = Session.all(sessionId, level.dimension(), owners, endAt(effectiveDuration), playerId);
+        activeSession = Session.all(sessionId, level.dimension(), owners, endAt(durationSec), playerId);
         return TicketPerfMessages.allOwnersAnalysisStarted(
                 level.dimension(),
                 owners.size(),
-                effectiveDuration
+                durationSec
         );
     }
 
@@ -138,8 +135,7 @@ final class OwnerPerfAnalyzer {
         return session.isTrackedChunk(ChunkPos.asLong(pos)) ? session.id : -1L;
     }
 
-    void onEntityTick(Level level,
-                      BlockPos pos,
+    void onEntityTick(BlockPos pos,
                       String type,
                       String sourceId,
                       String sourceLabel,
@@ -155,14 +151,12 @@ final class OwnerPerfAnalyzer {
         recordEntityTick(session, ChunkPos.asLong(pos), type, sourceId, sourceLabel, durationNanos, isBlockEntity);
     }
 
-    void onChunkTick(Level level, ChunkPos pos, long durationNanos) {
+    void onChunkTick(ChunkPos pos, long durationNanos) {
         Session session = activeSession;
         if (session == null) {
             return;
         }
-        long chunkPos = pos.toLong();
-        ChunkPerfStats stats = session.chunkStats(chunkPos);
-        stats.chunkNanos += durationNanos;
+        session.chunkTickNanos.addTo(pos.toLong(), durationNanos);
     }
 
     private TableReport.Result stopSession(Session session) {
@@ -170,14 +164,6 @@ final class OwnerPerfAnalyzer {
         flushPending(session.blockEntityStats);
         flushPending(session.entityStats);
         return new TableReport.Result(null, session.allOwnersReport ? buildAllReport(session) : buildSingleReport(session));
-    }
-
-    private Session resolveSession(Level level) {
-        if (!(level instanceof ServerLevel serverLevel)) {
-            return null;
-        }
-        Session session = activeSession;
-        return session != null && session.dimension.equals(serverLevel.dimension()) ? session : null;
     }
 
     private void recordEntityTick(Session session,
@@ -216,13 +202,12 @@ final class OwnerPerfAnalyzer {
         );
         for (OwnerChunks.Entry owner : session.owners) {
             OwnerChunks.Stats stats = owner.stats();
-            ChunkPerfStats totals = ownerTotals(session, owner);
             entries.add(new TicketPerfReportData.OwnerMsptEntry(
                     owner.owner(),
                     stats.chunkCount(),
                     stats.blockEntityCount(),
                     stats.entityCount(),
-                    totals.blockEntityNanos + totals.entityNanos + totals.chunkNanos,
+                    ownerTotalNanos(session, owner),
                     OwnerChunks.uniqueChunkAnchor(owner.chunks(), ownerCounts)
             ));
         }
@@ -239,7 +224,10 @@ final class OwnerPerfAnalyzer {
     }
 
     private TableReport buildSingleReport(Session session) {
-        ChunkPerfStats chunkTotals = chunkTotals(session);
+        long chunkTickTotal = 0L;
+        for (long nanos : session.chunkTickNanos.values()) {
+            chunkTickTotal += nanos;
+        }
         OwnerChunks.Entry owner = session.owners.getFirst();
         OwnerChunks.Stats stats = owner.stats();
         return TicketPerfReportBuilder.buildPerfReport(new TicketPerfReportData.SingleOwnerReport(
@@ -255,7 +243,7 @@ final class OwnerPerfAnalyzer {
                 reportStats(session.blockEntityStats),
                 reportStats(session.entityStats),
                 new TicketPerfReportData.ChunkStats(
-                        chunkTotals.chunkNanos,
+                        chunkTickTotal,
                         session.chunkLoadTotals
                 ),
                 Duration.ofNanos(System.nanoTime() - session.startedAtNanos)
@@ -271,28 +259,14 @@ final class OwnerPerfAnalyzer {
         );
     }
 
-    private ChunkPerfStats ownerTotals(Session session, OwnerChunks.Entry owner) {
-        ChunkPerfStats totals = new ChunkPerfStats();
+    private long ownerTotalNanos(Session session, OwnerChunks.Entry owner) {
+        long total = 0L;
         for (long chunkPos : owner.chunks()) {
-            ChunkPerfStats stats = session.chunkStats.get(chunkPos);
-            if (stats == null) {
-                continue;
-            }
-            totals.blockEntityNanos += stats.blockEntityNanos;
-            totals.entityNanos += stats.entityNanos;
-            totals.chunkNanos += stats.chunkNanos;
+            total += session.chunkTickNanos.get(chunkPos)
+                    + session.chunkBlockEntityNanos.get(chunkPos)
+                    + session.chunkEntityNanos.get(chunkPos);
         }
-        return totals;
-    }
-
-    private ChunkPerfStats chunkTotals(Session session) {
-        ChunkPerfStats totals = new ChunkPerfStats();
-        for (ChunkPerfStats stats : session.chunkStats.values()) {
-            totals.blockEntityNanos += stats.blockEntityNanos;
-            totals.entityNanos += stats.entityNanos;
-            totals.chunkNanos += stats.chunkNanos;
-        }
-        return totals;
+        return total;
     }
 
     private void flushPending(ActorTimingStats stats) {
@@ -305,12 +279,7 @@ final class OwnerPerfAnalyzer {
             stats.totalNanos += nanos;
         }
         long chunkPos = stats.pendingChunkPos;
-        ChunkPerfStats chunkStats = session.chunkStats(chunkPos);
-        if (stats.blockEntity) {
-            chunkStats.blockEntityNanos += nanos;
-        } else {
-            chunkStats.entityNanos += nanos;
-        }
+        (stats.blockEntity ? session.chunkBlockEntityNanos : session.chunkEntityNanos).addTo(chunkPos, nanos);
         if (!session.allOwnersReport) {
             session.chunkLoadTotals.addTo(chunkPos, nanos);
         }
@@ -346,7 +315,9 @@ final class OwnerPerfAnalyzer {
         final boolean allOwnersReport;
         final List<OwnerChunks.Entry> owners;
         final LongOpenHashSet trackedChunks = new LongOpenHashSet();
-        final Long2ObjectOpenHashMap<ChunkPerfStats> chunkStats = new Long2ObjectOpenHashMap<>();
+        final Long2LongOpenHashMap chunkTickNanos = new Long2LongOpenHashMap();
+        final Long2LongOpenHashMap chunkBlockEntityNanos = new Long2LongOpenHashMap();
+        final Long2LongOpenHashMap chunkEntityNanos = new Long2LongOpenHashMap();
         final Long2LongOpenHashMap chunkLoadTotals = new Long2LongOpenHashMap();
         final ActorTimingStats blockEntityStats;
         final ActorTimingStats entityStats;
@@ -401,10 +372,6 @@ final class OwnerPerfAnalyzer {
             lastChunkPos = chunkPos;
             lastChunkTracked = tracked;
             return tracked;
-        }
-
-        ChunkPerfStats chunkStats(long chunkPos) {
-            return chunkStats.computeIfAbsent(chunkPos, ignored -> new ChunkPerfStats());
         }
     }
 

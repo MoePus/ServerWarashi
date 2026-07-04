@@ -30,7 +30,7 @@ public final class TicketPerfMixinHooks {
             if (sessionId < 0L) {
                 return original;
             }
-            return new ProfilingEntityConsumer<>(level, original, entity, entityPos, sessionId);
+            return new ProfilingEntityConsumer<>(original, entity, entityPos, sessionId);
         }
 
         if (!ChunkCostRuntime.enabled()) {
@@ -78,7 +78,7 @@ public final class TicketPerfMixinHooks {
             long start = System.nanoTime();
             original.tick(level, chunk, randomTickSpeed);
             long duration = System.nanoTime() - start;
-            TicketPerfSessionController.onChunkTick(level, pos, duration, sessionId);
+            TicketPerfSessionController.onChunkTick(pos, duration, sessionId);
             return;
         }
 
@@ -89,7 +89,7 @@ public final class TicketPerfMixinHooks {
         original.tick(level, chunk, randomTickSpeed);
     }
 
-    private record ProfilingEntityConsumer<T extends Entity>(ServerLevel level, Consumer<T> delegate, T entity,
+    private record ProfilingEntityConsumer<T extends Entity>(Consumer<T> delegate, T entity,
                                                              BlockPos entityPos,
                                                              long sessionId) implements Consumer<T> {
         @Override
@@ -99,7 +99,6 @@ public final class TicketPerfMixinHooks {
             long duration = System.nanoTime() - start;
             if (TicketPerfSessionController.isAllOwnersSession()) {
                 TicketPerfSessionController.onEntityTick(
-                        level,
                         entityPos,
                         null,
                         null,
@@ -114,7 +113,6 @@ public final class TicketPerfMixinHooks {
                 String shortUuid = entityId.length() > 8 ? entityId.substring(0, 8) : entityId;
                 String entityLabel = entityType + "#" + shortUuid + "@(" + entityPos.getX() + "," + entityPos.getY() + "," + entityPos.getZ() + ")";
                 TicketPerfSessionController.onEntityTick(
-                        level,
                         entityPos,
                         entityType,
                         entityId,
@@ -156,7 +154,7 @@ public final class TicketPerfMixinHooks {
                 return next;
             }
 
-            return new ProfilingBlockEntity(level, next, pos, sessionId);
+            return new ProfilingBlockEntity(next, pos, sessionId);
         }
 
         @Override
@@ -190,7 +188,7 @@ public final class TicketPerfMixinHooks {
         }
     }
 
-    private record ProfilingBlockEntity(Level level, TickingBlockEntity delegate, BlockPos pos,
+    private record ProfilingBlockEntity(TickingBlockEntity delegate, BlockPos pos,
                                         long sessionId) implements TickingBlockEntity {
 
         @Override
@@ -200,7 +198,6 @@ public final class TicketPerfMixinHooks {
             long duration = System.nanoTime() - start;
             if (TicketPerfSessionController.isAllOwnersSession()) {
                 TicketPerfSessionController.onEntityTick(
-                        level,
                         pos,
                         null,
                         null,
@@ -214,7 +211,6 @@ public final class TicketPerfMixinHooks {
                 String sourceId = Long.toString(pos.asLong());
                 String sourceLabel = blockEntityType + "@(" + pos.getX() + "," + pos.getY() + "," + pos.getZ() + ")";
                 TicketPerfSessionController.onEntityTick(
-                        level,
                         pos,
                         blockEntityType,
                         sourceId,

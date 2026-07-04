@@ -80,8 +80,7 @@ public final class TicketPerfSessionController {
         nextSessionId = 1L;
     }
 
-    public static void onEntityTick(Level level,
-                                    BlockPos pos,
+    public static void onEntityTick(BlockPos pos,
                                     String type,
                                     String sourceId,
                                     String sourceLabel,
@@ -91,13 +90,13 @@ public final class TicketPerfSessionController {
         if (sessionId < 0L || !ANALYZER.acceptsSessionId(sessionId)) {
             return;
         }
-        ANALYZER.onEntityTick(level, pos, type, sourceId, sourceLabel, durationNanos, isBlockEntity);
+        ANALYZER.onEntityTick(pos, type, sourceId, sourceLabel, durationNanos, isBlockEntity);
     }
 
-    public static void onChunkTick(Level level, ChunkPos pos, long durationNanos, long sessionId) {
+    public static void onChunkTick(ChunkPos pos, long durationNanos, long sessionId) {
         if (sessionId < 0L || !ANALYZER.acceptsSessionId(sessionId)) {
             return;
         }
-        ANALYZER.onChunkTick(level, pos, durationNanos);
+        ANALYZER.onChunkTick(pos, durationNanos);
     }
 }
