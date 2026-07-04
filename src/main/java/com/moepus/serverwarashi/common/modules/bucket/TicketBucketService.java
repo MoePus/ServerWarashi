@@ -51,7 +51,7 @@ final class TicketBucketService {
 
     /**
      * 收集参与自动分桶的 ticket。
-     * 若 chunk 内含有任意系统 ticket（如 PLAYER），整 chunk 跳过分桶。
+     * 若 chunk 内含有任意保护型 ticket（如 PLAYER），整 chunk 跳过分桶。
      * vanilla 会在玩家 viewDistance 范围内每个 chunk 都注册一个 PLAYER ticket
      * 实例（level=31），借此天然覆盖玩家可见范围，避免削掉这些 chunk 的实体 tick。
      *

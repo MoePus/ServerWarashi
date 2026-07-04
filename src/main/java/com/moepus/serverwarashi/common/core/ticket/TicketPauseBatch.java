@@ -29,7 +29,7 @@ public final class TicketPauseBatch {
     }
 
     /**
-     * 低层单 ticket 入口，调用方负责过滤系统 ticket。
+     * 低层单 ticket 入口，调用方负责过滤不可暂停或保护型 ticket。
      */
     public boolean apply(Ticket<?> ticket, long chunkPos, boolean paused, int reasonMask) {
         if (!updateTicketPauseReason(ticket, paused, reasonMask)) {

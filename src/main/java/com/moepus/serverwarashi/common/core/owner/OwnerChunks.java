@@ -97,10 +97,10 @@ public final class OwnerChunks {
     public static Map<TicketOwner, Set<Long>> collectMap(ServerLevel level, PauseMode pauseMode) {
         Map<TicketOwner, Set<Long>> ownerMap = new HashMap<>();
         TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
-            // resolve 可能触发实体/玩家查找，开销大；系统 ticket 先只挑一张候补，仅当该 chunk 没有其他 owner 时才 resolve 这一次
+            // resolve 可能触发实体/玩家查找，开销大；chunk protection ticket 先只挑一张候补，仅当该 chunk 没有其他 owner 时才 resolve 这一次
             Ticket<?> fallback = null;
             int fallbackPriority = Integer.MAX_VALUE;
-            boolean addedNonSystemOwner = false;
+            boolean addedNonChunkProtectionOwner = false;
             for (Ticket<?> ticket : tickets) {
                 if (!accept(ticket, pauseMode)) {
                     continue;
@@ -118,9 +118,9 @@ public final class OwnerChunks {
                     continue;
                 }
                 ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                addedNonSystemOwner = true;
+                addedNonChunkProtectionOwner = true;
             }
-            if (!addedNonSystemOwner && fallback != null) {
+            if (!addedNonChunkProtectionOwner && fallback != null) {
                 TicketOwner owner = TicketOwnerResolver.resolve(fallback, level);
                 if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
                     ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
@@ -140,7 +140,7 @@ public final class OwnerChunks {
         TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
             Ticket<?> fallback = null;
             int fallbackPriority = Integer.MAX_VALUE;
-            boolean addedNonSystemOwner = false;
+            boolean addedNonChunkProtectionOwner = false;
             for (Ticket<?> ticket : tickets) {
                 boolean paused = ((IPauseableTicket) (Object) ticket).serverWarashi$isPaused();
                 if (TicketUtils.getOriginLevel(ticket) > TicketUtils.MAX_PAUSEABLE_LEVEL) {
@@ -162,9 +162,9 @@ public final class OwnerChunks {
                 if (!paused) {
                     activeOnly.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
                 }
-                addedNonSystemOwner = true;
+                addedNonChunkProtectionOwner = true;
             }
-            if (!addedNonSystemOwner && fallback != null) {
+            if (!addedNonChunkProtectionOwner && fallback != null) {
                 TicketOwner owner = TicketOwnerResolver.resolve(fallback, level);
                 if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
                     all.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
