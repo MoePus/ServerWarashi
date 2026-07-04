@@ -1,6 +1,7 @@
 package com.moepus.serverwarashi.common.mixin.ticket;
 
 import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import net.minecraft.server.level.Ticket;
 import org.spongepowered.asm.mixin.Final;
@@ -21,6 +22,12 @@ public abstract class TicketMixin implements IPauseableTicket {
 
     @Unique
     private volatile int serverWarashi$pauseMask = 0;
+
+    @Unique
+    private volatile TicketOwner serverWarashi$cachedOwner;
+
+    @Unique
+    private volatile long serverWarashi$ownerResolvedAtGameTime = Long.MIN_VALUE;
 
     @Override
     public boolean serverWarashi$isPaused() {
@@ -47,6 +54,22 @@ public abstract class TicketMixin implements IPauseableTicket {
     @Override
     public Object serverWarashi$getKey() {
         return getKey();
+    }
+
+    @Override
+    public TicketOwner serverWarashi$getCachedOwner() {
+        return serverWarashi$cachedOwner;
+    }
+
+    @Override
+    public long serverWarashi$getOwnerResolvedAtGameTime() {
+        return serverWarashi$ownerResolvedAtGameTime;
+    }
+
+    @Override
+    public void serverWarashi$cacheOwner(TicketOwner owner, long gameTime) {
+        serverWarashi$cachedOwner = owner;
+        serverWarashi$ownerResolvedAtGameTime = gameTime;
     }
 
     @Inject(method = "getTicketLevel", at = @At("HEAD"), cancellable = true)

@@ -9,4 +9,7 @@ public interface IPauseableTicket {
     boolean serverWarashi$isPaused();
     int serverWarashi$getLevel();
     Object serverWarashi$getKey();
+    TicketOwner serverWarashi$getCachedOwner();
+    long serverWarashi$getOwnerResolvedAtGameTime();
+    void serverWarashi$cacheOwner(TicketOwner owner, long gameTime);
 }

@@ -29,15 +29,25 @@ public final class TicketOwnerResolver {
     private static final String C2ME_NOTICK_VIEW_DISTANCE = "c2me_notickvd";
     public static final String UNKNOWN_ENTITY = "Unknown entity";
     private static final String WORLD_START = "world_start";
+    private static final long OWNER_CACHE_TTL_TICKS = 100L;
 
     private TicketOwnerResolver() {
     }
 
     public static TicketOwner resolve(Ticket<?> ticket, ServerLevel level) {
-        Object rawKey = rawKey(ticket);
+        IPauseableTicket pauseableTicket = (IPauseableTicket) (Object) ticket;
+        long gameTime = level.getGameTime();
+        TicketOwner cachedOwner = pauseableTicket.serverWarashi$getCachedOwner();
+        long cachedAt = pauseableTicket.serverWarashi$getOwnerResolvedAtGameTime();
+        if (cachedOwner != null && gameTime - cachedAt <= OWNER_CACHE_TTL_TICKS) {
+            return cachedOwner;
+        }
+
+        Object rawKey = pauseableTicket.serverWarashi$getKey();
         String typeName = ticket.getType().toString();
         String displayName = typeName;
         BlockPos displayPos = null;
+        boolean cacheable = true;
 
         Optional<ForcedOwner> forcedOwner = readForcedOwner(rawKey);
         TicketOwnerKey key;
@@ -55,10 +65,12 @@ public final class TicketOwnerResolver {
                     displayPos = entity.blockPosition();
                 } else {
                     displayName = UNKNOWN_ENTITY;
+                    cacheable = false;
                 }
             }
         } else if (isPlayerTicket(ticket, typeName)) {
             Optional<ServerPlayer> nearestPlayer = nearestPlayer(level, rawKey);
+            cacheable = nearestPlayer.isPresent();
             key = playerKey(typeName, nearestPlayer.orElse(null));
             if (nearestPlayer.isPresent()) {
                 ServerPlayer player = nearestPlayer.get();
@@ -76,7 +88,11 @@ public final class TicketOwnerResolver {
             }
         }
 
-        return new TicketOwner(key, displayName, displayPos);
+        TicketOwner owner = new TicketOwner(key, displayName, displayPos);
+        if (cacheable) {
+            pauseableTicket.serverWarashi$cacheOwner(owner, gameTime);
+        }
+        return owner;
     }
 
     public static TicketOwnerKey resolveKey(Ticket<?> ticket, ServerLevel level) {
