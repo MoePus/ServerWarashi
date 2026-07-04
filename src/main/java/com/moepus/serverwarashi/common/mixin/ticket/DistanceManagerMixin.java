@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
  * 「分裂暂停」chunk 上增删无关 ticket 时把 ticketTracker 瞬时回滚到 33（见 bug-01 复查 SF1）。
  */
 @Mixin(value = DistanceManager.class, remap = false)
-@SuppressWarnings("unused")
+
 public abstract class DistanceManagerMixin {
     @WrapOperation(
             method = "getTicketLevelAt(Lnet/minecraft/util/SortedArraySet;)I",

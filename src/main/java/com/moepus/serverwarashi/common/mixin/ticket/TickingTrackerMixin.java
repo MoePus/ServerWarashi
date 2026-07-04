@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.At;
  * <p>仅在「含被暂停 ticket 的 chunk」上与原版行为不同：未暂停时 masked 最小 == first()。
  */
 @Mixin(value = TickingTracker.class, remap = false)
-@SuppressWarnings("unused")
+
 public abstract class TickingTrackerMixin {
     @WrapOperation(
             method = {

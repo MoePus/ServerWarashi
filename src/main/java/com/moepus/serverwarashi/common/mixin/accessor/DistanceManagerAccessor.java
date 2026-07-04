@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(value = DistanceManager.class, remap = false)
-@SuppressWarnings("unused")
+
 public interface DistanceManagerAccessor {
     @Accessor
     Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> getTickets();

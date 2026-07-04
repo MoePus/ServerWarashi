@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.At;
  * 避免 {@code defaultRequire:1} 下的加载期硬冲突（见 bug-01 复查 SF2）。
  */
 @Mixin(targets = "net.minecraft.server.level.DistanceManager$ChunkTicketTracker", remap = false)
-@SuppressWarnings("unused")
+
 public abstract class ChunkTicketTrackerMixin {
     @WrapOperation(
             method = "getLevelFromSource(J)I",

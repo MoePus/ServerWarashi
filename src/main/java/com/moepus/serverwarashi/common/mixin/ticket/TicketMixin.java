@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(value = Ticket.class, remap = false)
-@SuppressWarnings("unused")
+
 public abstract class TicketMixin implements IPauseableTicket {
     @Shadow
     @Final
@@ -22,40 +22,20 @@ public abstract class TicketMixin implements IPauseableTicket {
     @Unique
     private volatile int serverWarashi$pauseMask = 0;
 
-    @Unique
-    private boolean serverWarashi$dirty = false;
-
     @Override
-    @Unique
     public boolean serverWarashi$isPaused() {
         // 任一暂停位非 0 即视为已暂停
         return serverWarashi$pauseMask != 0;
     }
 
     @Override
-    public boolean serverWarashi$needUpdate() {
-        return serverWarashi$dirty;
-    }
-
-    @Override
-    @Unique
     public int serverWarashi$getPauseMask() {
         return serverWarashi$pauseMask;
     }
 
     @Override
-    @Unique
     public void serverWarashi$setPauseMask(int mask) {
-        // 掩码真正变化时才置脏标记，供后续刷新判定
-        if (this.serverWarashi$pauseMask != mask) {
-            this.serverWarashi$dirty = true;
-            this.serverWarashi$pauseMask = mask;
-        }
-    }
-
-    @Override
-    public void serverWarashi$clearDirty() {
-        serverWarashi$dirty = false;
+        this.serverWarashi$pauseMask = mask;
     }
 
     @Override
