@@ -27,7 +27,7 @@ public final class TicketScanService {
                 distanceManager.getTickets().long2ObjectEntrySet()) {
             long chunkPos = entry.getLongKey();
             SortedArraySet<Ticket<?>> tickets = entry.getValue();
-            if (tickets == null || tickets.isEmpty()) {
+            if (tickets.isEmpty()) {
                 continue;
             }
             visitor.visitChunk(chunkPos, tickets);

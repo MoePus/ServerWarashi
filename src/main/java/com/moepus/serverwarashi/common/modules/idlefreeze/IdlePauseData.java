@@ -35,15 +35,6 @@ public final class IdlePauseData extends SavedData {
         return Collections.unmodifiableList(frozenOwners);
     }
 
-    public boolean containsChunk(long chunkPos) {
-        for (LongOpenHashSet owner : frozenOwners) {
-            if (owner.contains(chunkPos)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public static IdlePauseData get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(FACTORY, DATA_NAME);
     }

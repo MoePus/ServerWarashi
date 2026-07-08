@@ -15,6 +15,10 @@ public final class TicketUtils {
     private TicketUtils() {
     }
 
+    public static IPauseableTicket asPauseable(Ticket<?> ticket) {
+        return (IPauseableTicket) (Object) ticket;
+    }
+
     public static boolean isSystemTicket(Ticket<?> ticket) {
         return getOriginLevel(ticket) > MAX_PAUSEABLE_LEVEL || isSystemType(ticket.getType());
     }
@@ -24,7 +28,7 @@ public final class TicketUtils {
     }
 
     public static int getOriginLevel(Ticket<?> ticket) {
-        return ((IPauseableTicket) (Object) ticket).serverWarashi$getLevel();
+        return asPauseable(ticket).serverWarashi$getLevel();
     }
 
     /**
@@ -41,7 +45,7 @@ public final class TicketUtils {
         // masked=raw≥r0，若暂停则 masked=33，而暂停票必满足 origin≤32（见 ARCHITECTURE 不变量），故存在暂停票时
         // r0≤32<33。两种情况 masked(first) 均最小。覆盖绝大多数未降负载 chunk，把热路径从 O(n) 拉回 O(1)。
         Ticket<?> first = tickets.first();
-        if (!((IPauseableTicket) (Object) first).serverWarashi$isPaused()) {
+        if (!asPauseable(first).serverWarashi$isPaused()) {
             return first;
         }
         // 慢路径：仅当最严格票被暂停（降负载 chunk）时才需扫描全集合取 masked 最小者（与原实现一致）

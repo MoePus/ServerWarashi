@@ -45,10 +45,6 @@ final class TicketBucketService {
         scheduler.clear();
     }
 
-    boolean ownerTrackedForTest(ServerLevel level, TicketOwnerKey owner) {
-        return scheduler.ownerTrackedForTest(level.dimension(), owner);
-    }
-
     /**
      * 收集参与自动分桶的 ticket。
      * 若 chunk 内含有任意保护型 ticket（如 PLAYER），整 chunk 跳过分桶。
@@ -66,7 +62,7 @@ final class TicketBucketService {
             }
 
             for (Ticket<?> ticket : tickets) {
-                if (TicketUtils.isSystemTicket(ticket)) {
+                if (TicketUtils.getOriginLevel(ticket) > TicketUtils.MAX_PAUSEABLE_LEVEL) {
                     continue;
                 }
                 allTickets.add(new TicketEntry(ticket, TicketOwnerResolver.resolveKey(ticket, level), chunkPosLong));

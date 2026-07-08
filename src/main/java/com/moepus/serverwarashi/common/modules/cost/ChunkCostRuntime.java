@@ -53,10 +53,6 @@ public final class ChunkCostRuntime {
         return costSampleForChunk(level, chunkPos, currentGameTime);
     }
 
-    static CostSample costSampleForChunkAtGameTimeForTest(ServerLevel level, long chunkPos, long gameTime) {
-        return costSampleForChunk(level, chunkPos, gameTime);
-    }
-
     private static CostSample costSampleForChunk(ServerLevel level, long chunkPos, long currentGameTime) {
         synchronized (SAMPLE_LOCK) {
             Long2ObjectOpenHashMap<MutableChunkCost> costs = COST_BY_LEVEL.get(level);
@@ -80,37 +76,15 @@ public final class ChunkCostRuntime {
     }
 
     public static boolean shouldSample(ServerLevel level, BlockPos pos) {
-        // 调用点（hooks）已先判 enabled()
-        return pos != null && shouldSample(level.getGameTime(), ChunkPos.asLong(pos));
+        return shouldSample(level.getGameTime(), ChunkPos.asLong(pos));
     }
 
     public static void recordEntitySample(ServerLevel level, BlockPos pos, long durationNanos) {
-        if (pos != null) {
-            recordEntitySample(level, ChunkPos.asLong(pos), level.getGameTime(), durationNanos);
-        }
+        recordEntitySample(level, ChunkPos.asLong(pos), level.getGameTime(), durationNanos);
     }
 
     public static void recordBlockEntitySample(ServerLevel level, BlockPos pos, long durationNanos) {
-        if (pos != null) {
-            recordBlockEntitySample(level, ChunkPos.asLong(pos), level.getGameTime(), durationNanos);
-        }
-    }
-
-    static long sampledTicksForTest() {
-        synchronized (SAMPLE_LOCK) {
-            return sampledTicks;
-        }
-    }
-
-    public static void recordSampleForTest(ServerLevel level, long chunkPos, long durationNanos) {
-        recordChunkSample(level, chunkPos, durationNanos);
-    }
-
-    public static void clearForTest() {
-        synchronized (SAMPLE_LOCK) {
-            COST_BY_LEVEL.clear();
-            sampledTicks = 0L;
-        }
+        recordBlockEntitySample(level, ChunkPos.asLong(pos), level.getGameTime(), durationNanos);
     }
 
     static boolean shouldSample(long gameTime, long chunkPos) {
@@ -185,7 +159,7 @@ public final class ChunkCostRuntime {
                     || entityNanos != UNKNOWN_COST_NANOS;
         }
 
-        private static long knownNanos(long value) {
+        static long knownNanos(long value) {
             return value == UNKNOWN_COST_NANOS ? 0L : value;
         }
     }

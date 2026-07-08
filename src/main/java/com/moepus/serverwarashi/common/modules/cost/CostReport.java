@@ -1,6 +1,5 @@
 package com.moepus.serverwarashi.common.modules.cost;
 
-import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
 import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
 import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfMessages;
@@ -89,9 +88,9 @@ public final class CostReport {
         for (long chunk : chunks) {
             ChunkCostRuntime.CostSample cost = ChunkCostRuntime.costSampleForChunk(level, chunk);
             if (cost.hasKnownCost()) {
-                chunkTotal += knownNanos(cost.chunkNanos());
-                blockEntityTotal += knownNanos(cost.blockEntityNanos());
-                entityTotal += knownNanos(cost.entityNanos());
+                chunkTotal += ChunkCostRuntime.CostSample.knownNanos(cost.chunkNanos());
+                blockEntityTotal += ChunkCostRuntime.CostSample.knownNanos(cost.blockEntityNanos());
+                entityTotal += ChunkCostRuntime.CostSample.knownNanos(cost.entityNanos());
                 known++;
             }
         }
@@ -100,10 +99,6 @@ public final class CostReport {
 
     private static String formatMspt(long nanos) {
         return String.format(Locale.ROOT, "%.3f", nanos / 1_000_000.0);
-    }
-
-    private static long knownNanos(long nanos) {
-        return nanos == ChunkCostRuntime.UNKNOWN_COST_NANOS ? 0L : nanos;
     }
 
     private record OwnerCost(TicketOwner owner,

@@ -1,6 +1,5 @@
 package com.moepus.serverwarashi.common.modules.bucket;
 
-import com.moepus.serverwarashi.common.core.ticket.TicketOwnerKey;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseService;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -15,7 +14,7 @@ import java.util.Set;
  * 上游：Commands / analyze。下游：TicketBucketService。
  */
 public final class TicketBucketRuntime {
-    private static long tickAge = 0L;
+    private static long tickAge;
     private static final Set<ResourceKey<Level>> ANALYSIS_SUSPENDED_LEVELS = new HashSet<>();
     private static final TicketBucketService SERVICE = new TicketBucketService();
 
@@ -43,14 +42,6 @@ public final class TicketBucketRuntime {
         tickAge = 0L;
         ANALYSIS_SUSPENDED_LEVELS.clear();
         SERVICE.clearRuntimeState();
-    }
-
-    static long tickAgeForTest() {
-        return tickAge;
-    }
-
-    static boolean ownerTrackedForTest(ServerLevel level, TicketOwnerKey owner) {
-        return SERVICE.ownerTrackedForTest(level, owner);
     }
 
     static LevelTickDecision decideLevelTick(ResourceKey<Level> dimension, boolean hasActiveAnalysisSession) {

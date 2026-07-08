@@ -1,6 +1,5 @@
 package com.moepus.serverwarashi.common.core.owner;
 
-import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
 import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
 import com.moepus.serverwarashi.common.core.ticket.TicketOwnerResolver;
 import com.moepus.serverwarashi.common.core.ticket.TicketScanService;
@@ -97,35 +96,9 @@ public final class OwnerChunks {
 
     public static Map<TicketOwner, Set<Long>> collectMap(ServerLevel level, PauseMode pauseMode) {
         Map<TicketOwner, Set<Long>> ownerMap = new HashMap<>();
-        TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
-            // resolve 可能触发实体/玩家查找，开销大；chunk protection ticket 先只挑一张候补，仅当该 chunk 没有其他 owner 时才 resolve 这一次
-            Ticket<?> fallback = null;
-            int fallbackPriority = Integer.MAX_VALUE;
-            boolean addedNonChunkProtectionOwner = false;
-            for (Ticket<?> ticket : tickets) {
-                if (!accept(ticket, pauseMode)) {
-                    continue;
-                }
-                if (TicketUtils.isChunkProtectionTicket(ticket)) {
-                    int priority = ticket.getType() == TicketType.FORCED ? 0 : 255;
-                    if (priority < fallbackPriority) {
-                        fallback = ticket;
-                        fallbackPriority = priority;
-                    }
-                    continue;
-                }
-                TicketOwner owner = TicketOwnerResolver.resolve(ticket, level);
-                if (TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
-                    continue;
-                }
+        visitOwnerChunks(level, (owner, chunkPos, paused) -> {
+            if (pauseMode.accept(paused)) {
                 ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                addedNonChunkProtectionOwner = true;
-            }
-            if (!addedNonChunkProtectionOwner && fallback != null) {
-                TicketOwner owner = TicketOwnerResolver.resolve(fallback, level);
-                if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
-                    ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                }
             }
         });
         return ownerMap;
@@ -133,47 +106,14 @@ public final class OwnerChunks {
 
     /**
      * 一次遍历同时返回 ACTIVE_ONLY 与 ALL 两个视图，避免双全量扫描。
-     * 返回值：record BothMaps(activeOnly, all)
      */
     public static BothMaps collectBothMaps(ServerLevel level) {
         Map<TicketOwner, Set<Long>> activeOnly = new HashMap<>();
         Map<TicketOwner, Set<Long>> all = new HashMap<>();
-        TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
-            Ticket<?> fallback = null;
-            int fallbackPriority = Integer.MAX_VALUE;
-            boolean addedNonChunkProtectionOwner = false;
-            for (Ticket<?> ticket : tickets) {
-                boolean paused = ((IPauseableTicket) (Object) ticket).serverWarashi$isPaused();
-                if (TicketUtils.getOriginLevel(ticket) > TicketUtils.MAX_PAUSEABLE_LEVEL) {
-                    continue;
-                }
-                if (TicketUtils.isChunkProtectionTicket(ticket)) {
-                    int priority = ticket.getType() == TicketType.FORCED ? 0 : 255;
-                    if (priority < fallbackPriority) {
-                        fallback = ticket;
-                        fallbackPriority = priority;
-                    }
-                    continue;
-                }
-                TicketOwner owner = TicketOwnerResolver.resolve(ticket, level);
-                if (TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
-                    continue;
-                }
-                all.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                if (!paused) {
-                    activeOnly.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                }
-                addedNonChunkProtectionOwner = true;
-            }
-            if (!addedNonChunkProtectionOwner && fallback != null) {
-                TicketOwner owner = TicketOwnerResolver.resolve(fallback, level);
-                if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
-                    all.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                    boolean paused = ((IPauseableTicket) (Object) fallback).serverWarashi$isPaused();
-                    if (!paused) {
-                        activeOnly.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-                    }
-                }
+        visitOwnerChunks(level, (owner, chunkPos, paused) -> {
+            all.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
+            if (!paused) {
+                activeOnly.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
             }
         });
         return new BothMaps(activeOnly, all);
@@ -256,10 +196,47 @@ public final class OwnerChunks {
         return new ChunkLoad(blockEntityCount, entityCount);
     }
 
-    @SuppressWarnings("ConstantValue")
-    private static boolean accept(Ticket<?> ticket, PauseMode pauseMode) {
-        boolean paused = ((IPauseableTicket) (Object) ticket).serverWarashi$isPaused();
-        return pauseMode.accept(paused) && TicketUtils.getOriginLevel(ticket) <= TicketUtils.MAX_PAUSEABLE_LEVEL;
+    /**
+     * 核心 ticket→owner 遍历：过滤 origin level、解析 owner、处理 chunk protection fallback。
+     * consumer 接收 (owner, chunkPos, paused)，由调用方决定写入哪些 map。
+     */
+    private static void visitOwnerChunks(ServerLevel level, OwnerChunkConsumer consumer) {
+        TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
+            Ticket<?> fallback = null;
+            int fallbackPriority = Integer.MAX_VALUE;
+            boolean addedNonChunkProtectionOwner = false;
+            for (Ticket<?> ticket : tickets) {
+                if (TicketUtils.getOriginLevel(ticket) > TicketUtils.MAX_PAUSEABLE_LEVEL) {
+                    continue;
+                }
+                if (TicketUtils.isChunkProtectionTicket(ticket)) {
+                    int priority = ticket.getType() == TicketType.FORCED ? 0 : 255;
+                    if (priority < fallbackPriority) {
+                        fallback = ticket;
+                        fallbackPriority = priority;
+                    }
+                    continue;
+                }
+                TicketOwner owner = TicketOwnerResolver.resolve(ticket, level);
+                if (TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
+                    continue;
+                }
+                boolean paused = TicketUtils.asPauseable(ticket).serverWarashi$isPaused();
+                consumer.accept(owner, chunkPos, paused);
+                addedNonChunkProtectionOwner = true;
+            }
+            if (!addedNonChunkProtectionOwner && fallback != null) {
+                TicketOwner owner = TicketOwnerResolver.resolve(fallback, level);
+                if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
+                    consumer.accept(owner, chunkPos, false);
+                }
+            }
+        });
+    }
+
+    @FunctionalInterface
+    private interface OwnerChunkConsumer {
+        void accept(TicketOwner owner, long chunkPos, boolean paused);
     }
 
     private record ChunkLoad(int blockEntityCount, int entityCount) {

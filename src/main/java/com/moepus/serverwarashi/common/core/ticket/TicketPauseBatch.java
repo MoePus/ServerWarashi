@@ -100,7 +100,7 @@ public final class TicketPauseBatch {
 
     // 仅修改 pauseMask，不直接改原始 ticket level。
     public static boolean updateTicketPauseReason(Ticket<?> ticket, boolean paused, int reasonMask) {
-        IPauseableTicket ticketInfo = (IPauseableTicket) (Object) ticket;
+        IPauseableTicket ticketInfo = TicketUtils.asPauseable(ticket);
         // 计算新旧掩码；无变化则直接返回 false
         int before = ticketInfo.serverWarashi$getPauseMask();
         int after = applyPauseMask(before, paused, reasonMask);

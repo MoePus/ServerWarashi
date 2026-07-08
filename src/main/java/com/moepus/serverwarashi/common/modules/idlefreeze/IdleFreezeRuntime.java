@@ -42,12 +42,8 @@ public final class IdleFreezeRuntime {
         if (IdleFreezeConfig.disabled()) {
             return;
         }
-        MinecraftServer server = player.getServer();
-        if (server == null) {
-            return;
-        }
         // 每 CHECK_INTERVAL_TICKS 才处理一次，降低开销
-        int tick = server.getTickCount();
+        int tick = player.getServer().getTickCount();
         if (tick % CHECK_INTERVAL_TICKS == 0) {
             long chunkPos = player.chunkPosition().toLong();
             ServerLevel level = player.serverLevel();

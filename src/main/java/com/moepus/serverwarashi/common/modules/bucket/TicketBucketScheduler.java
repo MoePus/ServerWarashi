@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.common.modules.bucket;
 import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
 import com.moepus.serverwarashi.common.core.ticket.TicketOwnerKey;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseBatch;
+import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.config.TicketBucketConfig;
 import com.moepus.serverwarashi.common.modules.cost.ChunkCostRuntime;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -55,17 +56,8 @@ final class TicketBucketScheduler {
         statesByLevel.clear();
     }
 
-    boolean ownerTrackedForTest(ResourceKey<Level> dimension, TicketOwnerKey owner) {
-        Map<TicketOwnerKey, TicketBucketOwnerState> states = statesByLevel.get(dimension);
-        return states != null && states.containsKey(owner);
-    }
-
     static long cycle(long age, int runEvery) {
         return Math.floorDiv(age, Math.max(1, runEvery));
-    }
-
-    static int phaseFor(Object owner, int period) {
-        return phaseForNormalized(owner, Math.max(1, period));
     }
 
     static boolean isActivePhase(Object owner, long cycle, int period) {
@@ -239,7 +231,7 @@ final class TicketBucketScheduler {
     private boolean syncPausedStateFromTickets(List<TicketBucketService.TicketEntry> entries,
                                                TicketBucketOwnerState state) {
         for (TicketBucketService.TicketEntry entry : entries) {
-            if ((((IPauseableTicket) (Object) entry.ticket()).serverWarashi$getPauseMask()
+            if ((TicketUtils.asPauseable(entry.ticket()).serverWarashi$getPauseMask()
                     & IPauseableTicket.PAUSE_REASON_AUTO) != 0) {
                 state.paused = true;
                 return true;

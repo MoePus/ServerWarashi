@@ -35,7 +35,7 @@ public final class TicketOwnerResolver {
     }
 
     public static TicketOwner resolve(Ticket<?> ticket, ServerLevel level) {
-        IPauseableTicket pauseableTicket = (IPauseableTicket) (Object) ticket;
+        IPauseableTicket pauseableTicket = TicketUtils.asPauseable(ticket);
         long gameTime = level.getGameTime();
         TicketOwner cachedOwner = pauseableTicket.serverWarashi$getCachedOwner();
         long cachedAt = pauseableTicket.serverWarashi$getOwnerResolvedAtGameTime();
@@ -109,7 +109,7 @@ public final class TicketOwnerResolver {
     }
 
     static Object rawKey(Ticket<?> ticket) {
-        return ((IPauseableTicket) (Object) ticket).serverWarashi$getKey();
+        return TicketUtils.asPauseable(ticket).serverWarashi$getKey();
     }
 
     static Optional<ForcedOwner> readForcedOwner(Object key) {
