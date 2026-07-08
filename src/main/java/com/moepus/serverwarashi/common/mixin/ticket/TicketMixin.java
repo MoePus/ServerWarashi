@@ -21,7 +21,7 @@ public abstract class TicketMixin implements IPauseableTicket {
     private int ticketLevel;
 
     @Unique
-    private volatile int serverWarashi$pauseMask = 0;
+    private volatile int serverWarashi$pauseMask;
 
     @Unique
     private volatile TicketOwner serverWarashi$cachedOwner;

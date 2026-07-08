@@ -57,12 +57,11 @@ final class TicketBucketScheduler {
     }
 
     static long cycle(long age, int runEvery) {
-        return Math.floorDiv(age, Math.max(1, runEvery));
+        return Math.floorDiv(age, runEvery);
     }
 
     static boolean isActivePhase(Object owner, long cycle, int period) {
-        int normalizedPeriod = Math.max(1, period);
-        return phaseForNormalized(owner, normalizedPeriod) == Math.floorMod(cycle, normalizedPeriod);
+        return phaseForNormalized(owner, period) == Math.floorMod(cycle, period);
     }
 
     private static int phaseForNormalized(Object owner, int normalizedPeriod) {
@@ -74,8 +73,8 @@ final class TicketBucketScheduler {
                                 long lastFlipTick,
                                 int pauseDelayRuns,
                                 int minHoldTicks) {
-        return inactiveRuns > Math.max(0, pauseDelayRuns)
-                && age - lastFlipTick >= Math.max(0, minHoldTicks);
+        return inactiveRuns > pauseDelayRuns
+                && age - lastFlipTick >= minHoldTicks;
     }
 
     /**
@@ -98,7 +97,7 @@ final class TicketBucketScheduler {
     }
 
     static long tombstoneTtlCycles(int minHoldTicks, int runEvery) {
-        return Math.max(2L, Math.ceilDiv(Math.max(0, minHoldTicks), Math.max(1, runEvery)) + 1L);
+        return Math.max(2L, Math.ceilDiv(minHoldTicks, runEvery) + 1L);
     }
 
     private static Map<TicketOwnerKey, List<TicketBucketService.TicketEntry>> ownerTickets(
@@ -146,12 +145,10 @@ final class TicketBucketScheduler {
     private static final long AGE_PRIORITY_WEIGHT = MAX_COST_PENALTY + 1L;
 
     static long score(long cyclesSinceActive, long ownerCost) {
-        long cycles = Math.max(0L, cyclesSinceActive);
-        long agePriority = cycles > Long.MAX_VALUE / AGE_PRIORITY_WEIGHT
+        long agePriority = cyclesSinceActive > Long.MAX_VALUE / AGE_PRIORITY_WEIGHT
                 ? Long.MAX_VALUE
-                : cycles * AGE_PRIORITY_WEIGHT;
-        long normalizedCost = Math.max(0L, ownerCost);
-        long costPenalty = Math.min(MAX_COST_PENALTY, normalizedCost / COST_PENALTY_BUCKET_NANOS);
+                : cyclesSinceActive * AGE_PRIORITY_WEIGHT;
+        long costPenalty = Math.min(MAX_COST_PENALTY, ownerCost / COST_PENALTY_BUCKET_NANOS);
         return agePriority - costPenalty;
     }
 
@@ -192,7 +189,7 @@ final class TicketBucketScheduler {
     }
 
     static int activeOwnerBudget(int ownerCount, int period) {
-        return Math.max(1, Math.ceilDiv(ownerCount, Math.max(1, period)));
+        return Math.max(1, Math.ceilDiv(ownerCount, period));
     }
 
     private void applyOwnerTickets(List<TicketBucketService.TicketEntry> entries,
@@ -266,7 +263,7 @@ final class TicketBucketScheduler {
                                SchedulerConfig config,
                                TicketPauseBatch pauseBatch) {
         // 批数取 min(配置批数, owner 内 ticket 数)，避免空批
-        int batches = Math.min(Math.max(1, config.wakeBatches()), entries.size());
+        int batches = Math.min(config.wakeBatches(), entries.size());
         // 本轮处理第 wakeBatchIndex 批：解除该批 ticket 的 AUTO 暂停；分批恢复，避免全部 chunk 在同一 tick 恢复造成瞬时卡顿
         int batch = state.wakeBatchIndex % batches;
         for (int i = 0; i < entries.size(); i++) {

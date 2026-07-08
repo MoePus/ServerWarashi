@@ -11,10 +11,6 @@ public final class TicketPerfConfig {
     }
 
     public static int defaultAnalyzeSeconds() {
-        try {
-            return Config.CHUNKPERF_DEFAULT_ANALYZE_SECONDS.get();
-        } catch (IllegalStateException ignored) {
-            return DEFAULT_ANALYZE_SECONDS;
-        }
+        return Config.CHUNKPERF_DEFAULT_ANALYZE_SECONDS.get();
     }
 }

@@ -129,7 +129,7 @@ public final class ChunkCostRuntime {
     }
 
     private static long sampleGameTime(ServerLevel level) {
-        return level == null ? NO_SAMPLE_GAME_TIME : level.getGameTime();
+        return level.getGameTime();
     }
 
     private static long currentNanos(long nanos, long sampleGameTime, long currentGameTime) {
