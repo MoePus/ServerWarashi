@@ -88,6 +88,7 @@ public final class TicketPerfSessionController {
                                     boolean isBlockEntity,
                                     long sessionId) {
         long activeSessionId = activeSessionId();
+        // Public hook entry: ignore stale callbacks after a session stops or changes.
         if (activeSessionId == NO_SESSION_ID || sessionId != activeSessionId) {
             return;
         }
@@ -96,6 +97,7 @@ public final class TicketPerfSessionController {
 
     public static void onChunkTick(ChunkPos pos, long durationNanos, long sessionId) {
         long activeSessionId = activeSessionId();
+        // Public hook entry: ignore stale callbacks after a session stops or changes.
         if (activeSessionId == NO_SESSION_ID || sessionId != activeSessionId) {
             return;
         }

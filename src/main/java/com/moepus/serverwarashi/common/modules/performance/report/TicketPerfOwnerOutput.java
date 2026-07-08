@@ -35,7 +35,32 @@ public final class TicketPerfOwnerOutput {
                                           OwnerChunks.PauseMode pauseMode,
                                           String header,
                                           OwnerChunks.SortMode sortMode) {
-        // 一次遍历获取 ACTIVE_ONLY 与 ALL 两个视图，避免双全量扫描
+        OwnerReportData data = ownerReportData(level, pauseMode, sortMode);
+        // 锚点唯一性必须按 ALL 全集（含已暂停 owner）判定：分析按钮执行的 startSingle 就是按 ALL 判定是否多 owner
+        Long2IntOpenHashMap ownerCounts = OwnerChunks.ownerCountByChunk(data.allOwnerChunks());
+        List<List<TableReport.Button>> rowButtons = new ArrayList<>();
+        for (OwnerChunks.Entry entry : data.owners()) {
+            BlockPos ownerPos = entry.owner().representativePos();
+            rowButtons.add(TicketPerfMessages.locateButtons(
+                    level.dimension().location(),
+                    ownerPos,
+                    OwnerChunks.uniqueChunkAnchor(entry.chunks(), ownerCounts)
+            ));
+        }
+        return buildOwnerReport(level, header, data.owners(), rowButtons);
+    }
+
+    private static TableReport ownerReportPlainText(ServerLevel level,
+                                                    OwnerChunks.PauseMode pauseMode,
+                                                    String header,
+                                                    OwnerChunks.SortMode sortMode) {
+        OwnerReportData data = ownerReportData(level, pauseMode, sortMode);
+        return buildOwnerReport(level, header, data.owners(), List.of());
+    }
+
+    private static OwnerReportData ownerReportData(ServerLevel level,
+                                                   OwnerChunks.PauseMode pauseMode,
+                                                   OwnerChunks.SortMode sortMode) {
         OwnerChunks.BothMaps both = OwnerChunks.collectBothMaps(level);
         Map<TicketOwner, Set<Long>> targetMap = pauseMode == OwnerChunks.PauseMode.ALL
                 ? both.all()
@@ -44,10 +69,15 @@ public final class TicketPerfOwnerOutput {
         List<OwnerChunks.Entry> owners = OwnerChunks.collectFromMap(level, targetMap).stream()
                 .sorted(sortMode.comparator())
                 .toList();
-        // 锚点唯一性必须按 ALL 全集（含已暂停 owner）判定：分析按钮执行的 startSingle 就是按 ALL 判定是否多 owner
-        Long2IntOpenHashMap ownerCounts = OwnerChunks.ownerCountByChunk(both.all().values());
+        return new OwnerReportData(owners, both.all().values());
+    }
+
+    private static TableReport buildOwnerReport(ServerLevel level,
+                                                String header,
+                                                List<OwnerChunks.Entry> owners,
+                                                List<List<TableReport.Button>> rowButtons) {
+        List<String> columns = List.of("Owner", "Pos", "Chunks", "BE", "E");
         List<List<String>> rows = new ArrayList<>();
-        List<List<TableReport.Button>> rowButtons = new ArrayList<>();
         for (OwnerChunks.Entry entry : owners) {
             OwnerChunks.Stats stats = entry.stats();
             BlockPos ownerPos = entry.owner().representativePos();
@@ -58,13 +88,7 @@ public final class TicketPerfOwnerOutput {
                     Integer.toString(stats.blockEntityCount()),
                     Integer.toString(stats.entityCount())
             ));
-            rowButtons.add(TicketPerfMessages.locateButtons(
-                    level.dimension().location(),
-                    ownerPos,
-                    OwnerChunks.uniqueChunkAnchor(entry.chunks(), ownerCounts)
-            ));
         }
-        List<String> columns = List.of("Owner", "Pos", "Chunks", "BE", "E");
         return new TableReport(
                 header,
                 List.of("Dimension: " + level.dimension().location()),
@@ -77,42 +101,6 @@ public final class TicketPerfOwnerOutput {
         );
     }
 
-    private static TableReport ownerReportPlainText(ServerLevel level,
-                                                    OwnerChunks.PauseMode pauseMode,
-                                                    String header,
-                                                    OwnerChunks.SortMode sortMode) {
-        OwnerChunks.BothMaps both = OwnerChunks.collectBothMaps(level);
-        Map<TicketOwner, Set<Long>> targetMap = pauseMode == OwnerChunks.PauseMode.ALL
-                ? both.all()
-                : both.activeOnly();
-
-        List<OwnerChunks.Entry> owners = OwnerChunks.collectFromMap(level, targetMap).stream()
-                .sorted(sortMode.comparator())
-                .toList();
-
-        List<List<String>> rows = new ArrayList<>();
-        for (OwnerChunks.Entry entry : owners) {
-            OwnerChunks.Stats stats = entry.stats();
-            BlockPos ownerPos = entry.owner().representativePos();
-            rows.add(List.of(
-                    entry.owner().getName(),
-                    ReportButtons.formatPos(ownerPos),
-                    Integer.toString(stats.chunkCount()),
-                    Integer.toString(stats.blockEntityCount()),
-                    Integer.toString(stats.entityCount())
-            ));
-        }
-        List<String> columns = List.of("Owner", "Pos", "Chunks", "BE", "E");
-        return new TableReport(
-                header,
-                List.of("Dimension: " + level.dimension().location()),
-                List.of(TableReport.section(
-                        "Owners",
-                        columns,
-                        rows,
-                        List.of()
-                ))
-        );
+    private record OwnerReportData(List<OwnerChunks.Entry> owners, Iterable<? extends Set<Long>> allOwnerChunks) {
     }
-
 }

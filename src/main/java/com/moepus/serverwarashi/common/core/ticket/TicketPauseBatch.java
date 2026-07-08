@@ -83,7 +83,7 @@ public final class TicketPauseBatch {
             // 新 level 数值更小 = 加载强度上升（对应恢复/解除暂停方向），作为 tracker.update 的 isDecreasing 实参
             boolean isDecreasing = newLevel < oldLevel;
             distanceManager.getTicketTracker().update(chunkPos, newLevel, isDecreasing);
-            // 仍有 ticket 时同步更新 ticking tracker
+            // Public utility: tolerate callers that pass chunks whose ticket set was emptied.
             if (!ticketSet.isEmpty()) {
                 distanceManager.getTickingTicketsTracker().update(chunkPos, newLevel, isDecreasing);
             }

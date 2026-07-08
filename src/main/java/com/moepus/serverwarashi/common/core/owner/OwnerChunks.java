@@ -89,7 +89,8 @@ public final class OwnerChunks {
         Map<Long, ChunkLoad> chunkLoads = new HashMap<>();
         List<Entry> entries = new ArrayList<>(ownerMap.size());
         for (var owner : ownerMap.entrySet()) {
-            entries.add(entry(level, owner.getKey(), owner.getValue(), sectionStorage, chunkLoads));
+            Set<Long> chunks = owner.getValue();
+            entries.add(new Entry(owner.getKey(), chunks, computeStats(level, chunks, sectionStorage, chunkLoads)));
         }
         return entries;
     }
@@ -219,14 +220,6 @@ public final class OwnerChunks {
             }
         }
         return null;
-    }
-
-    private static Entry entry(ServerLevel level,
-                               TicketOwner owner,
-                               Set<Long> chunks,
-                               EntitySectionStorage<?> sectionStorage,
-                               Map<Long, ChunkLoad> chunkLoads) {
-        return new Entry(owner, chunks, computeStats(level, chunks, sectionStorage, chunkLoads));
     }
 
     private static Stats computeStats(ServerLevel level,
