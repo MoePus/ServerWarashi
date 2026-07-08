@@ -46,7 +46,7 @@ public final class TicketPerfSessionController {
         if (activeSessionId() == NO_SESSION_ID) {
             return new TableReport.Result(TicketPerfMessages.noActiveAnalysis(), null);
         }
-        return ANALYZER.stopCurrentAnalysis();
+        return ANALYZER.stopActiveSession();
     }
 
     public static void tickSessions(MinecraftServer server) {

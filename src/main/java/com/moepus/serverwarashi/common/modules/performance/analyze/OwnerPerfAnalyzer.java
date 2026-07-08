@@ -100,17 +100,13 @@ final class OwnerPerfAnalyzer {
         activeSession = null;
     }
 
-    TableReport.Result stopCurrentAnalysis() {
-        return stopSession(activeSession);
-    }
-
     AutoAnalysisReport tickSessions() {
         Session session = activeSession;
         session.serverTickCount++;
         if (System.nanoTime() < session.endAtNanos) {
             return null;
         }
-        return new AutoAnalysisReport(session.playerId, stopSession(session));
+        return new AutoAnalysisReport(session.playerId, stopActiveSession());
     }
 
     long resolveTrackSessionId(ServerLevel level, BlockPos pos) {
@@ -150,7 +146,8 @@ final class OwnerPerfAnalyzer {
         session.chunkTickNanos.addTo(pos.toLong(), durationNanos);
     }
 
-    private TableReport.Result stopSession(Session session) {
+    TableReport.Result stopActiveSession() {
+        Session session = activeSession;
         activeSession = null;
         flushPending(session.blockEntityStats);
         flushPending(session.entityStats);
@@ -167,6 +164,7 @@ final class OwnerPerfAnalyzer {
         );
     }
 
+    //TODO 审阅到这里
     private List<TicketPerfReportData.OwnerMsptEntry> buildOwnerEntries(Session session) {
         List<TicketPerfReportData.OwnerMsptEntry> entries = new ArrayList<>();
         Long2IntOpenHashMap ownerCounts = OwnerChunks.ownerCountByChunk(
