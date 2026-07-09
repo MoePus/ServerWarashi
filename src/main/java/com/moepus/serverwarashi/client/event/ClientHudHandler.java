@@ -37,7 +37,7 @@ public final class ClientHudHandler {
     }
 
     static boolean consumeToggleClick() {
-        // 消费一次切换键按下（含未注册时的空安全）
-        return toggleKey != null && toggleKey.consumeClick();
+        // 消费一次切换键按下；按键注册事件先于任何 client tick，此处必已注册
+        return toggleKey.consumeClick();
     }
 }

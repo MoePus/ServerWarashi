@@ -133,7 +133,6 @@ public abstract class TableReportPanelScreen extends Screen {
         contentHeight = TableReportTableRenderer.contentHeight(currentReport());
         int viewHeight = viewHeight(geometry);
         switch (keyCode) {
-            case InputConstants.KEY_ESCAPE -> onClose();
             case InputConstants.KEY_UP -> scrollTo(scroll - ROW_H, viewHeight);
             case InputConstants.KEY_DOWN -> scrollTo(scroll + ROW_H, viewHeight);
             case InputConstants.KEY_PAGEUP -> scrollTo(scroll - viewHeight, viewHeight);

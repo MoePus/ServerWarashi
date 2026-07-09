@@ -33,15 +33,13 @@ public final class ReportDelivery {
     /**
      * 后台到点：把报告发回触发玩家；玩家离线或无客户端则回退纯文本（玩家或控制台）。
      */
-    public static void toPlayerOrConsole(MinecraftServer server, UUID playerId, TableReport.Result result) {
+    public static void toPlayerOrConsole(MinecraftServer server, UUID playerId, TableReport report) {
         ServerPlayer player = playerId == null ? null : server.getPlayerList().getPlayer(playerId);
-        if (player != null && result.report() != null && WarashiNetwork.canSendReports(player)) {
-            WarashiNetwork.sendPerfReport(player, result.report());
+        if (player != null && WarashiNetwork.canSendReports(player)) {
+            WarashiNetwork.sendPerfReport(player, report);
             return;
         }
-        Component message = result.report() != null
-                ? TableReportRenderer.toComponent(result.report())
-                : result.message();
+        Component message = TableReportRenderer.toComponent(report);
         if (player != null) {
             player.sendSystemMessage(message);
         } else {

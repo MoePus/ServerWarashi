@@ -3,7 +3,6 @@ package com.moepus.serverwarashi.client.event;
 import com.moepus.serverwarashi.Serverwarashi;
 import com.moepus.serverwarashi.client.screen.ResidentCostScreen;
 import com.moepus.serverwarashi.client.state.ClientResidentCostState;
-import com.moepus.serverwarashi.common.network.ReportPayload;
 import com.moepus.serverwarashi.common.network.ResidentHudSubscribePayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -67,8 +66,8 @@ public final class ClientHudRuntimeEvents {
         if (activeConnection == null || subscribed == enabled) {
             return true;
         }
-        if (!NetworkRegistry.hasChannel(activeConnection, ResidentHudSubscribePayload.TYPE.id())
-                || !NetworkRegistry.hasChannel(activeConnection, ReportPayload.TYPE.id())) {
+        // 两个 payload 由同一 registrar 同版本一并注册，协商结果必然同有同无，查订阅包一个即可
+        if (!NetworkRegistry.hasChannel(activeConnection, ResidentHudSubscribePayload.TYPE.id())) {
             subscribed = false;
             ClientResidentCostState.clear();
             sendStatus("Resident cost HUD is not supported by this server");

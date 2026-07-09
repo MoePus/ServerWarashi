@@ -53,8 +53,8 @@ public final class TableReportCodec {
     }
 
     private static List<List<TableReport.Button>> readRowButtons(RegistryFriendlyByteBuf buffer, int expectedRows) {
-        // 0 行表示无按钮；否则按钮行数必须等于数据行数
-        int rowCount = readCount(buffer);
+        // 0 行表示无按钮；行数不匹配立即拒绝，不按不可信的行数继续读取包体
+        int rowCount = buffer.readVarInt();
         if (rowCount == 0) {
             return List.of();
         }
@@ -74,13 +74,5 @@ public final class TableReportCodec {
         for (List<TableReport.Button> row : rowButtons) {
             BUTTON_ROW_CODEC.encode(buffer, row);
         }
-    }
-
-    private static int readCount(RegistryFriendlyByteBuf buffer) {
-        int count = buffer.readVarInt();
-        if (count < 0) {
-            throw new IllegalArgumentException("button rows count cannot be negative: " + count);
-        }
-        return count;
     }
 }

@@ -96,7 +96,7 @@ public final class TicketOwnerResolver {
     }
 
     public static TicketOwnerKey resolveKey(Ticket<?> ticket, ServerLevel level) {
-        Object rawKey = rawKey(ticket);
+        Object rawKey = TicketUtils.asPauseable(ticket).serverWarashi$getKey();
         String typeName = ticket.getType().toString();
         Optional<ForcedOwner> forcedOwner = readForcedOwner(rawKey);
         if (forcedOwner.isPresent()) {
@@ -106,10 +106,6 @@ public final class TicketOwnerResolver {
             return playerKey(typeName, nearestPlayer(level, rawKey).orElse(null));
         }
         return nonPlayerKey(ticket, rawKey, typeName);
-    }
-
-    static Object rawKey(Ticket<?> ticket) {
-        return TicketUtils.asPauseable(ticket).serverWarashi$getKey();
     }
 
     static Optional<ForcedOwner> readForcedOwner(Object key) {

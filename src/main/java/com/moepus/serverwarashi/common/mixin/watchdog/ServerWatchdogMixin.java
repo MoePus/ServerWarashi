@@ -23,12 +23,7 @@ public class ServerWatchdogMixin {
     @WrapOperation(method = "run", at = @At(value = "INVOKE", target = "Lnet/minecraft/CrashReport;saveToFile(Ljava/nio/file/Path;Lnet/minecraft/ReportType;)Z"))
     private boolean onSaveToFile(CrashReport instance, Path path, ReportType type, Operation<Boolean> original) {
         // 看门狗保存崩溃报告前，注入各维度 ticket 信息到报告分类中。
-        return ServerWatchdogTicketAppender.saveWithTicketInfo(
-                instance,
-                path,
-                type,
-                original::call,
-                server::getAllLevels
-        );
+        ServerWatchdogTicketAppender.appendTicketInfoToReport(instance, server.getAllLevels());
+        return original.call(instance, path, type);
     }
 }

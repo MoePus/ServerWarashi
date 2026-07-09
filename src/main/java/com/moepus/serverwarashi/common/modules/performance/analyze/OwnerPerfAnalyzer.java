@@ -125,7 +125,7 @@ final class OwnerPerfAnalyzer {
                       boolean isBlockEntity) {
         Session session = activeSession;
         long chunkPos = ChunkPos.asLong(pos);
-        ActorTimingStats stats = session.actorStats(isBlockEntity);
+        ActorTimingStats stats = isBlockEntity ? session.blockEntityStats : session.entityStats;
         if (!session.allOwnersReport) {
             stats.typeTotals.addTo(type, durationNanos);
             long currentSpikeNanos = stats.spikeNanos.getLong(sourceId);
@@ -146,12 +146,12 @@ final class OwnerPerfAnalyzer {
         session.chunkTickNanos.addTo(pos.toLong(), durationNanos);
     }
 
-    TableReport.Result stopActiveSession() {
+    TableReport stopActiveSession() {
         Session session = activeSession;
         activeSession = null;
         flushPending(session.blockEntityStats);
         flushPending(session.entityStats);
-        return new TableReport.Result(null, session.allOwnersReport ? buildAllReport(session) : buildSingleReport(session));
+        return session.allOwnersReport ? buildAllReport(session) : buildSingleReport(session);
     }
 
     private TableReport buildAllReport(Session session) {
@@ -164,7 +164,6 @@ final class OwnerPerfAnalyzer {
         );
     }
 
-    //TODO 审阅到这里
     private List<TicketPerfReportData.OwnerMsptEntry> buildOwnerEntries(Session session) {
         List<TicketPerfReportData.OwnerMsptEntry> entries = new ArrayList<>();
         Long2IntOpenHashMap ownerCounts = OwnerChunks.ownerCountByChunk(
@@ -261,7 +260,7 @@ final class OwnerPerfAnalyzer {
         return System.nanoTime() + durationSec * 1_000_000_000L;
     }
 
-    record AutoAnalysisReport(UUID playerId, TableReport.Result result) {
+    record AutoAnalysisReport(UUID playerId, TableReport report) {
     }
 
     private static final class Session {
@@ -316,10 +315,6 @@ final class OwnerPerfAnalyzer {
                            long endAtNanos,
                            UUID playerId) {
             return new Session(id, dimension, endAtNanos, playerId, true, owners);
-        }
-
-        ActorTimingStats actorStats(boolean isBlockEntity) {
-            return isBlockEntity ? blockEntityStats : entityStats;
         }
 
         boolean isTrackedChunk(long chunkPos) {

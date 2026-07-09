@@ -46,7 +46,7 @@ public final class TicketPerfSessionController {
         if (activeSessionId() == NO_SESSION_ID) {
             return new TableReport.Result(TicketPerfMessages.noActiveAnalysis(), null);
         }
-        return ANALYZER.stopActiveSession();
+        return new TableReport.Result(null, ANALYZER.stopActiveSession());
     }
 
     public static void tickSessions(MinecraftServer server) {
@@ -55,7 +55,7 @@ public final class TicketPerfSessionController {
         }
         OwnerPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions();
         if (report != null) {
-            ReportDelivery.toPlayerOrConsole(server, report.playerId(), report.result());
+            ReportDelivery.toPlayerOrConsole(server, report.playerId(), report.report());
         }
     }
 
@@ -63,7 +63,7 @@ public final class TicketPerfSessionController {
         return ANALYZER.resolveTrackSessionId(level, pos);
     }
 
-    public static long activeSessionId() {
+    private static long activeSessionId() {
         return ANALYZER.activeSessionId();
     }
 

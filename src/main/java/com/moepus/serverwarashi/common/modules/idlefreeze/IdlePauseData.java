@@ -10,7 +10,6 @@ import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -29,10 +28,6 @@ public final class IdlePauseData extends SavedData {
 
     boolean isEmpty() {
         return frozenOwners.isEmpty();
-    }
-
-    List<LongOpenHashSet> ownerChunks() {
-        return Collections.unmodifiableList(frozenOwners);
     }
 
     public static IdlePauseData get(ServerLevel level) {

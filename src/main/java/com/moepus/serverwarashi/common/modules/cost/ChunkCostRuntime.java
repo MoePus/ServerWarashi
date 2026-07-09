@@ -17,7 +17,7 @@ public final class ChunkCostRuntime {
     // 给下一轮采样 tick 与 ServerTick.Post HUD 推送留一个 tick 宽限，避免刚到采样窗口就提前过期。
     private static final long SAMPLE_STALE_TICKS = SAMPLE_PERIOD_TICKS + 1L;
     private static final int EWMA_OLD_WEIGHT = 7;
-    static final long UNKNOWN_COST_NANOS = -1L;
+    private static final long UNKNOWN_COST_NANOS = -1L;
     private static final long NO_SAMPLE_GAME_TIME = Long.MIN_VALUE;
     private static final CostSample UNKNOWN_COST = new CostSample(
             UNKNOWN_COST_NANOS,
@@ -27,9 +27,8 @@ public final class ChunkCostRuntime {
     private static final WeakHashMap<ServerLevel, Long2ObjectOpenHashMap<MutableChunkCost>> COST_BY_LEVEL =
             new WeakHashMap<>();
     // 采样写路径默认仅主线程调用；但注入点（tickChunk redirect）可能被并行 tick 的 mod 搬到 worker 线程，
-    // 故对所有访问加锁，防止 WeakHashMap / fastutil map 并发 rehash 死循环与 sampledTicks 丢失自增（见 bug-03）。
+    // 故对所有访问加锁，防止 WeakHashMap / fastutil map 并发 rehash 死循环（见 bug-03）。
     private static final Object SAMPLE_LOCK = new Object();
-    private static long sampledTicks;
 
     private ChunkCostRuntime() {
     }
@@ -49,11 +48,7 @@ public final class ChunkCostRuntime {
     }
 
     public static CostSample costSampleForChunk(ServerLevel level, long chunkPos) {
-        long currentGameTime = sampleGameTime(level);
-        return costSampleForChunk(level, chunkPos, currentGameTime);
-    }
-
-    private static CostSample costSampleForChunk(ServerLevel level, long chunkPos, long currentGameTime) {
+        long currentGameTime = level.getGameTime();
         synchronized (SAMPLE_LOCK) {
             Long2ObjectOpenHashMap<MutableChunkCost> costs = COST_BY_LEVEL.get(level);
             MutableChunkCost cost = costs == null ? null : costs.get(chunkPos);
@@ -80,40 +75,28 @@ public final class ChunkCostRuntime {
     }
 
     public static void recordEntitySample(ServerLevel level, BlockPos pos, long durationNanos) {
-        recordEntitySample(level, ChunkPos.asLong(pos), level.getGameTime(), durationNanos);
+        long gameTime = level.getGameTime();
+        synchronized (SAMPLE_LOCK) {
+            costEntry(level, ChunkPos.asLong(pos)).recordEntity(gameTime, durationNanos);
+        }
     }
 
     public static void recordBlockEntitySample(ServerLevel level, BlockPos pos, long durationNanos) {
-        recordBlockEntitySample(level, ChunkPos.asLong(pos), level.getGameTime(), durationNanos);
+        long gameTime = level.getGameTime();
+        synchronized (SAMPLE_LOCK) {
+            costEntry(level, ChunkPos.asLong(pos)).recordBlockEntity(gameTime, durationNanos);
+        }
     }
 
-    static boolean shouldSample(long gameTime, long chunkPos) {
+    private static boolean shouldSample(long gameTime, long chunkPos) {
         // 错峰采样，使不同 chunk 落在不同 tick。
         return Math.floorMod(gameTime + chunkPos, SAMPLE_PERIOD_TICKS) == 0;
     }
 
     private static void recordChunkSample(ServerLevel level, long chunkPos, long durationNanos) {
-        recordChunkSample(level, chunkPos, sampleGameTime(level), durationNanos);
-    }
-
-    static void recordChunkSample(ServerLevel level, long chunkPos, long gameTime, long durationNanos) {
+        long gameTime = level.getGameTime();
         synchronized (SAMPLE_LOCK) {
             costEntry(level, chunkPos).recordChunk(gameTime, durationNanos);
-            sampledTicks++;
-        }
-    }
-
-    static void recordEntitySample(ServerLevel level, long chunkPos, long gameTime, long durationNanos) {
-        synchronized (SAMPLE_LOCK) {
-            costEntry(level, chunkPos).recordEntity(gameTime, durationNanos);
-            sampledTicks++;
-        }
-    }
-
-    static void recordBlockEntitySample(ServerLevel level, long chunkPos, long gameTime, long durationNanos) {
-        synchronized (SAMPLE_LOCK) {
-            costEntry(level, chunkPos).recordBlockEntity(gameTime, durationNanos);
-            sampledTicks++;
         }
     }
 
@@ -128,10 +111,6 @@ public final class ChunkCostRuntime {
                 : (previous * EWMA_OLD_WEIGHT + durationNanos) / (EWMA_OLD_WEIGHT + 1L);
     }
 
-    private static long sampleGameTime(ServerLevel level) {
-        return level.getGameTime();
-    }
-
     private static long currentNanos(long nanos, long sampleGameTime, long currentGameTime) {
         if (nanos == UNKNOWN_COST_NANOS) {
             return UNKNOWN_COST_NANOS;
@@ -141,7 +120,6 @@ public final class ChunkCostRuntime {
 
     private static boolean sampleStale(long sampleGameTime, long currentGameTime) {
         return sampleGameTime != NO_SAMPLE_GAME_TIME
-                && currentGameTime != NO_SAMPLE_GAME_TIME
                 && currentGameTime - sampleGameTime > SAMPLE_STALE_TICKS;
     }
 

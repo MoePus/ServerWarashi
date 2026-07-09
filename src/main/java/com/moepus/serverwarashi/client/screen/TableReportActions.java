@@ -24,20 +24,19 @@ final class TableReportActions {
                                   int mouseY,
                                   int minY,
                                   int maxY) {
-        // 算宽度并按可视区裁剪；裁剪后判断鼠标是否悬停
+        // 算宽度并按可视区裁剪；完全被裁剪掉则不绘制也不登记命中
         int width = buttonWidth(font, button.label());
         ButtonBounds clipped = clippedActionBounds(x, y, width, minY, maxY);
-        boolean hover = clipped != null && contains(clipped, mouseX, mouseY);
+        if (clipped == null) {
+            return null;
+        }
+        boolean hover = contains(clipped, mouseX, mouseY);
         // 画底色（悬停高亮）+ 边框 + 居中文字
         graphics.fill(x, y, x + width, y + ACTION_H,
                 hover ? TableReportPanelScreen.CLOSE_BG_HOVER : TableReportPanelScreen.CLOSE_BG);
         graphics.renderOutline(x, y, width, ACTION_H, TableReportPanelScreen.BORDER);
         int textX = x + (width - font.width(button.label())) / 2;
         graphics.drawString(font, button.label(), textX, y + 1, TableReportPanelScreen.ACTION_TEXT, true);
-        // 完全被裁剪掉则不登记命中
-        if (clipped == null) {
-            return null;
-        }
         // 登记命中区域，返回悬停命中（供 tooltip）
         ActionHit hit = new ActionHit(clipped, button.kind(), button.command(), button.section(), button.tooltip());
         hits.add(hit);

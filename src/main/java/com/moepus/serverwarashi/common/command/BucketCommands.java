@@ -6,11 +6,9 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.moepus.serverwarashi.common.config.TicketBucketConfig;
-import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
@@ -94,7 +92,6 @@ final class BucketCommands {
                     return 1;
                 })
                 .then(net.minecraft.commands.Commands.argument(setting.name(), BoolArgumentType.bool())
-                        .suggests((context1, builder) -> SharedSuggestionProvider.suggest(List.of("true", "false"), builder))
                         .executes(context -> {
                             setting.setter().accept(BoolArgumentType.getBool(context, setting.name()));
                             TicketBucketConfig.save();

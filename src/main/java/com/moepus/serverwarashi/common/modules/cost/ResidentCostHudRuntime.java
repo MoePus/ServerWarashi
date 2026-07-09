@@ -11,7 +11,6 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -62,7 +61,7 @@ public final class ResidentCostHudRuntime {
     private static void pushReports(MinecraftServer server) {
         // 按维度缓存已构建的报告，避免同维度重复计算
         Map<ServerLevel, Optional<TableReport>> reports = new HashMap<>();
-        for (UUID subscriber : List.copyOf(SUBSCRIBERS)) {
+        for (UUID subscriber : SUBSCRIBERS) {
             ServerPlayer player = server.getPlayerList().getPlayer(subscriber);
             // 玩家离线或无权限/不支持网络则跳过
             if (player == null || !canPushTo(player)) {

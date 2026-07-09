@@ -24,12 +24,11 @@ final class IdleFreezeCommands {
                 .then(net.minecraft.commands.Commands.literal("force")
                         .executes(context -> {
                             var source = context.getSource();
-                            source.sendSuccess(() -> {
-                                // 清访问记录 + 立即重扫，再回绿色完成提示
-                                IdleFreezeService.forceRescan(source.getLevel());
-                                return Component.literal("Idle-freeze force scan finished.")
-                                        .withStyle(ChatFormatting.GREEN);
-                            }, false);
+                            // 清访问记录 + 立即重扫；副作用须在 sendSuccess 之外执行——
+                            // 命令反馈被抑制（sendCommandFeedback=false / silent execute）时 Supplier 不会被调用
+                            IdleFreezeService.forceRescan(source.getLevel());
+                            source.sendSuccess(() -> Component.literal("Idle-freeze force scan finished.")
+                                    .withStyle(ChatFormatting.GREEN), false);
                             return 1;
                         })
                 )

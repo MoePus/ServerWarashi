@@ -13,6 +13,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
@@ -90,13 +91,14 @@ final class PerfCommands {
                                    BlockPos pos) {
         int seconds = getOptionalSeconds(context);
         UUID playerId = getPlayerId(context.getSource());
-        context.getSource().sendSuccess(() ->
-                TicketPerfSessionController.start(
-                        context.getSource().getLevel(),
-                        pos,
-                        seconds,
-                        playerId
-                ), false);
+        // 立即启动会话；启动动作不能放进 sendSuccess 的 Supplier——反馈被抑制时 Supplier 不会被调用
+        Component message = TicketPerfSessionController.start(
+                context.getSource().getLevel(),
+                pos,
+                seconds,
+                playerId
+        );
+        context.getSource().sendSuccess(() -> message, false);
     }
 
     private static void stopPerfAnalysis(CommandContext<CommandSourceStack> context) {
@@ -111,12 +113,13 @@ final class PerfCommands {
     private static void startAllOwners(CommandContext<CommandSourceStack> context) {
         int seconds = getOptionalSeconds(context);
         UUID playerId = getPlayerId(context.getSource());
-        context.getSource().sendSuccess(() ->
-                TicketPerfSessionController.startAll(
-                        context.getSource().getLevel(),
-                        seconds,
-                        playerId
-                ), false);
+        // 同 runStartAt：启动动作先行，Supplier 只负责回显
+        Component message = TicketPerfSessionController.startAll(
+                context.getSource().getLevel(),
+                seconds,
+                playerId
+        );
+        context.getSource().sendSuccess(() -> message, false);
     }
 
     private static void listOwners(CommandContext<CommandSourceStack> context,

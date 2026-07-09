@@ -7,8 +7,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
 import net.minecraft.util.SortedArraySet;
 
-import java.util.Objects;
-
 /**
  * 批量写入暂停掩码，并集中刷新同一个 DistanceManager 的 tracker。
  */
@@ -17,7 +15,7 @@ public final class TicketPauseBatch {
     private final LongOpenHashSet modifiedChunks = new LongOpenHashSet();
 
     private TicketPauseBatch(DistanceManagerAccessor distanceManager) {
-        this.distanceManager = Objects.requireNonNull(distanceManager, "distanceManager");
+        this.distanceManager = distanceManager;
     }
 
     public static TicketPauseBatch forLevel(ServerLevel level) {
@@ -103,15 +101,11 @@ public final class TicketPauseBatch {
         IPauseableTicket ticketInfo = TicketUtils.asPauseable(ticket);
         // 计算新旧掩码；无变化则直接返回 false
         int before = ticketInfo.serverWarashi$getPauseMask();
-        int after = applyPauseMask(before, paused, reasonMask);
+        int after = paused ? (before | reasonMask) : (before & ~reasonMask);
         if (before == after) {
             return false;
         }
         ticketInfo.serverWarashi$setPauseMask(after);
         return true;
-    }
-
-    static int applyPauseMask(int before, boolean paused, int reasonMask) {
-        return paused ? (before | reasonMask) : (before & ~reasonMask);
     }
 }

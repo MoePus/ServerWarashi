@@ -77,7 +77,7 @@ public final class TableReportTableRenderer {
 
     public static String fitToWidth(Font font, String text, int maxWidth) {
         // 空/零宽返回空串
-        if (text == null || text.isEmpty() || maxWidth <= 0) {
+        if (text.isEmpty() || maxWidth <= 0) {
             return "";
         }
         // 放得下直接返回

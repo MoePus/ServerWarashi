@@ -26,16 +26,15 @@ public final class TicketBucketRuntime {
     }
 
     public static void onLevelTickPre(ServerLevel level, boolean hasActiveAnalysisSession) {
-        LevelTickDecision decision = decideLevelTick(level.dimension(), hasActiveAnalysisSession);
-        switch (decision) {
-            case CLEAR_AUTO_PAUSE -> {
-                // 分析开始的首个 tick：先清掉 AUTO 暂停，让分析看到真实 tick 负载
+        if (hasActiveAnalysisSession) {
+            // 该维度正在分析：首个 tick 先清掉 AUTO 暂停让分析看到真实负载，之后各 tick 跳过分桶
+            if (ANALYSIS_SUSPENDED_LEVELS.add(level.dimension())) {
                 TicketPauseService.clearAutoPause(level);
             }
-            case SKIP_BUCKETS -> {
-            }
-            case PROCESS_BUCKETS -> SERVICE.processTickets(level, tickAge);
+            return;
         }
+        ANALYSIS_SUSPENDED_LEVELS.remove(level.dimension());
+        SERVICE.processTickets(level, tickAge);
     }
 
     public static void clearRuntimeState() {
@@ -44,20 +43,4 @@ public final class TicketBucketRuntime {
         SERVICE.clearRuntimeState();
     }
 
-    static LevelTickDecision decideLevelTick(ResourceKey<Level> dimension, boolean hasActiveAnalysisSession) {
-        if (hasActiveAnalysisSession) {
-            // 该维度正在分析：首次进入返回 CLEAR_AUTO_PAUSE 清暂停，之后各 tick 跳过分桶
-            return ANALYSIS_SUSPENDED_LEVELS.add(dimension)
-                    ? LevelTickDecision.CLEAR_AUTO_PAUSE
-                    : LevelTickDecision.SKIP_BUCKETS;
-        }
-        ANALYSIS_SUSPENDED_LEVELS.remove(dimension);
-        return LevelTickDecision.PROCESS_BUCKETS;
-    }
-
-    enum LevelTickDecision {
-        CLEAR_AUTO_PAUSE,
-        SKIP_BUCKETS,
-        PROCESS_BUCKETS
-    }
 }

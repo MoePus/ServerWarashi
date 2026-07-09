@@ -1,7 +1,6 @@
 package com.moepus.serverwarashi.common.core.ticket;
 
 import com.moepus.serverwarashi.common.mixin.accessor.DistanceManagerAccessor;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;

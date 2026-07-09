@@ -19,10 +19,6 @@ final class TableReportLayout {
                                      int maxTableW) {
         int columns = headers.size();
         int[] widths = new int[columns];
-        if (columns == 0 || maxTableW <= 0) {
-            return widths;
-        }
-
         for (int column = 0; column < columns; column++) {
             widths[column] = Math.max(1, widthOf.applyAsInt(safeCell(headers, column)) + CELL_PAD);
         }
@@ -55,7 +51,7 @@ final class TableReportLayout {
     }
 
     static int clampScroll(int scroll, int contentH, int viewH) {
-        int maxScroll = Math.max(0, contentH - Math.max(0, viewH));
+        int maxScroll = Math.max(0, contentH - viewH);
         if (scroll < 0) {
             return 0;
         }

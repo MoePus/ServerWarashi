@@ -77,15 +77,11 @@ public final class TicketPerfMessages {
     public static List<TableReport.Button> locateButtons(ResourceLocation dimension,
                                                          BlockPos ownerPos,
                                                          BlockPos analyzeAnchor) {
-        return ReportButtons.locate(dimension, ownerPos,
-                analyzeAnchor == null ? null : analyzeButton(dimension, analyzeAnchor));
-    }
-
-    public static TableReport.Button analyzeButton(ResourceLocation dimension, BlockPos anchor) {
-        return new TableReport.Button("A", String.format(
+        TableReport.Button analyze = analyzeAnchor == null ? null : new TableReport.Button("A", String.format(
                 "execute in %s run warashi perf analyze start at %d %d %d %d",
-                dimension, anchor.getX(), anchor.getY(), anchor.getZ(), TicketPerfConfig.defaultAnalyzeSeconds()
+                dimension, analyzeAnchor.getX(), analyzeAnchor.getY(), analyzeAnchor.getZ(),
+                TicketPerfConfig.defaultAnalyzeSeconds()
         ));
+        return ReportButtons.locate(dimension, ownerPos, analyze);
     }
-
 }

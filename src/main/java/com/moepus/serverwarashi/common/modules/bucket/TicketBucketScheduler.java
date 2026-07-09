@@ -61,11 +61,7 @@ final class TicketBucketScheduler {
     }
 
     static boolean isActivePhase(Object owner, long cycle, int period) {
-        return phaseForNormalized(owner, period) == Math.floorMod(cycle, period);
-    }
-
-    private static int phaseForNormalized(Object owner, int normalizedPeriod) {
-        return Math.floorMod(owner.hashCode(), normalizedPeriod);
+        return Math.floorMod(owner.hashCode(), period) == Math.floorMod(cycle, period);
     }
 
     static boolean pauseAllowed(int inactiveRuns,
@@ -145,11 +141,8 @@ final class TicketBucketScheduler {
     private static final long AGE_PRIORITY_WEIGHT = MAX_COST_PENALTY + 1L;
 
     static long score(long cyclesSinceActive, long ownerCost) {
-        long agePriority = cyclesSinceActive > Long.MAX_VALUE / AGE_PRIORITY_WEIGHT
-                ? Long.MAX_VALUE
-                : cyclesSinceActive * AGE_PRIORITY_WEIGHT;
         long costPenalty = Math.min(MAX_COST_PENALTY, ownerCost / COST_PENALTY_BUCKET_NANOS);
-        return agePriority - costPenalty;
+        return cyclesSinceActive * AGE_PRIORITY_WEIGHT - costPenalty;
     }
 
     private long costAwareScore(TicketBucketOwnerState state,
