@@ -1,8 +1,8 @@
-package com.moepus.serverwarashi.common.mixin.chunkperf;
+package com.moepus.serverwarashi.common.mixin.ticktiming;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.moepus.serverwarashi.common.modules.performance.TicketPerfMixinHooks;
+import com.moepus.serverwarashi.common.modules.TickTimingHooks;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(value = ServerChunkCache.class, remap = false)
 
-public abstract class ServerLevelChunkTickMixin {
+public abstract class ServerChunkCacheTickMixin {
     @WrapOperation(
             method = "tickChunks",
             at = @At(
@@ -24,7 +24,7 @@ public abstract class ServerLevelChunkTickMixin {
     )
     private void onTickChunk(ServerLevel level, LevelChunk chunk, int randomTickSpeed, Operation<Void> original) {
         // 区块 tick 入口分流：交给 hooks 决定走成本采样 / 分析计时 / 原始调用
-        TicketPerfMixinHooks.profileChunkTick(
+        TickTimingHooks.profileChunkTick(
                 level,
                 chunk,
                 randomTickSpeed,

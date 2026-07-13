@@ -8,62 +8,62 @@ public final class TicketBucketConfig {
     }
 
     public static boolean enabled() {
-        return Config.ENABLED.get();
+        return ServerConfig.BUCKET_ENABLED.get();
     }
 
     public static void setEnabled(boolean enabled) {
-        Config.ENABLED.set(enabled);
+        ServerConfig.BUCKET_ENABLED.set(enabled);
     }
 
     public static boolean pauseAll() {
-        return Config.PAUSE_ALL_TICKETS.get();
+        return ServerConfig.BUCKET_PAUSE_ALL_TICKETS.get();
     }
 
     public static void setPauseAll(boolean pauseAll) {
-        Config.PAUSE_ALL_TICKETS.set(pauseAll);
+        ServerConfig.BUCKET_PAUSE_ALL_TICKETS.set(pauseAll);
     }
 
     public static int runEvery() {
-        return Config.RUN_EVERY.get();
+        return ServerConfig.BUCKET_RUN_EVERY.get();
     }
 
     public static void setRunEvery(int runEvery) {
-        Config.RUN_EVERY.set(runEvery);
+        ServerConfig.BUCKET_RUN_EVERY.set(runEvery);
     }
 
     public static int phasePeriod() {
-        return Config.TICKET_PHASE_PERIOD.get();
+        return ServerConfig.BUCKET_PHASE_PERIOD.get();
     }
 
     public static void setPhasePeriod(int phasePeriod) {
-        Config.TICKET_PHASE_PERIOD.set(phasePeriod);
+        ServerConfig.BUCKET_PHASE_PERIOD.set(phasePeriod);
     }
 
     public static int minHoldTicks() {
-        return Config.TICKET_MIN_HOLD_TICKS.get();
+        return ServerConfig.BUCKET_MIN_HOLD_TICKS.get();
     }
 
     public static void setMinHoldTicks(int minHoldTicks) {
-        Config.TICKET_MIN_HOLD_TICKS.set(minHoldTicks);
+        ServerConfig.BUCKET_MIN_HOLD_TICKS.set(minHoldTicks);
     }
 
     public static int pauseDelayRuns() {
-        return Config.TICKET_PAUSE_DELAY_RUNS.get();
+        return ServerConfig.BUCKET_PAUSE_DELAY_RUNS.get();
     }
 
     public static void setPauseDelayRuns(int pauseDelayRuns) {
-        Config.TICKET_PAUSE_DELAY_RUNS.set(pauseDelayRuns);
+        ServerConfig.BUCKET_PAUSE_DELAY_RUNS.set(pauseDelayRuns);
     }
 
     public static int wakeBatches() {
-        return Config.TICKET_WAKE_BATCHES.get();
+        return ServerConfig.BUCKET_WAKE_BATCHES.get();
     }
 
     public static void setWakeBatches(int wakeBatches) {
-        Config.TICKET_WAKE_BATCHES.set(wakeBatches);
+        ServerConfig.BUCKET_WAKE_BATCHES.set(wakeBatches);
     }
 
     public static void save() {
-        Config.SPEC.save();
+        ServerConfig.SPEC.save();
     }
 }

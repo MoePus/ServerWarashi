@@ -1,8 +1,8 @@
 package com.moepus.serverwarashi.common.command;
 
 import com.moepus.serverwarashi.common.network.ReportDelivery;
-import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfSessionController;
-import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfOwnerOutput;
+import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfRuntime;
+import com.moepus.serverwarashi.common.modules.performance.report.OwnerListReport;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -20,12 +20,12 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * ChunkPerf 命令入口。
+ * TicketPerf 命令入口。
  * 层级：命令入口层。
- * 上游：WarashiCommands。下游：TicketPerfSessionController / TicketPerfOwnerOutput。
+ * 上游：WarashiCommands。下游：TicketPerfRuntime / OwnerListReport。
  */
-final class PerfCommands {
-    private PerfCommands() {
+final class TicketPerfCommands {
+    private TicketPerfCommands() {
     }
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
@@ -37,12 +37,12 @@ final class PerfCommands {
                         .then(listAction("all", ListOwnersOptions.all())))
                 .then(Commands.literal("analyze")
                         .then(Commands.literal("start")
-                                .then(withOptionalSeconds(Commands.literal("all"), PerfCommands::startAllOwners))
-                                .then(withOptionalSeconds(Commands.literal("here"), PerfCommands::startPerfHere))
+                                .then(withOptionalSeconds(Commands.literal("all"), TicketPerfCommands::startAllOwners))
+                                .then(withOptionalSeconds(Commands.literal("here"), TicketPerfCommands::startPerfHere))
                                 .then(Commands.literal("at")
                                         .then(withOptionalSeconds(
                                                 Commands.argument("pos", BlockPosArgument.blockPos()),
-                                                PerfCommands::startPerfAt))
+                                                TicketPerfCommands::startPerfAt))
                                 )
                         )
                         .then(Commands.literal("stop")
@@ -92,7 +92,7 @@ final class PerfCommands {
         int seconds = getOptionalSeconds(context);
         UUID playerId = getPlayerId(context.getSource());
         // 立即启动会话；启动动作不能放进 sendSuccess 的 Supplier——反馈被抑制时 Supplier 不会被调用
-        Component message = TicketPerfSessionController.start(
+        Component message = TicketPerfRuntime.start(
                 context.getSource().getLevel(),
                 pos,
                 seconds,
@@ -102,7 +102,7 @@ final class PerfCommands {
     }
 
     private static void stopPerfAnalysis(CommandContext<CommandSourceStack> context) {
-        var result = TicketPerfSessionController.stopCurrentAnalysis();
+        var result = TicketPerfRuntime.stopCurrentAnalysis();
         if (result.report() != null) {
             ReportDelivery.toCommandSource(context.getSource(), result::report);
         } else {
@@ -114,7 +114,7 @@ final class PerfCommands {
         int seconds = getOptionalSeconds(context);
         UUID playerId = getPlayerId(context.getSource());
         // 同 runStartAt：启动动作先行，Supplier 只负责回显
-        Component message = TicketPerfSessionController.startAll(
+        Component message = TicketPerfRuntime.startAll(
                 context.getSource().getLevel(),
                 seconds,
                 playerId
@@ -127,7 +127,7 @@ final class PerfCommands {
         var source = context.getSource();
         ReportDelivery.toCommandSource(
                 source,
-                () -> TicketPerfOwnerOutput.ownerReport(
+                () -> OwnerListReport.ownerReport(
                         source.getLevel(),
                         options.pauseMode(),
                         options.header(),

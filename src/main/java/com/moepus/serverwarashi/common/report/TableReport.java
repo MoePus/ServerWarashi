@@ -1,7 +1,5 @@
 package com.moepus.serverwarashi.common.report;
 
-import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,19 +10,7 @@ public record TableReport(String title, List<String> metadata, List<Section> sec
         sections = List.copyOf(sections);
     }
 
-    public boolean isEmpty() {
-        for (Section section : sections) {
-            if (!section.rows().isEmpty()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     public record Button(String label, String command) {
-    }
-
-    public record Result(Component message, TableReport report) {
     }
 
     public record Section(String title,

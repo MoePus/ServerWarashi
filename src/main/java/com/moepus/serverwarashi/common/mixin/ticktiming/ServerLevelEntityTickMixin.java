@@ -1,8 +1,8 @@
-package com.moepus.serverwarashi.common.mixin.chunkperf;
+package com.moepus.serverwarashi.common.mixin.ticktiming;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.moepus.serverwarashi.common.modules.performance.TicketPerfMixinHooks;
+import com.moepus.serverwarashi.common.modules.TickTimingHooks;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,7 +15,7 @@ import java.util.function.Consumer;
  */
 @Mixin(value = ServerLevel.class, remap = false)
 
-public abstract class LevelEntityTickMixin {
+public abstract class ServerLevelEntityTickMixin {
     @WrapOperation(
             method = "lambda$tick$2(Lnet/minecraft/world/TickRateManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/world/entity/Entity;)V",
             at = @At(
@@ -28,6 +28,6 @@ public abstract class LevelEntityTickMixin {
                                    Entity entity,
                                    Operation<Void> original) {
         // 把实体 tick 的 Consumer 交给 hooks 包装后再执行（仅分析期间计时）
-        original.call(level, TicketPerfMixinHooks.wrapEntityTickConsumer(level, consumer, entity), entity);
+        original.call(level, TickTimingHooks.wrapEntityTickConsumer(level, consumer, entity), entity);
     }
 }

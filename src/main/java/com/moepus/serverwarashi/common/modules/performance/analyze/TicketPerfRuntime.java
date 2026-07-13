@@ -13,14 +13,14 @@ import java.util.UUID;
 
 /**
  * 性能会话入口：负责调度单 owner 会话与全 owner 会话。
- * 上游：ServerWarashiEvents / mixin hooks / PerfCommands。
+ * 上游：ServerWarashiEvents / mixin hooks / TicketPerfCommands。
  */
-public final class TicketPerfSessionController {
-    public static final long NO_SESSION_ID = OwnerPerfAnalyzer.NO_SESSION_ID;
-    private static final OwnerPerfAnalyzer ANALYZER = new OwnerPerfAnalyzer();
+public final class TicketPerfRuntime {
+    public static final long NO_SESSION_ID = TicketPerfAnalyzer.NO_SESSION_ID;
+    private static final TicketPerfAnalyzer ANALYZER = new TicketPerfAnalyzer();
     private static long nextSessionId = 1L;
 
-    private TicketPerfSessionController() {
+    private TicketPerfRuntime() {
     }
 
     public static Component start(ServerLevel sourceLevel,
@@ -42,18 +42,22 @@ public final class TicketPerfSessionController {
         return ANALYZER.startAll(level, durationSec, playerId, sessionId);
     }
 
-    public static TableReport.Result stopCurrentAnalysis() {
+    public static StopResult stopCurrentAnalysis() {
         if (activeSessionId() == NO_SESSION_ID) {
-            return new TableReport.Result(TicketPerfMessages.noActiveAnalysis(), null);
+            return new StopResult(TicketPerfMessages.noActiveAnalysis(), null);
         }
-        return new TableReport.Result(null, ANALYZER.stopActiveSession());
+        return new StopResult(null, ANALYZER.stopActiveSession());
+    }
+
+    /** 停止分析的结果信封：message 与 report 恰有一个非空。 */
+    public record StopResult(Component message, TableReport report) {
     }
 
     public static void tickSessions(MinecraftServer server) {
         if (activeSessionId() == NO_SESSION_ID) {
             return;
         }
-        OwnerPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions();
+        TicketPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions();
         if (report != null) {
             ReportDelivery.toPlayerOrConsole(server, report.playerId(), report.report());
         }
@@ -67,8 +71,8 @@ public final class TicketPerfSessionController {
         return ANALYZER.activeSessionId();
     }
 
-    public static long activeSessionIdIn(ServerLevel level) {
-        return ANALYZER.activeSessionIdIn(level.dimension());
+    public static boolean hasActiveSessionIn(ServerLevel level) {
+        return ANALYZER.activeSessionIdIn(level.dimension()) != NO_SESSION_ID;
     }
 
     public static boolean isAllOwnersSession() {

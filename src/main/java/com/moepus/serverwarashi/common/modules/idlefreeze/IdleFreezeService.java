@@ -48,7 +48,7 @@ public final class IdleFreezeService {
         visitData.pruneBefore(todayDay - retentionDays);
 
         List<Set<Long>> targetFrozenOwners = new ArrayList<>();
-        List<OwnerChunks.Entry> owners = OwnerChunks.collect(level, OwnerChunks.PauseMode.ALL);
+        List<OwnerChunks.Entry> owners = OwnerChunks.collect(level);
         for (OwnerChunks.Entry owner : owners) {
             if (shouldIdleFreeze(owner, visitData, todayDay, IdleFreezeConfig.minOwnerLoad(), IdleFreezeConfig.inactiveDays())) {
                 targetFrozenOwners.add(owner.chunks());
@@ -67,7 +67,7 @@ public final class IdleFreezeService {
             return false;
         }
         LongOpenHashSet chunksToClear = new LongOpenHashSet(removedChunks);
-        chunksToClear.addAll(OwnerChunks.resolveChunksAt(level, chunkPos, OwnerChunks.PauseMode.ALL));
+        chunksToClear.addAll(OwnerChunks.resolveChunksAt(level, chunkPos));
         chunksToClear.removeAll(pauseData.allChunks());
         applyIdleMask(level, chunksToClear, false);
         return true;

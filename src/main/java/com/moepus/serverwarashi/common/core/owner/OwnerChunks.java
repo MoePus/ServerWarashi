@@ -1,7 +1,5 @@
 package com.moepus.serverwarashi.common.core.owner;
 
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwnerResolver;
 import com.moepus.serverwarashi.common.core.ticket.TicketScanService;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.mixin.accessor.PersistentEntitySectionManagerAccessor;
@@ -41,16 +39,13 @@ public final class OwnerChunks {
     public record BothMaps(Map<TicketOwner, Set<Long>> activeOnly, Map<TicketOwner, Set<Long>> all) {
     }
 
+    /**
+     * 报表视图选择器（仅 owner 列表报告用）：收集方法本身一律全量收集，
+     * ACTIVE_ONLY/ALL 只决定报告展示 {@link BothMaps} 的哪个视图。
+     */
     public enum PauseMode {
         ACTIVE_ONLY,
-        ALL;
-
-        boolean accept(boolean paused) {
-            return switch (this) {
-                case ACTIVE_ONLY -> !paused;
-                case ALL -> true;
-            };
-        }
+        ALL
     }
 
     public enum SortMode {
@@ -71,9 +66,8 @@ public final class OwnerChunks {
         }
     }
 
-    public static List<Entry> collect(ServerLevel level, PauseMode pauseMode) {
-        Map<TicketOwner, Set<Long>> ownerMap = collectMap(level, pauseMode);
-        return collectFromMap(level, ownerMap);
+    public static List<Entry> collect(ServerLevel level) {
+        return collectFromMap(level, collectMap(level));
     }
 
     /**
@@ -94,13 +88,10 @@ public final class OwnerChunks {
         return entries;
     }
 
-    public static Map<TicketOwner, Set<Long>> collectMap(ServerLevel level, PauseMode pauseMode) {
+    public static Map<TicketOwner, Set<Long>> collectMap(ServerLevel level) {
         Map<TicketOwner, Set<Long>> ownerMap = new HashMap<>();
-        visitOwnerChunks(level, (owner, chunkPos, paused) -> {
-            if (pauseMode.accept(paused)) {
-                ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
-            }
-        });
+        visitOwnerChunks(level, (owner, chunkPos, paused) ->
+                ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos));
         return ownerMap;
     }
 
@@ -119,10 +110,10 @@ public final class OwnerChunks {
         return new BothMaps(activeOnly, all);
     }
 
-    public static Map<TicketOwner, Set<Long>> resolveOwnersAt(ServerLevel level, long chunkPos, PauseMode pauseMode) {
+    public static Map<TicketOwner, Set<Long>> resolveOwnersAt(ServerLevel level, long chunkPos) {
         // 解析chunk命中的owner
         Map<TicketOwner, Set<Long>> owners = new HashMap<>();
-        for (var owner : collectMap(level, pauseMode).entrySet()) {
+        for (var owner : collectMap(level).entrySet()) {
             if (owner.getValue().contains(chunkPos)) {
                 owners.put(owner.getKey(), owner.getValue());
             }
@@ -130,9 +121,9 @@ public final class OwnerChunks {
         return owners;
     }
 
-    public static Set<Long> resolveChunksAt(ServerLevel level, long chunkPos, PauseMode pauseMode) {
+    public static Set<Long> resolveChunksAt(ServerLevel level, long chunkPos) {
         LongOpenHashSet resolved = new LongOpenHashSet();
-        for (Set<Long> chunks : resolveOwnersAt(level, chunkPos, pauseMode).values()) {
+        for (Set<Long> chunks : resolveOwnersAt(level, chunkPos).values()) {
             resolved.addAll(chunks);
         }
         return resolved;
@@ -218,7 +209,7 @@ public final class OwnerChunks {
                     continue;
                 }
                 TicketOwner owner = TicketOwnerResolver.resolve(ticket, level);
-                if (TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
+                if (TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.name())) {
                     continue;
                 }
                 boolean paused = TicketUtils.asPauseable(ticket).serverWarashi$isPaused();
@@ -227,7 +218,7 @@ public final class OwnerChunks {
             }
             if (!addedNonChunkProtectionOwner && fallback != null) {
                 TicketOwner owner = TicketOwnerResolver.resolve(fallback, level);
-                if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.getName())) {
+                if (!TicketOwnerResolver.UNKNOWN_ENTITY.equals(owner.name())) {
                     consumer.accept(owner, chunkPos, false);
                 }
             }

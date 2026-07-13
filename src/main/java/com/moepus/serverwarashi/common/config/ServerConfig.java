@@ -2,27 +2,27 @@ package com.moepus.serverwarashi.common.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-public final class Config {
+public final class ServerConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
-    static final ModConfigSpec.ConfigValue<Boolean> ENABLED = BUILDER
-            .define("enabled", false);
-    static final ModConfigSpec.ConfigValue<Boolean> PAUSE_ALL_TICKETS = BUILDER
-            .define("pause_all_tickets", false);
+    static final ModConfigSpec.ConfigValue<Boolean> BUCKET_ENABLED = BUILDER
+            .define("bucket_enabled", false);
+    static final ModConfigSpec.ConfigValue<Boolean> BUCKET_PAUSE_ALL_TICKETS = BUILDER
+            .define("bucket_pause_all_tickets", false);
 
-    static final ModConfigSpec.ConfigValue<Integer> RUN_EVERY = BUILDER
-            .defineInRange("run_every", 10, 1, 1200);
-    static final ModConfigSpec.ConfigValue<Integer> TICKET_PHASE_PERIOD = BUILDER
-            .defineInRange("ticket_phase_period", 4, 1, 1024);
-    static final ModConfigSpec.ConfigValue<Integer> TICKET_MIN_HOLD_TICKS = BUILDER
-            .defineInRange("ticket_min_hold_ticks", 40, 0, 12000);
-    static final ModConfigSpec.ConfigValue<Integer> TICKET_PAUSE_DELAY_RUNS = BUILDER
-            .defineInRange("ticket_pause_delay_runs", 2, 0, 1024);
-    static final ModConfigSpec.ConfigValue<Integer> TICKET_WAKE_BATCHES = BUILDER
-            .defineInRange("ticket_wake_batches", 2, 1, 64);
+    static final ModConfigSpec.ConfigValue<Integer> BUCKET_RUN_EVERY = BUILDER
+            .defineInRange("bucket_run_every", 10, 1, 1200);
+    static final ModConfigSpec.ConfigValue<Integer> BUCKET_PHASE_PERIOD = BUILDER
+            .defineInRange("bucket_phase_period", 4, 1, 1024);
+    static final ModConfigSpec.ConfigValue<Integer> BUCKET_MIN_HOLD_TICKS = BUILDER
+            .defineInRange("bucket_min_hold_ticks", 40, 0, 12000);
+    static final ModConfigSpec.ConfigValue<Integer> BUCKET_PAUSE_DELAY_RUNS = BUILDER
+            .defineInRange("bucket_pause_delay_runs", 2, 0, 1024);
+    static final ModConfigSpec.ConfigValue<Integer> BUCKET_WAKE_BATCHES = BUILDER
+            .defineInRange("bucket_wake_batches", 2, 1, 64);
 
-    static final ModConfigSpec.ConfigValue<Integer> CHUNKPERF_DEFAULT_ANALYZE_SECONDS = BUILDER
-            .defineInRange("chunkperf_default_analyze_seconds",
+    static final ModConfigSpec.ConfigValue<Integer> PERF_DEFAULT_ANALYZE_SECONDS = BUILDER
+            .defineInRange("perf_default_analyze_seconds",
                     TicketPerfConfig.DEFAULT_ANALYZE_SECONDS,
                     1,
                     TicketPerfConfig.MAX_ANALYZE_SECONDS);
@@ -51,6 +51,6 @@ public final class Config {
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 
-    private Config() {
+    private ServerConfig() {
     }
 }

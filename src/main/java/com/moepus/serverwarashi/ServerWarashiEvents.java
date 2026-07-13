@@ -3,7 +3,7 @@ package com.moepus.serverwarashi;
 import com.moepus.serverwarashi.common.command.WarashiCommands;
 import com.moepus.serverwarashi.common.modules.bucket.TicketBucketRuntime;
 import com.moepus.serverwarashi.common.modules.cost.ResidentCostHudRuntime;
-import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfSessionController;
+import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfRuntime;
 import com.moepus.serverwarashi.common.modules.idlefreeze.IdleFreezeRuntime;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,7 +21,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * 模组统一事件订阅入口。
  * 只负责接收 NeoForge 事件并分发到各模块运行时入口。
  */
-@EventBusSubscriber(modid = Serverwarashi.MODID)
+@EventBusSubscriber(modid = ServerWarashi.MODID)
 
 public final class ServerWarashiEvents {
     private ServerWarashiEvents() {
@@ -48,7 +48,7 @@ public final class ServerWarashiEvents {
     @SubscribeEvent
     public static void onServerTickPost(ServerTickEvent.Post event) {
         // 推进性能分析会话计时：到点则自动停止并产出报告
-        TicketPerfSessionController.tickSessions(event.getServer());
+        TicketPerfRuntime.tickSessions(event.getServer());
         // 按推送周期把驻留成本 Top owner 下发给订阅的管理员 HUD
         ResidentCostHudRuntime.tick(event.getServer());
     }
@@ -57,9 +57,8 @@ public final class ServerWarashiEvents {
     public static void onLevelTickPre(LevelTickEvent.Pre event) {
         // 仅服务端维度参与：执行该维度的自动分桶主循环（降负载核心链路）
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            boolean hasActiveSession = TicketPerfSessionController.activeSessionIdIn(serverLevel)
-                    != TicketPerfSessionController.NO_SESSION_ID;
-            TicketBucketRuntime.onLevelTickPre(serverLevel, hasActiveSession);
+            TicketBucketRuntime.onLevelTickPre(serverLevel,
+                    TicketPerfRuntime.hasActiveSessionIn(serverLevel));
         }
     }
 
@@ -75,7 +74,7 @@ public final class ServerWarashiEvents {
     public static void onServerStopped(ServerStoppedEvent event) {
         // 服务器停止：清空三个模块的运行时状态，避免跨存档残留
         TicketBucketRuntime.clearRuntimeState();
-        TicketPerfSessionController.clearRuntimeState();
+        TicketPerfRuntime.clearRuntimeState();
         ResidentCostHudRuntime.clearRuntimeState();
     }
 

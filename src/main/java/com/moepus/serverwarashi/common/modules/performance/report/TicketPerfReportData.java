@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.modules.performance.report;
 
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
+import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.BlockPos;

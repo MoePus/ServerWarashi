@@ -11,6 +11,6 @@ public final class TicketPerfConfig {
     }
 
     public static int defaultAnalyzeSeconds() {
-        return Config.CHUNKPERF_DEFAULT_ANALYZE_SECONDS.get();
+        return ServerConfig.PERF_DEFAULT_ANALYZE_SECONDS.get();
     }
 }

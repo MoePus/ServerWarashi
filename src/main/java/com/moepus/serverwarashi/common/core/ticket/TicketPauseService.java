@@ -22,7 +22,7 @@ public final class TicketPauseService {
                                                Iterable<Long> chunks,
                                                boolean paused,
                                                int reasonMask) {
-        TicketPauseBatch batch = TicketPauseBatch.forLevel(level);
+        TicketPauseBatch batch = new TicketPauseBatch(level);
         batch.applyChunks(chunks, paused, reasonMask);
         return batch.flush();
     }

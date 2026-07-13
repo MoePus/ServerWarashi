@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.network;
 
-import com.moepus.serverwarashi.Serverwarashi;
+import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.common.modules.cost.ResidentCostHudRuntime;
 import com.moepus.serverwarashi.common.report.TableReport;
 import net.minecraft.server.level.ServerPlayer;
@@ -10,7 +10,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
-@EventBusSubscriber(modid = Serverwarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 
 public final class WarashiNetwork {
     private static final String NETWORK_VERSION = "4";
@@ -25,9 +25,9 @@ public final class WarashiNetwork {
                 .optional()
                 // 服务端→客户端：报告 payload，主线程上分发给处理器
                 .playToClient(ReportPayload.TYPE, ReportPayload.STREAM_CODEC,
-                        (payload, context) -> ReportDispatch.handleReport(payload.kind(), payload.report()))
+                        (payload, context) -> ClientReportDispatch.handleReport(payload.kind(), payload.report()))
                 // 客户端→服务端：驻留成本订阅，主线程上更新订阅集合
-                .playToServer(ResidentHudSubscribePayload.TYPE, ResidentHudSubscribePayload.STREAM_CODEC,
+                .playToServer(ResidentCostSubscribePayload.TYPE, ResidentCostSubscribePayload.STREAM_CODEC,
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
                                 ResidentCostHudRuntime.subscribe(player, payload.on());

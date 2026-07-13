@@ -1,11 +1,11 @@
 package com.moepus.serverwarashi.common.modules.bucket;
 
 import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwnerKey;
+import com.moepus.serverwarashi.common.core.owner.TicketOwnerKey;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseBatch;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.config.TicketBucketConfig;
-import com.moepus.serverwarashi.common.modules.cost.ChunkCostRuntime;
+import com.moepus.serverwarashi.common.modules.cost.ChunkCostSampler;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -25,13 +25,18 @@ import java.util.stream.Collectors;
  * Owner-phase 调度器：按稳定 owner hash 分相位，并对 promote/demote 做滞后。
  */
 final class TicketBucketScheduler {
+    // 成本只作为同一周期内的细分排序；多等待一个空闲周期一定压过最大成本惩罚。
+    private static final long COST_PENALTY_BUCKET_NANOS = 100_000L;
+    private static final long MAX_COST_PENALTY = 999L;
+    private static final long AGE_PRIORITY_WEIGHT = MAX_COST_PENALTY + 1L;
+
     private final Map<ResourceKey<Level>, Map<TicketOwnerKey, TicketBucketOwnerState>> statesByLevel = new HashMap<>();
 
     void schedule(ServerLevel level,
-                  List<TicketBucketService.TicketEntry> tickets,
+                  List<TicketBucketRuntime.TicketEntry> tickets,
                   long age,
                   TicketPauseBatch pauseBatch) {
-        Map<TicketOwnerKey, List<TicketBucketService.TicketEntry>> ownerTickets = ownerTickets(tickets);
+        Map<TicketOwnerKey, List<TicketBucketRuntime.TicketEntry>> ownerTickets = ownerTickets(tickets);
         Map<TicketOwnerKey, TicketBucketOwnerState> states =
                 statesByLevel.computeIfAbsent(level.dimension(), ignored -> new HashMap<>());
 
@@ -39,11 +44,11 @@ final class TicketBucketScheduler {
         // 只回收缺席超过保留周期数（tombstoneTtlCycles）的 owner 状态，短暂缺席者保留（bug-02）
         pruneStaleStates(states, ownerTickets.keySet(), config.cycle(),
                 tombstoneTtlCycles(config.minHoldTicks(), config.runEvery()));
-        CostAwareSelection costAwareSelection = ChunkCostRuntime.hasCostData(level)
+        CostAwareSelection costAwareSelection = ChunkCostSampler.hasCostData(level)
                 ? selectCostAwareActiveOwners(level, ownerTickets, states, config)
                 : CostAwareSelection.none();
         boolean costAware = costAwareSelection.hasKnownCostData();
-        for (Map.Entry<TicketOwnerKey, List<TicketBucketService.TicketEntry>> entry : ownerTickets.entrySet()) {
+        for (Map.Entry<TicketOwnerKey, List<TicketBucketRuntime.TicketEntry>> entry : ownerTickets.entrySet()) {
             TicketBucketOwnerState state = states.computeIfAbsent(entry.getKey(), k -> new TicketBucketOwnerState(config.age(), config.cycle()));
             boolean active = costAware
                     ? costAwareSelection.activeOwners().contains(entry.getKey())
@@ -96,24 +101,24 @@ final class TicketBucketScheduler {
         return Math.max(2L, Math.ceilDiv(minHoldTicks, runEvery) + 1L);
     }
 
-    private static Map<TicketOwnerKey, List<TicketBucketService.TicketEntry>> ownerTickets(
-            List<TicketBucketService.TicketEntry> tickets
+    private static Map<TicketOwnerKey, List<TicketBucketRuntime.TicketEntry>> ownerTickets(
+            List<TicketBucketRuntime.TicketEntry> tickets
     ) {
-        Map<TicketOwnerKey, List<TicketBucketService.TicketEntry>> ownerTickets = new HashMap<>();
-        for (TicketBucketService.TicketEntry entry : tickets) {
+        Map<TicketOwnerKey, List<TicketBucketRuntime.TicketEntry>> ownerTickets = new HashMap<>();
+        for (TicketBucketRuntime.TicketEntry entry : tickets) {
             ownerTickets.computeIfAbsent(entry.ownerKey(), ignored -> new ArrayList<>()).add(entry);
         }
         return ownerTickets;
     }
 
     private CostAwareSelection selectCostAwareActiveOwners(ServerLevel level,
-                                                           Map<TicketOwnerKey, List<TicketBucketService.TicketEntry>> ownerTickets,
+                                                           Map<TicketOwnerKey, List<TicketBucketRuntime.TicketEntry>> ownerTickets,
                                                            Map<TicketOwnerKey, TicketBucketOwnerState> states,
                                                            SchedulerConfig config) {
         int budget = activeOwnerBudget(ownerTickets.size(), config.period());
         boolean hasKnownCostData = false;
         List<CostCandidate> candidates = new ArrayList<>();
-        for (Map.Entry<TicketOwnerKey, List<TicketBucketService.TicketEntry>> entry : ownerTickets.entrySet()) {
+        for (Map.Entry<TicketOwnerKey, List<TicketBucketRuntime.TicketEntry>> entry : ownerTickets.entrySet()) {
             OwnerCost ownerCost = ownerCost(level, entry.getValue());
             hasKnownCostData |= ownerCost.hasKnownCostData();
             candidates.add(new CostCandidate(
@@ -135,11 +140,6 @@ final class TicketBucketScheduler {
         return new CostAwareSelection(activeOwners, true);
     }
 
-    // 成本只作为同一周期内的细分排序；多等待一个空闲周期一定压过最大成本惩罚。
-    private static final long COST_PENALTY_BUCKET_NANOS = 100_000L;
-    private static final long MAX_COST_PENALTY = 999L;
-    private static final long AGE_PRIORITY_WEIGHT = MAX_COST_PENALTY + 1L;
-
     static long score(long cyclesSinceActive, long ownerCost) {
         long costPenalty = Math.min(MAX_COST_PENALTY, ownerCost / COST_PENALTY_BUCKET_NANOS);
         return cyclesSinceActive * AGE_PRIORITY_WEIGHT - costPenalty;
@@ -160,15 +160,15 @@ final class TicketBucketScheduler {
         return score(cyclesSinceActive, ownerCost);
     }
 
-    private OwnerCost ownerCost(ServerLevel level, List<TicketBucketService.TicketEntry> entries) {
+    private OwnerCost ownerCost(ServerLevel level, List<TicketBucketRuntime.TicketEntry> entries) {
         long cost = 0L;
         boolean hasKnownCostData = false;
         LongOpenHashSet seenChunks = new LongOpenHashSet();
-        for (TicketBucketService.TicketEntry entry : entries) {
+        for (TicketBucketRuntime.TicketEntry entry : entries) {
             if (!seenChunks.add(entry.chunkPos())) {
                 continue;
             }
-            ChunkCostRuntime.CostSample sample = ChunkCostRuntime.costSampleForChunk(level, entry.chunkPos());
+            ChunkCostSampler.CostSample sample = ChunkCostSampler.costSampleForChunk(level, entry.chunkPos());
             if (!sample.hasKnownCost()) {
                 continue;
             }
@@ -185,7 +185,7 @@ final class TicketBucketScheduler {
         return Math.max(1, Math.ceilDiv(ownerCount, period));
     }
 
-    private void applyOwnerTickets(List<TicketBucketService.TicketEntry> entries,
+    private void applyOwnerTickets(List<TicketBucketRuntime.TicketEntry> entries,
                                    TicketBucketOwnerState state,
                                    SchedulerConfig config,
                                    boolean active,
@@ -203,7 +203,7 @@ final class TicketBucketScheduler {
         }
     }
 
-    private void requestActive(List<TicketBucketService.TicketEntry> entries,
+    private void requestActive(List<TicketBucketRuntime.TicketEntry> entries,
                                TicketBucketOwnerState state,
                                SchedulerConfig config,
                                TicketPauseBatch pauseBatch) {
@@ -218,9 +218,9 @@ final class TicketBucketScheduler {
         wakeNextBatch(entries, state, config, pauseBatch);
     }
 
-    private boolean syncPausedStateFromTickets(List<TicketBucketService.TicketEntry> entries,
+    private boolean syncPausedStateFromTickets(List<TicketBucketRuntime.TicketEntry> entries,
                                                TicketBucketOwnerState state) {
-        for (TicketBucketService.TicketEntry entry : entries) {
+        for (TicketBucketRuntime.TicketEntry entry : entries) {
             if ((TicketUtils.asPauseable(entry.ticket()).serverWarashi$getPauseMask()
                     & IPauseableTicket.PAUSE_REASON_AUTO) != 0) {
                 state.paused = true;
@@ -233,12 +233,18 @@ final class TicketBucketScheduler {
         return false;
     }
 
-    private void requestPaused(List<TicketBucketService.TicketEntry> entries,
+    private void requestPaused(List<TicketBucketRuntime.TicketEntry> entries,
                                TicketBucketOwnerState state,
                                SchedulerConfig config,
                                TicketPauseBatch pauseBatch) {
         state.inactiveRuns++;
-        if (state.paused || !pauseAllowed(
+        if (state.paused) {
+            // Protection can clear AUTO masks while the tombstoned owner state remains paused.
+            // Reapply idempotently when the owner re-enters during an inactive phase.
+            pauseAll(entries, pauseBatch);
+            return;
+        }
+        if (!pauseAllowed(
                 state.inactiveRuns,
                 config.age(),
                 state.lastFlipTick,
@@ -251,7 +257,7 @@ final class TicketBucketScheduler {
         state.markPaused(config.age(), changed);
     }
 
-    private void wakeNextBatch(List<TicketBucketService.TicketEntry> entries,
+    private void wakeNextBatch(List<TicketBucketRuntime.TicketEntry> entries,
                                TicketBucketOwnerState state,
                                SchedulerConfig config,
                                TicketPauseBatch pauseBatch) {
@@ -270,16 +276,16 @@ final class TicketBucketScheduler {
         }
     }
 
-    private boolean pauseAll(List<TicketBucketService.TicketEntry> entries,
+    private boolean pauseAll(List<TicketBucketRuntime.TicketEntry> entries,
                              TicketPauseBatch pauseBatch) {
         boolean changed = false;
-        for (TicketBucketService.TicketEntry entry : entries) {
+        for (TicketBucketRuntime.TicketEntry entry : entries) {
             changed |= applyPause(entry, true, pauseBatch);
         }
         return changed;
     }
 
-    private boolean applyPause(TicketBucketService.TicketEntry entry,
+    private boolean applyPause(TicketBucketRuntime.TicketEntry entry,
                                boolean paused,
                                TicketPauseBatch pauseBatch) {
         return pauseBatch.apply(entry.ticket(), entry.chunkPos(), paused, IPauseableTicket.PAUSE_REASON_AUTO);

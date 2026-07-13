@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.modules.cost;
 
-import com.moepus.serverwarashi.common.config.OptimizationConfig;
+import com.moepus.serverwarashi.common.config.ResidentCostConfig;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -12,7 +12,7 @@ import java.util.WeakHashMap;
 /**
  * 低频驻留成本采样器，按 chunk 聚合 chunk tick、block entity tick 与 entity tick 成本。
  */
-public final class ChunkCostRuntime {
+public final class ChunkCostSampler {
     private static final int SAMPLE_PERIOD_TICKS = 40;
     // 给下一轮采样 tick 与 ServerTick.Post HUD 推送留一个 tick 宽限，避免刚到采样窗口就提前过期。
     private static final long SAMPLE_STALE_TICKS = SAMPLE_PERIOD_TICKS + 1L;
@@ -30,7 +30,7 @@ public final class ChunkCostRuntime {
     // 故对所有访问加锁，防止 WeakHashMap / fastutil map 并发 rehash 死循环（见 bug-03）。
     private static final Object SAMPLE_LOCK = new Object();
 
-    private ChunkCostRuntime() {
+    private ChunkCostSampler() {
     }
 
     public static void tickChunk(ServerLevel level,
@@ -67,7 +67,7 @@ public final class ChunkCostRuntime {
     }
 
     public static boolean enabled() {
-        return OptimizationConfig.residentChunkCostEnabled();
+        return ResidentCostConfig.residentChunkCostEnabled();
     }
 
     public static boolean shouldSample(ServerLevel level, BlockPos pos) {

@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.client.screen;
 
 import com.moepus.serverwarashi.client.config.ClientConfig;
-import com.moepus.serverwarashi.client.event.ClientHudRuntimeEvents;
+import com.moepus.serverwarashi.client.event.ResidentCostHudEvents;
 import com.moepus.serverwarashi.client.state.ClientResidentCostState;
 import com.moepus.serverwarashi.common.report.TableReport;
 import net.minecraft.network.chat.Component;
@@ -29,7 +29,7 @@ public final class ResidentCostScreen extends TableReportPanelScreen {
     @Override
     public void removed() {
         // 界面被移除时退订驻留成本推送（覆盖 ESC/toggle/断线/被替换等所有移除路径）
-        ClientHudRuntimeEvents.closeResidentCostScreen();
+        ResidentCostHudEvents.closeResidentCostScreen();
         super.removed();
     }
 }

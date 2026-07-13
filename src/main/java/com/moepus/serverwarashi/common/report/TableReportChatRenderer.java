@@ -9,8 +9,8 @@ import net.minecraft.network.chat.Style;
 
 import java.util.List;
 
-public final class TableReportRenderer {
-    private TableReportRenderer() {
+public final class TableReportChatRenderer {
+    private TableReportChatRenderer() {
     }
 
     public static Component toComponent(TableReport report) {

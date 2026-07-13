@@ -4,6 +4,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.moepus.serverwarashi.common.modules.idlefreeze.IdleFreezeService;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -20,8 +21,8 @@ final class IdleFreezeCommands {
      */
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         // /warashi idlefreeze force：立即对当前维度强制跑一次冻结扫描并回显结果
-        root.then(net.minecraft.commands.Commands.literal("idlefreeze")
-                .then(net.minecraft.commands.Commands.literal("force")
+        root.then(Commands.literal("idlefreeze")
+                .then(Commands.literal("force")
                         .executes(context -> {
                             var source = context.getSource();
                             // 清访问记录 + 立即重扫；副作用须在 sendSuccess 之外执行——

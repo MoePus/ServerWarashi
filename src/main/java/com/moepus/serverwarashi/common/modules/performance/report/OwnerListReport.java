@@ -1,10 +1,10 @@
 package com.moepus.serverwarashi.common.modules.performance.report;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
+import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import com.moepus.serverwarashi.common.report.ReportButtons;
 import com.moepus.serverwarashi.common.report.TableReport;
-import com.moepus.serverwarashi.common.report.TableReportRenderer;
+import com.moepus.serverwarashi.common.report.TableReportChatRenderer;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -14,10 +14,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * ChunkPerf owner 展示视图。
+ * TicketPerf owner 展示视图。
  */
-public final class TicketPerfOwnerOutput {
-    private TicketPerfOwnerOutput() {
+public final class OwnerListReport {
+    private OwnerListReport() {
     }
 
     /**
@@ -27,8 +27,9 @@ public final class TicketPerfOwnerOutput {
                                              OwnerChunks.PauseMode pauseMode,
                                              String header,
                                              OwnerChunks.SortMode sortMode) {
-        TableReport report = ownerReportPlainText(level, pauseMode, header, sortMode);
-        return TableReportRenderer.toComponent(report).getString();
+        OwnerReportData data = ownerReportData(level, pauseMode, sortMode);
+        TableReport report = buildOwnerReport(level, header, data.owners(), List.of());
+        return TableReportChatRenderer.toComponent(report).getString();
     }
 
     public static TableReport ownerReport(ServerLevel level,
@@ -48,14 +49,6 @@ public final class TicketPerfOwnerOutput {
             ));
         }
         return buildOwnerReport(level, header, data.owners(), rowButtons);
-    }
-
-    private static TableReport ownerReportPlainText(ServerLevel level,
-                                                    OwnerChunks.PauseMode pauseMode,
-                                                    String header,
-                                                    OwnerChunks.SortMode sortMode) {
-        OwnerReportData data = ownerReportData(level, pauseMode, sortMode);
-        return buildOwnerReport(level, header, data.owners(), List.of());
     }
 
     private static OwnerReportData ownerReportData(ServerLevel level,
@@ -82,7 +75,7 @@ public final class TicketPerfOwnerOutput {
             OwnerChunks.Stats stats = entry.stats();
             BlockPos ownerPos = entry.owner().representativePos();
             rows.add(List.of(
-                    entry.owner().getName(),
+                    entry.owner().name(),
                     ReportButtons.formatPos(ownerPos),
                     Integer.toString(stats.chunkCount()),
                     Integer.toString(stats.blockEntityCount()),

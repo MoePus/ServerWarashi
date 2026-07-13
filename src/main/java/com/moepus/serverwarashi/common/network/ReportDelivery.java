@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.network;
 
 import com.moepus.serverwarashi.common.report.TableReport;
-import com.moepus.serverwarashi.common.report.TableReportRenderer;
+import com.moepus.serverwarashi.common.report.TableReportChatRenderer;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 
 /**
  * 报告投递的唯一出口：决定走客户端 UI 包还是聊天栏文本。
- * 各功能模块只负责把数据构建成 {@link TableReport}/{@link TableReport.Result}，
+ * 各功能模块只负责把数据构建成 {@link TableReport}，
  * 投递路径（在线？装了客户端？回退到哪里）在此统一裁决。
  */
 public final class ReportDelivery {
@@ -27,7 +27,7 @@ public final class ReportDelivery {
             WarashiNetwork.sendPerfReport(player, report.get());
             return;
         }
-        source.sendSuccess(() -> TableReportRenderer.toComponent(report.get()), false);
+        source.sendSuccess(() -> TableReportChatRenderer.toComponent(report.get()), false);
     }
 
     /**
@@ -39,7 +39,7 @@ public final class ReportDelivery {
             WarashiNetwork.sendPerfReport(player, report);
             return;
         }
-        Component message = TableReportRenderer.toComponent(report);
+        Component message = TableReportChatRenderer.toComponent(report);
         if (player != null) {
             player.sendSystemMessage(message);
         } else {

@@ -1,5 +1,7 @@
-package com.moepus.serverwarashi.common.core.ticket;
+package com.moepus.serverwarashi.common.core.owner;
 
+import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;

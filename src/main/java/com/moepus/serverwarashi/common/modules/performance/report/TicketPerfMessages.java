@@ -1,12 +1,17 @@
 package com.moepus.serverwarashi.common.modules.performance.report;
 
 import com.moepus.serverwarashi.common.config.TicketPerfConfig;
+import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import com.moepus.serverwarashi.common.report.ReportButtons;
 import com.moepus.serverwarashi.common.report.TableReport;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
@@ -43,7 +48,7 @@ public final class TicketPerfMessages {
     }
 
     public static Component sessionStarted(ResourceKey<Level> dimension,
-                                           Component ownerComponent,
+                                           TicketOwner owner,
                                            int chunkCount,
                                            int blockEntityCount,
                                            int entityCount,
@@ -53,13 +58,69 @@ public final class TicketPerfMessages {
         message = message.append(Component.literal("    ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(Component.literal("Dimension=" + dimension.location() + "\n").withStyle(ChatFormatting.GRAY));
         message = message.append(Component.literal("    ").withStyle(ChatFormatting.DARK_GRAY))
-                .append(ownerComponent)
+                .append(ownerComponent(owner, dimension))
                 .append(Component.literal("\n").withStyle(ChatFormatting.DARK_GRAY));
         message = message.append(Component.literal("    (chunks=" + chunkCount
                         + ", BE=" + blockEntityCount
                         + ", E=" + entityCount
                         + ").\n").withStyle(ChatFormatting.GRAY));
         return message;
+    }
+
+    /**
+     * owner 的可点击展示组件：名字（Block 带 modId 悬浮提示）+ 金色可点击传送坐标。
+     */
+    static Component ownerComponent(TicketOwner owner, ResourceKey<Level> dimension) {
+        BlockPos pos = owner.representativePos();
+        // 无坐标：仅文本，不可点击
+        if (pos == null) {
+            return Component.literal(owner.name() + "@null");
+        }
+
+        DisplayName displayName = resolveDisplayName(owner.name());
+
+        // 普通部分：名字 + @
+        Component base = Component.literal(displayName.text() + "@");
+        if (displayName.hoverName() != null) {
+            // 方块带 modId 时附悬浮提示
+            base = base.copy().setStyle(
+                    Style.EMPTY.withHoverEvent(new HoverEvent(
+                            HoverEvent.Action.SHOW_TEXT,
+                            Component.literal(displayName.hoverName())
+                    ))
+            );
+        }
+
+        // 坐标部分：金色 + 可点击传送
+        Component coord = Component.literal("(" + pos.getX() + "," + pos.getY() + "," + pos.getZ() + ")")
+                .setStyle(
+                        Style.EMPTY
+                                .withColor(TextColor.fromRgb(0xFFD700))
+                                .withClickEvent(new ClickEvent(
+                                        ClickEvent.Action.RUN_COMMAND,
+                                        "/" + ReportButtons.teleportCommand(dimension.location(), pos)
+                                ))
+                );
+
+        return Component.empty().append(base).append(coord);
+    }
+
+    static DisplayName resolveDisplayName(String rawName) {
+        // 形如 "Block{modid:blockid}" 时，拆出简短名并把 modId 作为悬浮提示
+        if (rawName.startsWith("Block{") && rawName.endsWith("}")) {
+            int start = "Block{".length();
+            int colon = rawName.indexOf(':', start);
+            if (colon > start) {
+                int end = rawName.length() - 1;
+                String modId = rawName.substring(start, colon);
+                String blockId = rawName.substring(colon + 1, end);
+                return new DisplayName("Block{" + blockId + "}", modId);
+            }
+        }
+        return new DisplayName(rawName, null);
+    }
+
+    record DisplayName(String text, String hoverName) {
     }
 
     public static Component allOwnersAnalysisStarted(ResourceKey<Level> dimension, int ownerCount, int durationSec) {

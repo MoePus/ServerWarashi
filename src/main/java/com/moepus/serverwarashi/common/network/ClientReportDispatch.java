@@ -5,13 +5,13 @@ import com.moepus.serverwarashi.common.report.TableReport;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-public final class ReportDispatch {
+public final class ClientReportDispatch {
     private static Consumer<TableReport> perfReportHandler = ignored -> {
     };
     private static Consumer<TableReport> residentCostHandler = ignored -> {
     };
 
-    private ReportDispatch() {
+    private ClientReportDispatch() {
     }
 
     public static void setPerfReportHandler(Consumer<TableReport> handler) {

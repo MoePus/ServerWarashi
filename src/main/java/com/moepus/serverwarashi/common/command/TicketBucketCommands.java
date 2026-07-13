@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.moepus.serverwarashi.common.config.TicketBucketConfig;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -18,12 +19,12 @@ import java.util.function.Supplier;
  * 层级：命令入口层。
  * 上游：WarashiCommands。下游：TicketBucketConfig / TicketPauseService。
  */
-final class BucketCommands {
-    private BucketCommands() {
+final class TicketBucketCommands {
+    private TicketBucketCommands() {
     }
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
-        root.then(net.minecraft.commands.Commands.literal("bucket")
+        root.then(Commands.literal("bucket")
                 .then(boolSetting(new BoolSetting(
                         "enabled",
                         "bucket",
@@ -37,7 +38,7 @@ final class BucketCommands {
                             }
                         }
                 )))
-                .then(net.minecraft.commands.Commands.literal("ticket")
+                .then(Commands.literal("ticket")
                         .then(boolSetting(new BoolSetting(
                                 "pauseAll",
                                 "pauseAll",
@@ -86,12 +87,12 @@ final class BucketCommands {
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> boolSetting(BoolSetting setting) {
-        return net.minecraft.commands.Commands.literal(setting.name())
+        return Commands.literal(setting.name())
                 .executes(context -> {
                     sendReport(context.getSource(), setting.label(), setting.valueSupplier());
                     return 1;
                 })
-                .then(net.minecraft.commands.Commands.argument(setting.name(), BoolArgumentType.bool())
+                .then(Commands.argument(setting.name(), BoolArgumentType.bool())
                         .executes(context -> {
                             setting.setter().accept(BoolArgumentType.getBool(context, setting.name()));
                             TicketBucketConfig.save();
@@ -105,24 +106,23 @@ final class BucketCommands {
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> intSetting(IntSetting setting) {
-        return net.minecraft.commands.Commands.literal(setting.name())
+        return Commands.literal(setting.name())
                 .executes(context -> {
                     sendReport(context.getSource(), setting.name(), setting.valueSupplier());
                     return 1;
                 })
-                .then(net.minecraft.commands.Commands.argument(
-	                                setting.name(),
-	                                IntegerArgumentType.integer(setting.min(), setting.max())
-	                        )
-	                        .executes(context -> {
-	                            setting.setter().accept(IntegerArgumentType.getInteger(context, setting.name()));
-	                            TicketBucketConfig.save();
-                            context.getSource().sendSuccess(
-                                    () -> Component.literal(setting.name() + " set to " + setting.valueSupplier().get()),
-                                    false
-                            );
-                            return 1;
-                        }));
+                .then(Commands.argument(
+                        setting.name(),
+                        IntegerArgumentType.integer(setting.min(), setting.max())
+                ).executes(context -> {
+                    setting.setter().accept(IntegerArgumentType.getInteger(context, setting.name()));
+                    TicketBucketConfig.save();
+                    context.getSource().sendSuccess(
+                            () -> Component.literal(setting.name() + " set to " + setting.valueSupplier().get()),
+                            false
+                    );
+                    return 1;
+                }));
     }
 
     private static void sendReport(CommandSourceStack source, String label, Supplier<?> valueSupplier) {

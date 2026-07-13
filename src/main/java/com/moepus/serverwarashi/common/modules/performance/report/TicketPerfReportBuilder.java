@@ -41,7 +41,7 @@ public final class TicketPerfReportBuilder {
             }
             BlockPos ownerPos = entry.owner().representativePos();
             rows.add(List.of(
-                    entry.owner().getName(),
+                    entry.owner().name(),
                     ReportButtons.formatPos(ownerPos),
                     Integer.toString(entry.chunkCount()),
                     Integer.toString(entry.blockEntityCount()),
@@ -87,7 +87,7 @@ public final class TicketPerfReportBuilder {
         addSection(sections, "Top Entities", List.of("Type", "MSPT"),
                 buildTopTypeRows(report.entities().typeTotals(), summary.serverTickCount()));
         return new TableReport(
-                "Serverwarashi Profiler Report",
+                "ServerWarashi Profiler Report",
                 List.of("Elapsed: " + report.elapsed().toSeconds() + "s"),
                 sections
         );

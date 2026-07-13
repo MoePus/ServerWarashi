@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.modules.cost;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
+import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfMessages;
 import com.moepus.serverwarashi.common.report.ReportButtons;
 import com.moepus.serverwarashi.common.report.TableReport;
@@ -19,8 +19,8 @@ import java.util.Set;
 /**
  * Resident Chunk Cost 报告构建（cost 模块的渲染分片）。
  */
-public final class CostReport {
-    private CostReport() {
+public final class ResidentCostReport {
+    private ResidentCostReport() {
     }
 
     public static TableReport build(net.minecraft.server.level.ServerLevel level,
@@ -44,7 +44,7 @@ public final class CostReport {
             OwnerChunks.Stats stats = OwnerChunks.stats(level, cost.chunks());
             BlockPos ownerPos = cost.owner().representativePos();
             rows.add(List.of(
-                    cost.owner().getName(),
+                    cost.owner().name(),
                     ReportButtons.formatPos(ownerPos),
                     Integer.toString(stats.chunkCount()),
                     Integer.toString(stats.blockEntityCount()),
@@ -86,11 +86,11 @@ public final class CostReport {
         long entityTotal = 0L;
         int known = 0;
         for (long chunk : chunks) {
-            ChunkCostRuntime.CostSample cost = ChunkCostRuntime.costSampleForChunk(level, chunk);
+            ChunkCostSampler.CostSample cost = ChunkCostSampler.costSampleForChunk(level, chunk);
             if (cost.hasKnownCost()) {
-                chunkTotal += ChunkCostRuntime.CostSample.knownNanos(cost.chunkNanos());
-                blockEntityTotal += ChunkCostRuntime.CostSample.knownNanos(cost.blockEntityNanos());
-                entityTotal += ChunkCostRuntime.CostSample.knownNanos(cost.entityNanos());
+                chunkTotal += ChunkCostSampler.CostSample.knownNanos(cost.chunkNanos());
+                blockEntityTotal += ChunkCostSampler.CostSample.knownNanos(cost.blockEntityNanos());
+                entityTotal += ChunkCostSampler.CostSample.knownNanos(cost.entityNanos());
                 known++;
             }
         }

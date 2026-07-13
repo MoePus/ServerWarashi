@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.mixin.watchdog;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfOwnerOutput;
+import com.moepus.serverwarashi.common.modules.performance.report.OwnerListReport;
 import net.minecraft.CrashReport;
 import net.minecraft.CrashReportCategory;
 import net.minecraft.server.level.ServerLevel;
@@ -13,9 +13,9 @@ final class ServerWatchdogTicketAppender {
 
     static void appendTicketInfoToReport(CrashReport report, Iterable<ServerLevel> levels) {
         try {
-            CrashReportCategory category = report.addCategory("Serverwarashi Ticket Info");
+            CrashReportCategory category = report.addCategory("ServerWarashi Ticket Info");
             for (var level : levels) {
-                String ticketInfo = TicketPerfOwnerOutput.listOwnersPlainText(
+                String ticketInfo = OwnerListReport.listOwnersPlainText(
                         level,
                         OwnerChunks.PauseMode.ACTIVE_ONLY,
                         "Running ticket owners:",

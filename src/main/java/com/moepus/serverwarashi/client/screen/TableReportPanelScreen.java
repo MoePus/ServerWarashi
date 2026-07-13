@@ -28,9 +28,6 @@ public abstract class TableReportPanelScreen extends Screen {
     static final int BORDER = 0xFF3B6EA5;
     private static final int HEADER_BG = 0xFF1E2A38;
     private static final int TITLE = 0xFF7FE0FF;
-    private static final int COL_HEADER = TableReportTableRenderer.COL_HEADER;
-    private static final int ROW_TEXT = TableReportTableRenderer.ROW_TEXT;
-    private static final int SEP = TableReportTableRenderer.SEP;
     static final int CLOSE_BG = 0xFF24323F;
     static final int CLOSE_BG_HOVER = 0xFF3B6EA5;
     private static final int CLOSE_TEXT = 0xFFCFE3FF;
@@ -155,7 +152,8 @@ public abstract class TableReportPanelScreen extends Screen {
     private void renderContent(GuiGraphics graphics, Geometry geometry, TableReport report, int mouseX, int mouseY) {
         int y = geometry.contentY - scroll;
         for (String metadata : report.metadata()) {
-            graphics.drawString(font, fitToWidth(metadata, geometry.contentW), geometry.contentX, y, COL_HEADER, true);
+            graphics.drawString(font, fitToWidth(metadata, geometry.contentW), geometry.contentX, y,
+                    TableReportTableRenderer.COL_HEADER, true);
             y += ROW_H;
         }
         if (!report.metadata().isEmpty()) {
@@ -173,7 +171,7 @@ public abstract class TableReportPanelScreen extends Screen {
         }
 
         if (!hasRows) {
-            graphics.drawString(font, "No data", geometry.contentX, y, ROW_TEXT, true);
+            graphics.drawString(font, "No data", geometry.contentX, y, TableReportTableRenderer.ROW_TEXT, true);
         }
     }
 
@@ -228,7 +226,7 @@ public abstract class TableReportPanelScreen extends Screen {
         thumbH = Math.min(viewHeight, thumbH);
         int thumbTravel = Math.max(0, viewHeight - thumbH);
         int thumbY = trackY + Math.round((float) thumbTravel * scroll / maxScroll);
-        graphics.fill(trackX, trackY, trackX + SCROLLBAR_W, trackY + viewHeight, SEP);
+        graphics.fill(trackX, trackY, trackX + SCROLLBAR_W, trackY + viewHeight, TableReportTableRenderer.SEP);
         graphics.fill(trackX, thumbY, trackX + SCROLLBAR_W, thumbY + thumbH, BORDER);
     }
 

@@ -1,8 +1,8 @@
 package com.moepus.serverwarashi.common.modules.cost;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.config.OptimizationConfig;
-import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfSessionController;
+import com.moepus.serverwarashi.common.config.ResidentCostConfig;
+import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfRuntime;
 import com.moepus.serverwarashi.common.report.TableReport;
 import com.moepus.serverwarashi.common.network.WarashiNetwork;
 import net.minecraft.server.MinecraftServer;
@@ -54,7 +54,7 @@ public final class ResidentCostHudRuntime {
         }
 
         // 到点：重置周期并推送一轮
-        ticksUntilPush = OptimizationConfig.residentHudPushPeriod() - 1;
+        ticksUntilPush = ResidentCostConfig.residentHudPushPeriod() - 1;
         pushReports(server);
     }
 
@@ -83,17 +83,16 @@ public final class ResidentCostHudRuntime {
 
     private static Optional<TableReport> buildReport(ServerLevel level) {
         // 成本未开或该维度正在性能分析时不出报告
-        if (!ChunkCostRuntime.enabled()
-                || TicketPerfSessionController.activeSessionIdIn(level) != TicketPerfSessionController.NO_SESSION_ID) {
+        if (!ChunkCostSampler.enabled() || TicketPerfRuntime.hasActiveSessionIn(level)) {
             return Optional.empty();
         }
         // 一次遍历获取 ACTIVE_ONLY 与 ALL 两个视图，避免双全量扫描
         OwnerChunks.BothMaps both = OwnerChunks.collectBothMaps(level);
         // 锚点计数按 ALL 全集（含已暂停 owner）：分析按钮的 startSingle 就是按 ALL 判定多 owner；若按 ACTIVE_ONLY 计数，发出的按钮点击后会因多 owner 被拒绝
-        return Optional.of(CostReport.build(
+        return Optional.of(ResidentCostReport.build(
                 level,
                 both.activeOnly(),
-                OptimizationConfig.residentHudMaxOwners(),
+                ResidentCostConfig.residentHudMaxOwners(),
                 OwnerChunks.ownerCountByChunk(both.all().values())
         ));
     }

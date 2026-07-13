@@ -1,8 +1,8 @@
-package com.moepus.serverwarashi.common.mixin.chunkperf;
+package com.moepus.serverwarashi.common.mixin.ticktiming;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.moepus.serverwarashi.common.modules.performance.TicketPerfMixinHooks;
+import com.moepus.serverwarashi.common.modules.TickTimingHooks;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
@@ -29,6 +29,6 @@ public abstract class LevelBlockEntityTickMixin {
         if (!(level instanceof ServerLevel serverLevel)) {
             return original.call(tickers);
         }
-        return TicketPerfMixinHooks.wrapBlockEntityIterator(serverLevel, original.call(tickers));
+        return TickTimingHooks.wrapBlockEntityIterator(serverLevel, original.call(tickers));
     }
 }

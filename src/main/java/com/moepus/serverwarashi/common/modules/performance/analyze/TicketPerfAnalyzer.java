@@ -2,7 +2,7 @@ package com.moepus.serverwarashi.common.modules.performance.analyze;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
 import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
+import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseService;
 import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfMessages;
 import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfReportBuilder;
@@ -28,13 +28,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-final class OwnerPerfAnalyzer {
+final class TicketPerfAnalyzer {
     static final long NO_SESSION_ID = -1L;
     private Session activeSession;
 
     Component startSingle(ServerLevel level, BlockPos pos, int durationSec, UUID playerId, long sessionId) {
         long chunkPos = new ChunkPos(pos).toLong();
-        Map<TicketOwner, Set<Long>> ownersAt = OwnerChunks.resolveOwnersAt(level, chunkPos, OwnerChunks.PauseMode.ALL);
+        Map<TicketOwner, Set<Long>> ownersAt = OwnerChunks.resolveOwnersAt(level, chunkPos);
         if (ownersAt.isEmpty()) {
             return TicketPerfMessages.noOwnerAtPosition(pos.getX(), pos.getY(), pos.getZ());
         }
@@ -58,7 +58,7 @@ final class OwnerPerfAnalyzer {
         OwnerChunks.Stats stats = owner.stats();
         return TicketPerfMessages.sessionStarted(
                 level.dimension(),
-                owner.owner().asComponent(level.dimension()),
+                owner.owner(),
                 stats.chunkCount(),
                 stats.blockEntityCount(),
                 stats.entityCount(),
@@ -68,7 +68,7 @@ final class OwnerPerfAnalyzer {
 
     Component startAll(ServerLevel level, int durationSec, UUID playerId, long sessionId) {
         TicketPauseService.clearAutoPause(level);
-        List<OwnerChunks.Entry> owners = OwnerChunks.collect(level, OwnerChunks.PauseMode.ALL);
+        List<OwnerChunks.Entry> owners = OwnerChunks.collect(level);
         if (owners.isEmpty()) {
             return TicketPerfMessages.noTicketOwnersFound();
         }
@@ -202,7 +202,7 @@ final class OwnerPerfAnalyzer {
         return TicketPerfReportBuilder.buildPerfReport(new TicketPerfReportData.SingleOwnerReport(
                 new TicketPerfReportData.Summary(
                         session.dimension,
-                        owner.owner().getName(),
+                        owner.owner().name(),
                         owner.owner().representativePos(),
                         session.trackedChunks.size(),
                         stats.blockEntityCount(),

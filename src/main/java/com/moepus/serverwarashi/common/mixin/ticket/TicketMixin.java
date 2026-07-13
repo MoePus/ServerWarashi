@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.mixin.ticket;
 
 import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
-import com.moepus.serverwarashi.common.core.ticket.TicketOwner;
+import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import net.minecraft.server.level.Ticket;
 import org.spongepowered.asm.mixin.Final;

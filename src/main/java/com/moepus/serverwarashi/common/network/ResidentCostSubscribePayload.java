@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.network;
 
-import com.moepus.serverwarashi.Serverwarashi;
+import com.moepus.serverwarashi.ServerWarashi;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -9,15 +9,15 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
 
 
-public record ResidentHudSubscribePayload(boolean on) implements CustomPacketPayload {
-    public static final Type<ResidentHudSubscribePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Serverwarashi.MODID, "resident_hud_subscribe")
+public record ResidentCostSubscribePayload(boolean on) implements CustomPacketPayload {
+    public static final Type<ResidentCostSubscribePayload> TYPE = new Type<>(
+            ResourceLocation.fromNamespaceAndPath(ServerWarashi.MODID, "resident_hud_subscribe")
     );
-    public static final StreamCodec<RegistryFriendlyByteBuf, ResidentHudSubscribePayload> STREAM_CODEC =
+    public static final StreamCodec<RegistryFriendlyByteBuf, ResidentCostSubscribePayload> STREAM_CODEC =
             StreamCodec.composite(
                     ByteBufCodecs.BOOL,
-                    ResidentHudSubscribePayload::on,
-                    ResidentHudSubscribePayload::new
+                    ResidentCostSubscribePayload::on,
+                    ResidentCostSubscribePayload::new
             );
 
     @Override

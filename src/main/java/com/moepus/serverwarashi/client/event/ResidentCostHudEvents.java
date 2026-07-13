@@ -1,9 +1,9 @@
 package com.moepus.serverwarashi.client.event;
 
-import com.moepus.serverwarashi.Serverwarashi;
+import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.client.screen.ResidentCostScreen;
 import com.moepus.serverwarashi.client.state.ClientResidentCostState;
-import com.moepus.serverwarashi.common.network.ResidentHudSubscribePayload;
+import com.moepus.serverwarashi.common.network.ResidentCostSubscribePayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
@@ -14,13 +14,13 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
-@EventBusSubscriber(value = Dist.CLIENT, modid = Serverwarashi.MODID)
+@EventBusSubscriber(value = Dist.CLIENT, modid = ServerWarashi.MODID)
 
-public final class ClientHudRuntimeEvents {
+public final class ResidentCostHudEvents {
     private static ClientPacketListener activeConnection;
     private static boolean subscribed;
 
-    private ClientHudRuntimeEvents() {
+    private ResidentCostHudEvents() {
     }
 
     @SubscribeEvent
@@ -36,7 +36,7 @@ public final class ClientHudRuntimeEvents {
             subscribed = false;
             ClientResidentCostState.clear();
         }
-        while (ClientHudHandler.consumeToggleClick()) {
+        while (ClientSetup.consumeToggleClick()) {
             toggleResidentCostScreen(minecraft);
         }
     }
@@ -67,13 +67,13 @@ public final class ClientHudRuntimeEvents {
             return true;
         }
         // 两个 payload 由同一 registrar 同版本一并注册，协商结果必然同有同无，查订阅包一个即可
-        if (!NetworkRegistry.hasChannel(activeConnection, ResidentHudSubscribePayload.TYPE.id())) {
+        if (!NetworkRegistry.hasChannel(activeConnection, ResidentCostSubscribePayload.TYPE.id())) {
             subscribed = false;
             ClientResidentCostState.clear();
             sendStatus("Resident cost HUD is not supported by this server");
             return false;
         }
-        PacketDistributor.sendToServer(new ResidentHudSubscribePayload(enabled));
+        PacketDistributor.sendToServer(new ResidentCostSubscribePayload(enabled));
         subscribed = enabled;
         return true;
     }

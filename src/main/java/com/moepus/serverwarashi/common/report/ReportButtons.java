@@ -38,20 +38,18 @@ public final class ReportButtons {
     }
 
     /**
-     * 装配行内按钮：传送按钮（按 tpTarget）+ 调用方注入的额外按钮（null 自动略过）。
+     * 装配行内按钮：传送按钮（按 tpTarget）+ 调用方注入的额外按钮（null 略过）。
      */
     public static List<TableReport.Button> locate(ResourceLocation dimension,
                                                   BlockPos tpTarget,
-                                                  TableReport.Button... extra) {
-        List<TableReport.Button> buttons = new ArrayList<>(1 + extra.length);
+                                                  TableReport.Button extra) {
+        List<TableReport.Button> buttons = new ArrayList<>(2);
         TableReport.Button teleport = teleport(dimension, tpTarget);
         if (teleport != null) {
             buttons.add(teleport);
         }
-        for (TableReport.Button button : extra) {
-            if (button != null) {
-                buttons.add(button);
-            }
+        if (extra != null) {
+            buttons.add(extra);
         }
         return List.copyOf(buttons);
     }

@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.network;
 
-import com.moepus.serverwarashi.Serverwarashi;
+import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.common.report.TableReport;
 import com.moepus.serverwarashi.common.report.TableReportCodec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -12,7 +12,7 @@ import org.jetbrains.annotations.NotNull;
 
 public record ReportPayload(ReportKind kind, TableReport report) implements CustomPacketPayload {
     public static final Type<ReportPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(Serverwarashi.MODID, "report")
+            ResourceLocation.fromNamespaceAndPath(ServerWarashi.MODID, "report")
     );
     private static final StreamCodec<RegistryFriendlyByteBuf, ReportKind> KIND_CODEC = StreamCodec.of(
             (buffer, kind) -> buffer.writeVarInt(kind.ordinal()),
