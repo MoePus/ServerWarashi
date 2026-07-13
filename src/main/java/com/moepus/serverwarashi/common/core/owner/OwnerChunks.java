@@ -26,6 +26,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * owner -> chunks 视图构建器：扫描 DistanceManager 当前 ticket 表，把 chunk 按 owner 分组，
+ * 并可为 chunk 集合清点 BE/E 负载（{@link Stats}）。收集本身一律全量（含被暂停 chunk）。
+ * 层级：core。上游：idlefreeze 冻结判定 / performance 定位与列表报告 / cost HUD。
+ * 下游：TicketScanService / TicketOwnerResolver。
+ */
 public final class OwnerChunks {
     private OwnerChunks() {
     }

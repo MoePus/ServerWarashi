@@ -20,6 +20,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /**
  * 模组统一事件订阅入口。
  * 只负责接收 NeoForge 事件并分发到各模块运行时入口。
+ * 层级：入口层。
+ * 上游：NeoForge 事件总线。下游：TicketBucketRuntime / IdleFreezeRuntime / ResidentCostHudRuntime / TicketPerfRuntime / WarashiCommands。
  */
 @EventBusSubscriber(modid = ServerWarashi.MODID)
 

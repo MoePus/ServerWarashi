@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.core.owner;
 
-import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.PauseableTicket;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
@@ -37,7 +37,7 @@ public final class TicketOwnerResolver {
     }
 
     public static TicketOwner resolve(Ticket<?> ticket, ServerLevel level) {
-        IPauseableTicket pauseableTicket = TicketUtils.asPauseable(ticket);
+        PauseableTicket pauseableTicket = TicketUtils.asPauseable(ticket);
         long gameTime = level.getGameTime();
         TicketOwner cachedOwner = pauseableTicket.serverWarashi$getCachedOwner();
         long cachedAt = pauseableTicket.serverWarashi$getOwnerResolvedAtGameTime();

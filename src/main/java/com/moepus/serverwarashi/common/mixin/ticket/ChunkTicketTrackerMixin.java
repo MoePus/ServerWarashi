@@ -10,11 +10,12 @@ import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * 与 {@link TickingTrackerMixin} 对应：让 {@code DistanceManager$ChunkTicketTracker.getLevelFromSource} 也以
- * masked 最小作为 source，使 ChunkHolder 的 ticket level 与暂停掩码语义一致（见 bug-01）。
+ * masked 最小作为 source，使 ChunkHolder 的 ticket level 与暂停掩码语义一致
+ * （不修正的失效场景见 {@link TicketUtils#strictestMaskedTicket}）。
  *
  * <p>仅在「含被暂停 ticket 的 chunk」上与原版行为不同：未暂停时 masked 最小 == first()。
  * 用 {@code @WrapOperation}（而非 {@code @Redirect}）以便与其它同样修改该 {@code first()} 调用的 mod 组合，
- * 避免 {@code defaultRequire:1} 下的加载期硬冲突（见 bug-01 复查 SF2）。
+ * 避免 {@code defaultRequire:1} 下的加载期硬冲突。
  */
 @Mixin(targets = "net.minecraft.server.level.DistanceManager$ChunkTicketTracker", remap = false)
 

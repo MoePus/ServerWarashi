@@ -9,6 +9,8 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 注册 idlefreeze 模块命令。
+ * 层级：命令入口层。
+ * 上游：WarashiCommands。下游：IdleFreezeService。
  */
 final class IdleFreezeCommands {
     private IdleFreezeCommands() {

@@ -15,6 +15,9 @@ import java.util.function.Consumer;
 
 /**
  * TicketPerf 与 resident cost 共用的 tick 计时钩子：无分析、无采样时直接回落到原始调用。
+ * 因被两个模块共用而放在 modules 根，不归属任一子包。
+ * 层级：入口层（三个计时 mixin 的统一汇聚点）。
+ * 上游：mixin/ticktiming。下游：TicketPerfRuntime / ChunkCostSampler。
  */
 public final class TickTimingHooks {
     private TickTimingHooks() {

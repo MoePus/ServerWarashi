@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.modules.performance.analyze;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.PauseableTicket;
 import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseService;
 import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfMessages;
@@ -28,6 +28,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 性能分析会话本体：持有当前会话快照（单 owner 或全 owner），
+ * 聚合 TickTimingHooks 上报的 chunk/BE/entity 计时，到期构建报告。
+ * 层级：模块内部（包私有）。上游：TicketPerfRuntime（唯一驱动方）。
+ * 下游：OwnerChunks / TicketPerfReportBuilder / TicketPerfMessages。
+ */
 final class TicketPerfAnalyzer {
     static final long NO_SESSION_ID = -1L;
     private Session activeSession;
@@ -47,7 +53,7 @@ final class TicketPerfAnalyzer {
                 level,
                 single.getValue(),
                 false,
-                IPauseableTicket.PAUSE_REASON_AUTO
+                PauseableTicket.PAUSE_REASON_AUTO
         );
         OwnerChunks.Entry owner = new OwnerChunks.Entry(
                 single.getKey(),

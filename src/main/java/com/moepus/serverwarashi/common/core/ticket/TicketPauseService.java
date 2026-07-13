@@ -14,7 +14,7 @@ public final class TicketPauseService {
                 level,
                 distanceManager.getTickets().keySet(),
                 false,
-                IPauseableTicket.PAUSE_REASON_AUTO
+                PauseableTicket.PAUSE_REASON_AUTO
         );
     }
 

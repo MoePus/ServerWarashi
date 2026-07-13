@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.modules.bucket;
 
 import com.moepus.serverwarashi.common.config.TicketBucketConfig;
-import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.PauseableTicket;
 import com.moepus.serverwarashi.common.core.owner.TicketOwnerKey;
 import com.moepus.serverwarashi.common.core.owner.TicketOwnerResolver;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseBatch;
@@ -68,7 +68,7 @@ public final class TicketBucketRuntime {
 
         if (TicketBucketConfig.pauseAll()) {
             for (TicketEntry entry : tickets) {
-                pauseBatch.apply(entry.ticket(), entry.chunkPos(), true, IPauseableTicket.PAUSE_REASON_AUTO);
+                pauseBatch.apply(entry.ticket(), entry.chunkPos(), true, PauseableTicket.PAUSE_REASON_AUTO);
             }
         } else {
             SCHEDULER.schedule(level, tickets, age, pauseBatch);
@@ -90,7 +90,7 @@ public final class TicketBucketRuntime {
             // 含保护型 ticket（玩家/强加载/传送门等）的 chunk 整体跳过，不参与分桶
             if (containsChunkProtectionTicket(tickets)) {
                 for (Ticket<?> ticket : tickets) {
-                    pauseBatch.apply(ticket, chunkPosLong, false, IPauseableTicket.PAUSE_REASON_AUTO);
+                    pauseBatch.apply(ticket, chunkPosLong, false, PauseableTicket.PAUSE_REASON_AUTO);
                 }
                 return;
             }

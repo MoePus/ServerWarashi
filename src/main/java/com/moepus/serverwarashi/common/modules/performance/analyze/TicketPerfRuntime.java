@@ -13,7 +13,8 @@ import java.util.UUID;
 
 /**
  * 性能会话入口：负责调度单 owner 会话与全 owner 会话。
- * 上游：ServerWarashiEvents / mixin hooks / TicketPerfCommands。
+ * 层级：入口层。
+ * 上游：ServerWarashiEvents / TickTimingHooks / TicketPerfCommands。下游：TicketPerfAnalyzer / ReportDelivery。
  */
 public final class TicketPerfRuntime {
     public static final long NO_SESSION_ID = TicketPerfAnalyzer.NO_SESSION_ID;

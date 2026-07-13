@@ -1,6 +1,6 @@
 package com.moepus.serverwarashi.common.modules.bucket;
 
-import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.PauseableTicket;
 import com.moepus.serverwarashi.common.core.owner.TicketOwnerKey;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseBatch;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
@@ -41,7 +41,7 @@ final class TicketBucketScheduler {
                 statesByLevel.computeIfAbsent(level.dimension(), ignored -> new HashMap<>());
 
         SchedulerConfig config = SchedulerConfig.read(age);
-        // 只回收缺席超过保留周期数（tombstoneTtlCycles）的 owner 状态，短暂缺席者保留（bug-02）
+        // 只回收缺席超过保留周期数（tombstoneTtlCycles）的 owner 状态，短暂缺席者保留
         pruneStaleStates(states, ownerTickets.keySet(), config.cycle(),
                 tombstoneTtlCycles(config.minHoldTicks(), config.runEvery()));
         CostAwareSelection costAwareSelection = ChunkCostSampler.hasCostData(level)
@@ -222,7 +222,7 @@ final class TicketBucketScheduler {
                                                TicketBucketOwnerState state) {
         for (TicketBucketRuntime.TicketEntry entry : entries) {
             if ((TicketUtils.asPauseable(entry.ticket()).serverWarashi$getPauseMask()
-                    & IPauseableTicket.PAUSE_REASON_AUTO) != 0) {
+                    & PauseableTicket.PAUSE_REASON_AUTO) != 0) {
                 state.paused = true;
                 return true;
             }
@@ -288,7 +288,7 @@ final class TicketBucketScheduler {
     private boolean applyPause(TicketBucketRuntime.TicketEntry entry,
                                boolean paused,
                                TicketPauseBatch pauseBatch) {
-        return pauseBatch.apply(entry.ticket(), entry.chunkPos(), paused, IPauseableTicket.PAUSE_REASON_AUTO);
+        return pauseBatch.apply(entry.ticket(), entry.chunkPos(), paused, PauseableTicket.PAUSE_REASON_AUTO);
     }
 
     private record CostCandidate(TicketOwnerKey owner, long score) {

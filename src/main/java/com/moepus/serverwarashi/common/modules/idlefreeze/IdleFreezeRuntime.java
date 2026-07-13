@@ -9,6 +9,8 @@ import net.minecraft.server.level.ServerPlayer;
 /**
  * IdleFreeze 模块运行时协调入口。
  * 负责事件驱动状态和玩家访问跟踪，不承载冻结判定本体。
+ * 层级：入口层。
+ * 上游：ServerWarashiEvents。下游：IdleFreezeService / IdleVisitData。
  */
 public final class IdleFreezeRuntime {
     private static final int CHECK_INTERVAL_TICKS = 20;

@@ -2,7 +2,7 @@ package com.moepus.serverwarashi.common.modules.idlefreeze;
 
 import com.moepus.serverwarashi.common.config.IdleFreezeConfig;
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
-import com.moepus.serverwarashi.common.core.ticket.IPauseableTicket;
+import com.moepus.serverwarashi.common.core.ticket.PauseableTicket;
 import com.moepus.serverwarashi.common.core.ticket.TicketPauseService;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.level.ServerLevel;
@@ -126,7 +126,7 @@ public final class IdleFreezeService {
                 level,
                 chunks,
                 paused,
-                IPauseableTicket.PAUSE_REASON_IDLE
+                PauseableTicket.PAUSE_REASON_IDLE
         );
     }
 }

@@ -6,6 +6,11 @@ import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.SortedArraySet;
 
+/**
+ * ticket 口径的唯一出处：保护型/系统型 ticket 判定、原始 level 读取，
+ * 以及所有 tracker mixin 共用的「masked level 最小」ticket 选取。
+ * 层级：core 工具（纯静态）。上游：mixin/ticket、TicketPauseBatch、各模块。
+ */
 public final class TicketUtils {
     public static final int MAX_PAUSEABLE_LEVEL = 32;
     public static final int PAUSED_TICKET_LEVEL = MAX_PAUSEABLE_LEVEL + 1;
@@ -14,8 +19,8 @@ public final class TicketUtils {
     private TicketUtils() {
     }
 
-    public static IPauseableTicket asPauseable(Ticket<?> ticket) {
-        return (IPauseableTicket) (Object) ticket;
+    public static PauseableTicket asPauseable(Ticket<?> ticket) {
+        return (PauseableTicket) (Object) ticket;
     }
 
     public static boolean isSystemTicket(Ticket<?> ticket) {

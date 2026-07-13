@@ -12,7 +12,8 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * 让 {@code DistanceManager.getTicketLevelAt}（static）用 masked 最小作「最严格 ticket」口径。
  * 它是 addTicket/removeTicket/purge 给 {@code ticketTracker.update(...)} 提供的实参来源；不修正会在
- * 「分裂暂停」chunk 上增删无关 ticket 时把 ticketTracker 瞬时回滚到 33（见 bug-01 复查 SF1）。
+ * 「分裂暂停」chunk（最严格 ticket 被暂停、同 chunk 还有未暂停弱 ticket）上增删无关 ticket 时，
+ * 把 ticketTracker 瞬时回滚到 33。
  */
 @Mixin(value = DistanceManager.class, remap = false)
 

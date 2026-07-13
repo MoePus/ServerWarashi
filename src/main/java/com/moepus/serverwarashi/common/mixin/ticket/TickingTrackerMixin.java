@@ -11,10 +11,10 @@ import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * 让 {@link TickingTracker} 用 masked 最小（而非原始 level 最严格的 first()）作为「最严格 ticket」的取值口径，
- * 与暂停掩码语义一致（见 bug-01）。覆盖两条取值路径：
+ * 与暂停掩码语义一致（不修正的失效场景见 {@link TicketUtils#strictestMaskedTicket}）。覆盖两条取值路径：
  * <ul>
  *   <li>{@code getLevelFromSource}：邻居触发的重算（修复回滚）；</li>
- *   <li>{@code getTicketLevelAt}：addTicket/removeTicket 时对 tickingTracker 的 update 实参（修复增删瞬态，SF1）。</li>
+ *   <li>{@code getTicketLevelAt}：addTicket/removeTicket 时对 tickingTracker 的 update 实参（修复增删无关 ticket 时的瞬态回滚）。</li>
  * </ul>
  *
  * <p>仅在「含被暂停 ticket 的 chunk」上与原版行为不同：未暂停时 masked 最小 == first()。

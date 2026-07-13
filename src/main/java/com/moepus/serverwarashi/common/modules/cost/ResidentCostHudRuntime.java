@@ -16,6 +16,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 驻留成本 HUD 推送入口：维护订阅者集合，按配置周期把所在维度的成本报告推给订阅的 OP。
+ * 层级：入口层。
+ * 上游：ServerWarashiEvents / WarashiNetwork（订阅 payload）。下游：OwnerChunks / ResidentCostReport / WarashiNetwork。
+ */
 public final class ResidentCostHudRuntime {
     private static final Set<UUID> SUBSCRIBERS = new HashSet<>();
     private static int ticksUntilPush;

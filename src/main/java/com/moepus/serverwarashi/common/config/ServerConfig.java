@@ -2,6 +2,10 @@ package com.moepus.serverwarashi.common.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
+/**
+ * 服务端配置定义（serverwarashi-server.toml），键按 bucket_/perf_/resident_/idlefreeze_ 前缀分组。
+ * 字段为包私有：模块代码不直接读本类，一律经各模块配置门面（TicketBucketConfig 等）取值。
+ */
 public final class ServerConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 

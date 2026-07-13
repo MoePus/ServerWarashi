@@ -11,6 +11,8 @@ import java.util.WeakHashMap;
 
 /**
  * 低频驻留成本采样器，按 chunk 聚合 chunk tick、block entity tick 与 entity tick 成本。
+ * 层级：cost 模块核心。
+ * 上游：TickTimingHooks 写入采样；TicketBucketScheduler 与 ResidentCostReport 读取成本。
  */
 public final class ChunkCostSampler {
     private static final int SAMPLE_PERIOD_TICKS = 40;
@@ -27,7 +29,7 @@ public final class ChunkCostSampler {
     private static final WeakHashMap<ServerLevel, Long2ObjectOpenHashMap<MutableChunkCost>> COST_BY_LEVEL =
             new WeakHashMap<>();
     // 采样写路径默认仅主线程调用；但注入点（tickChunk redirect）可能被并行 tick 的 mod 搬到 worker 线程，
-    // 故对所有访问加锁，防止 WeakHashMap / fastutil map 并发 rehash 死循环（见 bug-03）。
+    // 故对所有访问加锁，防止 WeakHashMap / fastutil map 并发 rehash 死循环。
     private static final Object SAMPLE_LOCK = new Object();
 
     private ChunkCostSampler() {
