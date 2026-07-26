@@ -4,9 +4,7 @@ import com.moepus.serverwarashi.common.core.ticket.TicketScanService;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.mixin.accessor.PersistentEntitySectionManagerAccessor;
 import com.moepus.serverwarashi.common.mixin.accessor.ServerLevelAccessor;
-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
@@ -29,7 +27,7 @@ import java.util.Set;
 /**
  * owner -> chunks 视图构建器：扫描 DistanceManager 当前 ticket 表，把 chunk 按 owner 分组，
  * 并可为 chunk 集合清点 BE/E 负载（{@link Stats}）。收集本身一律全量（含被暂停 chunk）。
- * 层级：core。上游：idlefreeze 冻结判定 / performance 定位与列表报告 / cost HUD。
+ * 层级：core。上游：performance 定位、watchdog 诊断和未来的 ticket 调度策略。
  * 下游：TicketScanService / TicketOwnerResolver。
  */
 public final class OwnerChunks {
@@ -138,25 +136,6 @@ public final class OwnerChunks {
     public static Stats stats(ServerLevel level, Set<Long> chunks) {
         EntitySectionStorage<?> sectionStorage = sectionStorage(level);
         return computeStats(level, chunks, sectionStorage, new HashMap<>());
-    }
-
-    public static Long2IntOpenHashMap ownerCountByChunk(Iterable<? extends Set<Long>> allOwnerChunks) {
-        Long2IntOpenHashMap counts = new Long2IntOpenHashMap();
-        for (Set<Long> chunks : allOwnerChunks) {
-            for (long chunkPos : chunks) {
-                counts.addTo(chunkPos, 1);
-            }
-        }
-        return counts;
-    }
-
-    public static BlockPos uniqueChunkAnchor(Set<Long> chunks, Long2IntOpenHashMap ownerCountByChunk) {
-        for (long chunkPos : chunks) {
-            if (ownerCountByChunk.get(chunkPos) == 1) {
-                return new ChunkPos(chunkPos).getWorldPosition();
-            }
-        }
-        return null;
     }
 
     private static Stats computeStats(ServerLevel level,

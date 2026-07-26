@@ -1,111 +1,85 @@
 package com.moepus.serverwarashi.common.modules.performance.analyze;
 
-import com.moepus.serverwarashi.common.network.ReportDelivery;
-import com.moepus.serverwarashi.common.modules.performance.report.TicketPerfMessages;
-import com.moepus.serverwarashi.common.report.TableReport;
-import net.minecraft.core.BlockPos;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 
 import java.util.UUID;
 
-/**
- * 性能会话入口：负责调度单 owner 会话与全 owner 会话。
- * 层级：入口层。
- * 上游：ServerWarashiEvents / TickTimingHooks / TicketPerfCommands。下游：TicketPerfAnalyzer / ReportDelivery。
- */
 public final class TicketPerfRuntime {
-    public static final long NO_SESSION_ID = TicketPerfAnalyzer.NO_SESSION_ID;
-    private static final TicketPerfAnalyzer ANALYZER = new TicketPerfAnalyzer();
-    private static long nextSessionId = 1L;
+    private static final PerfSessionController CONTROLLER = new PerfSessionController();
 
     private TicketPerfRuntime() {
     }
 
-    public static Component start(ServerLevel sourceLevel,
-                                  BlockPos pos,
-                                  int durationSec,
-                                  UUID playerId) {
-        if (activeSessionId() != NO_SESSION_ID) {
-            return TicketPerfMessages.analysisAlreadyRunning();
+    public static StartResult start(MinecraftServer server, int durationSeconds, UUID playerId) {
+        if (!CONTROLLER.schedule(durationSeconds, playerId)) {
+            return new StartResult(Component.literal("Another perf analysis is already running."), false);
         }
-        long sessionId = nextSessionId++;
-        return ANALYZER.startSingle(sourceLevel, pos, durationSec, playerId, sessionId);
+        return new StartResult(Component.literal("Performance analysis scheduled for " + durationSeconds
+                + "s; sampling begins on the next server tick."), true);
     }
 
-    public static Component startAll(ServerLevel level, int durationSec, UUID playerId) {
-        if (activeSessionId() != NO_SESSION_ID) {
-            return TicketPerfMessages.analysisAlreadyRunning();
+    public static void onServerTickPre(MinecraftServer server) {
+        CONTROLLER.onServerTickPre(server);
+    }
+
+    public static AutoReport onServerTickPost(MinecraftServer server) {
+        PerfSessionController.Completion completion = CONTROLLER.onServerTickPost(server);
+        if (completion == null) {
+            return null;
         }
-        long sessionId = nextSessionId++;
-        return ANALYZER.startAll(level, durationSec, playerId, sessionId);
+        return new AutoReport(completion.playerId(), completion.data());
     }
 
     public static StopResult stopCurrentAnalysis() {
-        if (activeSessionId() == NO_SESSION_ID) {
-            return new StopResult(TicketPerfMessages.noActiveAnalysis(), null);
+        PerfReportData data = CONTROLLER.stop();
+        if (data != null) {
+            return new StopResult(null, data);
         }
-        return new StopResult(null, ANALYZER.stopActiveSession());
-    }
-
-    /** 停止分析的结果信封：message 与 report 恰有一个非空。 */
-    public record StopResult(Component message, TableReport report) {
-    }
-
-    public static void tickSessions(MinecraftServer server) {
-        if (activeSessionId() == NO_SESSION_ID) {
-            return;
+        if (CONTROLLER.cancelPending()) {
+            return new StopResult(Component.literal("Pending performance analysis cancelled."), null);
         }
-        TicketPerfAnalyzer.AutoAnalysisReport report = ANALYZER.tickSessions();
-        if (report != null) {
-            ReportDelivery.toPlayerOrConsole(server, report.playerId(), report.report());
-        }
-    }
-
-    public static long resolveTrackSessionId(ServerLevel level, BlockPos pos) {
-        return ANALYZER.resolveTrackSessionId(level, pos);
-    }
-
-    private static long activeSessionId() {
-        return ANALYZER.activeSessionId();
+        return new StopResult(Component.literal("No active perf analysis."), null);
     }
 
     public static boolean hasActiveSessionIn(ServerLevel level) {
-        return ANALYZER.activeSessionIdIn(level.dimension()) != NO_SESSION_ID;
+        return CONTROLLER.hasActiveSession();
     }
 
-    public static boolean isAllOwnersSession() {
-        return ANALYZER.isAllOwnersSession();
+    public static boolean hasSession() {
+        return CONTROLLER.hasAnySession();
+    }
+
+    public static boolean isProfiling() {
+        return CONTROLLER.hasActiveSession();
+    }
+
+    public static PerfReportData currentReport() {
+        PerfReportData report = currentReportOrNull();
+        return report == null ? PerfReportData.empty(TicketPerfConfig.sampleIntervalMicros()) : report;
+    }
+
+    public static PerfReportData currentReportOrNull() {
+        return CONTROLLER.currentReport();
+    }
+
+    public static boolean clearLastReport() {
+        return CONTROLLER.clearLastReport();
     }
 
     public static void clearRuntimeState() {
-        ANALYZER.clearRuntimeState();
-        nextSessionId = 1L;
+        CONTROLLER.clear();
     }
 
-    public static void onEntityTick(BlockPos pos,
-                                    String type,
-                                    String sourceId,
-                                    String sourceLabel,
-                                    long durationNanos,
-                                    boolean isBlockEntity,
-                                    long sessionId) {
-        long activeSessionId = activeSessionId();
-        // Public hook entry: ignore stale callbacks after a session stops or changes.
-        if (activeSessionId == NO_SESSION_ID || sessionId != activeSessionId) {
-            return;
-        }
-        ANALYZER.onEntityTick(pos, type, sourceId, sourceLabel, durationNanos, isBlockEntity);
+    public record AutoReport(UUID playerId, PerfReportData data) {
     }
 
-    public static void onChunkTick(ChunkPos pos, long durationNanos, long sessionId) {
-        long activeSessionId = activeSessionId();
-        // Public hook entry: ignore stale callbacks after a session stops or changes.
-        if (activeSessionId == NO_SESSION_ID || sessionId != activeSessionId) {
-            return;
-        }
-        ANALYZER.onChunkTick(pos, durationNanos);
+    public record StartResult(Component message, boolean started) {
+    }
+
+    public record StopResult(Component message, PerfReportData data) {
     }
 }

@@ -1,33 +1,28 @@
 package com.moepus.serverwarashi.common.mixin.ticktiming;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.moepus.serverwarashi.common.modules.TickTimingHooks;
+import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import org.mixinlite.injector.InjectLite;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
-import java.util.function.Consumer;
-
-/**
- * 在真实实体 tick 调用点包装 Consumer，避免常驻共享状态对象。
- */
 @Mixin(value = ServerLevel.class, remap = false)
-
 public abstract class ServerLevelEntityTickMixin {
-    @WrapOperation(
-            method = "lambda$tick$2(Lnet/minecraft/world/TickRateManager;Lnet/minecraft/util/profiling/ProfilerFiller;Lnet/minecraft/world/entity/Entity;)V",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/server/level/ServerLevel;guardEntityTick(Ljava/util/function/Consumer;Lnet/minecraft/world/entity/Entity;)V"
-            )
-    )
-    private void onGuardEntityTick(ServerLevel level,
-                                   Consumer<Entity> consumer,
-                                   Entity entity,
-                                   Operation<Void> original) {
-        // 把实体 tick 的 Consumer 交给 hooks 包装后再执行（仅分析期间计时）
-        original.call(level, TickTimingHooks.wrapEntityTickConsumer(level, consumer, entity), entity);
+    @InjectLite(method = "tickNonPassenger(Lnet/minecraft/world/entity/Entity;)V", at = @At("HEAD"))
+    private void serverWarashi$beforeEntityTick(Entity entity) {
+        if (!PerfWorkTracker.isProfiling) {
+            return;
+        }
+        TickTimingHooks.beforeEntity((ServerLevel) (Object) this, entity);
+    }
+
+    @InjectLite(method = "tickNonPassenger(Lnet/minecraft/world/entity/Entity;)V", at = @At("RETURN"))
+    private void serverWarashi$afterEntityTick(Entity entity) {
+        if (!PerfWorkTracker.isProfiling) {
+            return;
+        }
+        TickTimingHooks.afterEntity();
     }
 }

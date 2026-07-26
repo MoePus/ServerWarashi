@@ -122,6 +122,10 @@ sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath
 
 
 dependencies {
+    implementation "org.mixinlite:mixinlite:0.1.0-SNAPSHOT"
+    annotationProcessor "org.mixinlite:mixinlite:0.1.0-SNAPSHOT"
+    jarJar "org.mixinlite:mixinlite:0.1.0-SNAPSHOT"
+
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
     compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
     implementation "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
@@ -136,6 +140,7 @@ dependencies {
     implementation("com.tterrag.registrate:Registrate:${registrate_version}")
 
     runtimeOnly "curse.maven:xaeros-minimap-263420:6778051"
+    compileOnly "curse.maven:xaeros-world-map-317780:6778114"
     runtimeOnly "curse.maven:xaeros-world-map-317780:6778114"
 
     testImplementation platform("org.junit:junit-bom:5.10.0")

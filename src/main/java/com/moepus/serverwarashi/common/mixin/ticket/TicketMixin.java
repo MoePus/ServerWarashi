@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 全 mod 的机制核心：为原版 {@link Ticket} 注入暂停掩码，实现 {@link PauseableTicket}。
  * 任一掩码位存在时 {@code getTicketLevel()} 对外返回 33，使其退出常规 entity/block ticking；
  * {@code forceTicks} 等额外下游路径不由 ticket level 单独保证停止。
- * 原始 ticketLevel 永不修改，各模块只按位读写自己的暂停原因（AUTO=bucket，IDLE=idlefreeze）。
+ * 原始 ticketLevel 永不修改，未来的调度策略可按位读写各自的暂停原因。
  * 另缓存 owner 解析结果（按 gameTime 失效），供 TicketOwnerResolver 在高频扫描路径复用。
  */
 @Mixin(value = Ticket.class, remap = false)

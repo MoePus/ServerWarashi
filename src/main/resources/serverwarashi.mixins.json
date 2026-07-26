@@ -2,20 +2,29 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.moepus.serverwarashi.common.mixin",
+  "plugin": "com.moepus.serverwarashi.common.mixin.ServerWarashiMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "accessor.DistanceManagerAccessor",
+    "accessor.GameProfileCacheAccessor",
+    "accessor.GameProfileInfoAccessor",
     "accessor.PersistentEntitySectionManagerAccessor",
     "accessor.ServerLevelAccessor",
+    "accessor.TickTaskAccessor",
     "accessor.TickingTrackerAccessor",
-    "ticktiming.LevelBlockEntityTickMixin",
-    "ticktiming.ServerLevelEntityTickMixin",
-    "ticktiming.ServerChunkCacheTickMixin",
     "ticket.ChunkTicketTrackerMixin",
     "ticket.DistanceManagerMixin",
     "ticket.TicketMixin",
     "ticket.TickingTrackerMixin",
+    "ticktiming.BlockableEventLoopTaskMixin",
+    "ticktiming.LevelBlockEntityTickMixin",
+    "ticktiming.ServerLevelChunkTickMixin",
+    "ticktiming.ServerLevelEntityTickMixin",
     "watchdog.ServerWatchdogMixin"
+  ],
+  "client": [
+    "compat.xaero.XaeroGuiMapAccessor",
+    "compat.xaero.XaeroGuiMapMixin"
   ],
   "injectors": {
     "defaultRequire": 1

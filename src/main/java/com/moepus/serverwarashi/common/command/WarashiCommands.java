@@ -22,10 +22,7 @@ public final class WarashiCommands {
         // 建根节点 /warashi，并要求 OP 权限等级 2
         var root = Commands.literal("warashi")
                 .requires(ADMIN_PERMISSION);
-        // 依次把各模块子命令挂载到根节点下
-        TicketBucketCommands.register(root);
         TicketPerfCommands.register(root);
-        IdleFreezeCommands.register(root);
         // 把装配好的根节点注册进全局命令派发器
         dispatcher.register(root);
     }

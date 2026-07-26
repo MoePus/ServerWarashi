@@ -28,7 +28,6 @@ public final class TicketOwnerResolver {
             "net.neoforged.neoforge.common.world.chunk.ForcedChunkManager$TicketOwner";
     private static final ConcurrentHashMap<Class<?>, Optional<ForcedOwnerAccess>> FORCED_OWNER_ACCESS_CACHE =
             new ConcurrentHashMap<>();
-    private static final String C2ME_NOTICK_VIEW_DISTANCE = "c2me_notickvd";
     public static final String UNKNOWN_ENTITY = "Unknown entity";
     private static final String WORLD_START = "world_start";
     private static final long OWNER_CACHE_TTL_TICKS = 100L;
@@ -70,7 +69,7 @@ public final class TicketOwnerResolver {
                     cacheable = false;
                 }
             }
-        } else if (isPlayerTicket(ticket, typeName)) {
+        } else if (isPlayerTicket(ticket)) {
             Optional<ServerPlayer> nearestPlayer = nearestPlayer(level, rawKey);
             ServerPlayer player = nearestPlayer.orElse(null);
             cacheable = player != null;
@@ -104,7 +103,7 @@ public final class TicketOwnerResolver {
         if (forcedOwner.isPresent()) {
             return new TicketOwnerKey(typeName, forcedOwner.get());
         }
-        if (isPlayerTicket(ticket, typeName)) {
+        if (isPlayerTicket(ticket)) {
             return playerKey(typeName, nearestPlayer(level, rawKey).orElse(null));
         }
         return nonPlayerKey(ticket, rawKey, typeName);
@@ -162,8 +161,8 @@ public final class TicketOwnerResolver {
         return new TicketOwnerKey(typeName, rawKey);
     }
 
-    private static boolean isPlayerTicket(Ticket<?> ticket, String typeName) {
-        return ticket.getType() == TicketType.PLAYER || C2ME_NOTICK_VIEW_DISTANCE.equals(typeName);
+    private static boolean isPlayerTicket(Ticket<?> ticket) {
+        return ticket.getType() == TicketType.PLAYER;
     }
 
     record ForcedOwner(Object id, Object owner) {
