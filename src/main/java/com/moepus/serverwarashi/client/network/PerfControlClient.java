@@ -9,11 +9,12 @@ public final class PerfControlClient {
     private PerfControlClient() {
     }
 
-    public static void send(PerfControlPayload.Action action) {
+    public static boolean send(PerfControlPayload.Action action) {
         var connection = Minecraft.getInstance().getConnection();
         if (connection == null || !NetworkRegistry.hasChannel(connection, PerfControlPayload.TYPE.id())) {
-            return;
+            return false;
         }
         PacketDistributor.sendToServer(new PerfControlPayload(action));
+        return true;
     }
 }

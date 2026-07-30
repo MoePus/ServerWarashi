@@ -4,7 +4,6 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData
 import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 
 import java.util.UUID;
 
@@ -15,11 +14,11 @@ public final class TicketPerfRuntime {
     }
 
     public static StartResult start(MinecraftServer server, int durationSeconds, UUID playerId) {
-        if (!CONTROLLER.schedule(durationSeconds, playerId)) {
+        if (!CONTROLLER.start(server, durationSeconds, playerId)) {
             return new StartResult(Component.literal("Another perf analysis is already running."), false);
         }
-        return new StartResult(Component.literal("Performance analysis scheduled for " + durationSeconds
-                + "s; sampling begins on the next server tick."), true);
+        return new StartResult(Component.literal("Performance analysis started for " + durationSeconds
+                + "s; tick sampling begins on the next server tick."), true);
     }
 
     public static void onServerTickPre(MinecraftServer server) {
@@ -35,22 +34,19 @@ public final class TicketPerfRuntime {
     }
 
     public static StopResult stopCurrentAnalysis() {
-        PerfReportData data = CONTROLLER.stop();
+        return stopCurrentAnalysis(false);
+    }
+
+    public static StopResult stopCurrentAnalysis(MinecraftServer server) {
+        return stopCurrentAnalysis(server != null && server.isPaused());
+    }
+
+    private static StopResult stopCurrentAnalysis(boolean retainInitialLayout) {
+        PerfReportData data = CONTROLLER.stop(retainInitialLayout);
         if (data != null) {
             return new StopResult(null, data);
         }
-        if (CONTROLLER.cancelPending()) {
-            return new StopResult(Component.literal("Pending performance analysis cancelled."), null);
-        }
         return new StopResult(Component.literal("No active perf analysis."), null);
-    }
-
-    public static boolean hasActiveSessionIn(ServerLevel level) {
-        return CONTROLLER.hasActiveSession();
-    }
-
-    public static boolean hasSession() {
-        return CONTROLLER.hasAnySession();
     }
 
     public static boolean isProfiling() {

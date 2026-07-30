@@ -1,4 +1,4 @@
-package com.moepus.serverwarashi.common.mixin.watchdog;
+package com.moepus.serverwarashi.common.watchdog;
 
 import com.moepus.serverwarashi.common.mixin.accessor.PersistentEntitySectionManagerAccessor;
 import com.moepus.serverwarashi.common.mixin.accessor.ServerLevelAccessor;

@@ -5,13 +5,20 @@
   "plugin": "com.moepus.serverwarashi.common.mixin.ServerWarashiMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "accessor.ClassInstanceMultiMapAccessor",
+    "accessor.ChunkMapAccessor",
     "accessor.DistanceManagerAccessor",
+    "accessor.EntityLevelCallbackAccessor",
+    "accessor.EntitySectionAccessor",
+    "accessor.EntitySectionStorageAccessor",
     "accessor.GameProfileCacheAccessor",
     "accessor.GameProfileInfoAccessor",
     "accessor.PersistentEntitySectionManagerAccessor",
+    "accessor.PersistentEntityCallbackAccessor",
     "accessor.ServerLevelAccessor",
     "accessor.TickTaskAccessor",
     "accessor.TickingTrackerAccessor",
+    "runtime.MinecraftServerRuntimeMixin",
     "ticket.ChunkTicketTrackerMixin",
     "ticket.DistanceManagerMixin",
     "ticket.TicketMixin",
@@ -24,7 +31,8 @@
   ],
   "client": [
     "compat.xaero.XaeroGuiMapAccessor",
-    "compat.xaero.XaeroGuiMapMixin"
+    "compat.xaero.XaeroGuiMapMixin",
+    "runtime.IntegratedServerRuntimeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

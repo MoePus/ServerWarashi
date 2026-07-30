@@ -9,7 +9,7 @@ version = mod_version
 group = mod_group_id
 
 repositories {
-    mavenLocal()
+    maven { url = "https://moepus.github.io/MixinLite/" }
     maven {
         url "https://cursemaven.com"
         content {
@@ -122,15 +122,21 @@ sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath
 
 
 dependencies {
-    implementation "org.mixinlite:mixinlite:0.1.0-SNAPSHOT"
-    annotationProcessor "org.mixinlite:mixinlite:0.1.0-SNAPSHOT"
-    jarJar "org.mixinlite:mixinlite:0.1.0-SNAPSHOT"
+    implementation "org.mixinlite:mixinlite:0.2.0"
+    annotationProcessor "org.mixinlite:mixinlite:0.2.0"
+    jarJar "org.mixinlite:mixinlite:0.2.0"
+
+    runtimeOnly "curse.maven:architectury-api-419699:8492726"
 
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
     compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
     implementation "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
 
     runtimeOnly "curse.maven:spark-361579:6225208"
+
+    implementation "curse.maven:ftb-chunks-forge-314906:8520252"
+    implementation "curse.maven:ftb-teams-forge-404468:7878281"
+    runtimeOnly "curse.maven:ftb-library-forge-404465:8519365"
 
     implementation "curse.maven:create-power-loader-936020:6549980"
     implementation("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
@@ -151,30 +157,6 @@ dependencies {
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
     maxParallelForks = 1
-}
-
-tasks.register("analyzeAudit", JavaExec) {
-    dependsOn testClasses
-    group = "verification"
-    description = "Analyze audit JSONL and write verdict.json."
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = "com.moepus.serverwarashi.harness.audit.AuditVerdictCli"
-    args "--input", providers.gradleProperty("auditInput").orElse("run/audit").get()
-    args "--output", providers.gradleProperty("auditOutput").orElse("run/audit/verdict.json").get()
-    args "--min-ticks", providers.gradleProperty("auditMinTicks").orElse("1").get()
-}
-
-tasks.register("compareCorrectnessAb", JavaExec) {
-    dependsOn testClasses
-    group = "verification"
-    description = "Compare L3 correctness A/B digest JSONL files."
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = "com.moepus.serverwarashi.harness.correctness.CorrectnessAbCli"
-    args "--on-digest", providers.gradleProperty("onDigest").orElse("run/audit/on-digest.jsonl").get()
-    args "--off-digest", providers.gradleProperty("offDigest").orElse("run/audit/off-digest.jsonl").get()
-    args "--on-audit", providers.gradleProperty("onAudit").orElse("run/audit").get()
-    args "--output", providers.gradleProperty("correctnessOutput").orElse("run/audit/correctness-verdict.json").get()
-    args "--min-ticks", providers.gradleProperty("correctnessMinTicks").orElse("1").get()
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

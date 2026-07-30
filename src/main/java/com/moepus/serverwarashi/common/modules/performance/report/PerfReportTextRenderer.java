@@ -56,8 +56,8 @@ public final class PerfReportTextRenderer {
     }
 
     private static String metric(PerfReportData.Metric metric) {
-        return String.format(Locale.ROOT, "%.3f MSPT, p98 %.3f, %d samples",
-                metric.mspt(), metric.p98(), metric.samples());
+        return String.format(Locale.ROOT, "%.3f MSPT, max %.3f, %d samples",
+                metric.mspt(), metric.max(), metric.samples());
     }
 
     private static String tickableIdentity(PerfReportData.TickableEntry entry) {

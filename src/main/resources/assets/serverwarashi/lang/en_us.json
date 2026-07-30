@@ -5,6 +5,8 @@
   "screen.serverwarashi.profiler.title": "Performance Profiler",
   "screen.serverwarashi.profiler.start": "Start Perf",
   "screen.serverwarashi.profiler.stop": "Stop Perf",
+  "screen.serverwarashi.profiler.analysis_paused": "Analysis Paused",
+  "screen.serverwarashi.profiler.game_paused_tooltip": "Xaero's World Map pauses singleplayer, so performance data cannot be collected while the map is open. Close the map to start collecting.",
   "screen.serverwarashi.profiler.page": "Page %1$s/%2$s",
   "screen.serverwarashi.profiler.summary": "Server %1$s MSPT | %2$ss | %3$s ticks | %4$sus | omitted %5$s",
   "screen.serverwarashi.profiler.no_data": "No data",
@@ -36,11 +38,17 @@
   "screen.serverwarashi.profiler.time.hours_ago": "%s hours ago",
   "screen.serverwarashi.profiler.time.days_ago": "%s days ago",
   "screen.serverwarashi.heatmap.mspt": "MSPT: %s ms",
-  "screen.serverwarashi.heatmap.p98": "P98: %s ms",
+  "screen.serverwarashi.heatmap.max": "MAX: %s ms",
+  "screen.serverwarashi.heatmap.possible_weak": "May become weak-loaded",
+  "screen.serverwarashi.heatmap.weak_entities": "Weak-loaded entities: %s",
+  "screen.serverwarashi.heatmap.estimated_entity_types": "Estimated Counts",
   "screen.serverwarashi.heatmap.loaded_by": "Loaded by %s",
   "screen.serverwarashi.heatmap.loaded_by_more": "and %s more loaders",
   "screen.serverwarashi.heatmap.loader_data_incomplete": "Loader coverage was truncated",
   "screen.serverwarashi.heatmap.loader_name": "Chunk loader: %s",
+  "screen.serverwarashi.heatmap.loader_chunk": "Region anchor chunk: %s, %s",
   "screen.serverwarashi.heatmap.loader_position": "Position: %s, %s, %s",
-  "screen.serverwarashi.heatmap.clear": "Clear Perf"
+  "screen.serverwarashi.heatmap.clear": "Clear Perf",
+  "gui.serverwarashi.weak_clear": "Clear: %1$s",
+  "gui.serverwarashi.weak_clear_confirm": "Confirm clearing: %1$s"
 }

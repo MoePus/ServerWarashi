@@ -3,27 +3,21 @@ package com.moepus.serverwarashi.client.state;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 
 public final class ClientPerfReportState {
-    private static PerfReportData report;
-    private static long revision;
-    private static boolean profiling;
+    private static Snapshot state = new Snapshot(null, 0L, false);
 
     private ClientPerfReportState() {
     }
 
     public static void update(PerfReportData nextReport, boolean nextProfiling) {
-        report = nextReport;
-        profiling = nextProfiling;
-        revision++;
+        state = new Snapshot(nextReport, state.revision() + 1L, nextProfiling);
     }
 
     public static Snapshot snapshot() {
-        return new Snapshot(report, revision, profiling);
+        return state;
     }
 
     public static void clear() {
-        report = null;
-        profiling = false;
-        revision++;
+        state = new Snapshot(null, state.revision() + 1L, false);
     }
 
     public record Snapshot(PerfReportData report, long revision, boolean profiling) {

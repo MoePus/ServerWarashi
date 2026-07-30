@@ -30,20 +30,35 @@ class PerfReportDeliveryTest {
     }
 
     @Test
+    void defersOnlyTheLoaderOnlyReportOfAnActiveSession() {
+        assertTrue(PerfReportDelivery.shouldDeferInitialReport(
+                PerfReportData.empty(1_000), true, false));
+        assertFalse(PerfReportDelivery.shouldDeferInitialReport(
+                PerfReportData.empty(1_000), true, true));
+        assertFalse(PerfReportDelivery.shouldDeferInitialReport(
+                PerfReportData.empty(1_000), false, false));
+        assertFalse(PerfReportDelivery.shouldDeferInitialReport(reportAtTick(1L), true, false));
+    }
+
+    @Test
     void keepsScreenAndMapSubscriptionsIndependent() {
         UUID screen = UUID.randomUUID();
         UUID map = UUID.randomUUID();
         UUID both = UUID.randomUUID();
         var subscriptions = new PerfReportDelivery.ViewerSubscriptions();
         subscriptions.openScreen(screen);
-        subscriptions.openScreen(both);
+        subscriptions.openScreen(both, true);
+        assertFalse(subscriptions.hasMapRecipients());
         subscriptions.setMap(map, true);
         subscriptions.setMap(both, true);
 
+        assertTrue(subscriptions.hasMapRecipients());
         assertEquals(Set.of(screen, map, both), subscriptions.recipients());
         assertTrue(subscriptions.isLiveViewer(screen));
         assertTrue(subscriptions.isLiveViewer(map));
         assertTrue(subscriptions.isLiveViewer(both));
+        assertEquals(PerfReportPayload.Mode.OPEN, subscriptions.nextMode(both));
+        assertEquals(PerfReportPayload.Mode.UPDATE, subscriptions.nextMode(both));
         subscriptions.setMap(both, false);
         assertTrue(subscriptions.isScreenViewer(both));
         assertFalse(subscriptions.isMapViewer(both));

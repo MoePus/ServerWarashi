@@ -52,7 +52,7 @@ public record PerfReportData(double serverMspt,
                 0, 0, 0, List.of(), List.of(), List.of());
     }
 
-    public record Metric(double mspt, double p98, long samples) {
+    public record Metric(double mspt, double max, long samples) {
     }
 
     public record Position(String dimension, int x, int y, int z) {

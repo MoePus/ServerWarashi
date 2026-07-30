@@ -1,14 +1,14 @@
-package com.moepus.serverwarashi.common.mixin.watchdog;
+package com.moepus.serverwarashi.common.watchdog;
 
 import java.util.List;
 
-final class WatchdogTicketFormatter {
+public final class WatchdogTicketFormatter {
     private static final String NO_ACTIVE_OWNERS = "No active ticket owners.";
 
     private WatchdogTicketFormatter() {
     }
 
-    static String format(List<Dimension> dimensions) {
+    public static String format(List<Dimension> dimensions) {
         if (dimensions.isEmpty()) {
             return "No server dimensions available.";
         }
@@ -57,26 +57,26 @@ final class WatchdogTicketFormatter {
                 .append(')');
     }
 
-    record Dimension(String name, List<Owner> owners, String error) {
-        Dimension {
+    public record Dimension(String name, List<Owner> owners, String error) {
+        public Dimension {
             owners = List.copyOf(owners);
         }
 
-        static Dimension success(String name, List<Owner> owners) {
+        public static Dimension success(String name, List<Owner> owners) {
             return new Dimension(name, owners, null);
         }
 
-        static Dimension failure(String name, Exception exception) {
+        public static Dimension failure(String name, Exception exception) {
             return new Dimension(name, List.of(), exception.getClass().getSimpleName());
         }
     }
 
-    record Owner(String name, Position position, Counts counts) {
+    public record Owner(String name, Position position, Counts counts) {
     }
 
-    record Position(int x, int y, int z) {
+    public record Position(int x, int y, int z) {
     }
 
-    record Counts(int chunks, int blockEntities, int entities) {
+    public record Counts(int chunks, int blockEntities, int entities) {
     }
 }

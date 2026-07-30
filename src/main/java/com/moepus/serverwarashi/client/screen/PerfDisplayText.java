@@ -1,6 +1,7 @@
 package com.moepus.serverwarashi.client.screen;
 
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
+import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.resources.ResourceLocation;
 
@@ -30,6 +31,12 @@ public final class PerfDisplayText {
         }
         int separator = Math.max(className.lastIndexOf('.'), className.lastIndexOf('$'));
         return separator < 0 ? className : className.substring(separator + 1);
+    }
+
+    public static String sampledEntityName(WeakEntityType type) {
+        TickDetailKind detailKind = type.kind() == WeakEntityType.Kind.ITEM
+                ? TickDetailKind.ITEM : TickDetailKind.ENTITY;
+        return objectName(detailKind, "", type.id());
     }
 
     private static String typedResource(TickDetailKind kind, String value) {

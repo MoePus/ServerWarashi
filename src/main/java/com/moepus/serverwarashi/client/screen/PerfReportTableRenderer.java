@@ -48,8 +48,8 @@ final class PerfReportTableRenderer {
         }
         headers.add(header(PerfReportRows.SortKey.MSPT, x, y, geometry.msptWidth()));
         x += geometry.msptWidth();
-        headers.add(header(PerfReportRows.SortKey.P98, x, y, geometry.p98Width()));
-        x += geometry.p98Width();
+        headers.add(header(PerfReportRows.SortKey.MAX, x, y, geometry.maxWidth()));
+        x += geometry.maxWidth();
         headers.add(header(PerfReportRows.SortKey.SAMPLES, x, y, geometry.samplesWidth()));
         return List.copyOf(headers);
     }
@@ -162,9 +162,9 @@ final class PerfReportTableRenderer {
         drawHeaderCell(graphics, font, "MSPT", PerfReportRows.SortKey.MSPT,
                 x, y, geometry.msptWidth(), state);
         x += geometry.msptWidth();
-        drawHeaderCell(graphics, font, "P98", PerfReportRows.SortKey.P98,
-                x, y, geometry.p98Width(), state);
-        x += geometry.p98Width();
+        drawHeaderCell(graphics, font, "MAX", PerfReportRows.SortKey.MAX,
+                x, y, geometry.maxWidth(), state);
+        x += geometry.maxWidth();
         drawHeaderCell(graphics, font, PerfDisplayText.translated("screen.serverwarashi.profiler.header.samples"),
                 PerfReportRows.SortKey.SAMPLES,
                 x, y, geometry.samplesWidth(), state);
@@ -192,9 +192,9 @@ final class PerfReportTableRenderer {
         drawCell(graphics, font, PerfReportRows.metric(row.metric().mspt()), x, y,
                 geometry.msptWidth(), true, TEXT);
         x += geometry.msptWidth();
-        drawCell(graphics, font, PerfReportRows.metric(row.metric().p98()), x, y,
-                geometry.p98Width(), true, TEXT);
-        x += geometry.p98Width();
+        drawCell(graphics, font, PerfReportRows.metric(row.metric().max()), x, y,
+                geometry.maxWidth(), true, TEXT);
+        x += geometry.maxWidth();
         drawCell(graphics, font, String.format(Locale.ROOT, "%,d", row.metric().samples()), x, y,
                 geometry.samplesWidth(), true, TEXT);
     }

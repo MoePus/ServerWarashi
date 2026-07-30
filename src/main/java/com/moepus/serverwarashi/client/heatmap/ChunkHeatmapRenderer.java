@@ -8,11 +8,15 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
+import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.level.ChunkPos;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL14;
+
+import java.util.List;
 
 public final class ChunkHeatmapRenderer implements AutoCloseable {
     private static final int PASS_GLOW = 0;
@@ -22,20 +26,27 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     private static final float ICON_HALF_PIXELS = 7.0F;
     private static final float MAX_ICON_HALF_WORLD = 32.0F;
 
+    private final Matrix4f modelViewMatrix = new Matrix4f();
     private VertexBuffer vertexBuffer;
     private VertexBuffer hoverBuffer;
     private VertexBuffer iconBuffer;
+    private ChunkHeatmapModel.Plan basePlan = ChunkHeatmapModel.Plan.EMPTY;
     private ChunkHeatmapModel.Plan plan = ChunkHeatmapModel.Plan.EMPTY;
+    private List<WeakChunkSnapshot.ChunkEntry> visibleWeakChunks = List.of();
     private HeatmapViewport coverage;
     private String dimension;
     private long reportRevision = Long.MIN_VALUE;
+    private long weakRevision = Long.MIN_VALUE;
     private long hoverChunk = Long.MIN_VALUE;
     private boolean meshValid;
 
     public HoverResult render(RenderContext context) {
         ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
-        if (needsRebuild(context, snapshot.revision())) {
-            rebuild(context, snapshot);
+        ClientWeakChunkState.Snapshot weakSnapshot = ClientWeakChunkState.snapshot();
+        if (needsBaseRebuild(context, snapshot.revision())) {
+            rebuild(context, snapshot, weakSnapshot);
+        } else if (weakSnapshot.revision() != weakRevision) {
+            refreshWeakChunks(context, weakSnapshot);
         }
         Hover hover = context.hover();
         ChunkHeatmapModel.HoverInfo info = plan.hoverAt(hover.chunkX(), hover.chunkZ());
@@ -44,33 +55,69 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
         return info == null && loader == null ? null : new HoverResult(info, loader);
     }
 
-    private boolean needsRebuild(RenderContext context, long revision) {
+    private boolean needsBaseRebuild(RenderContext context, long revision) {
         return !meshValid || revision != reportRevision
                 || !context.dimension().equals(dimension)
                 || coverage == null || !coverage.contains(context.transform().viewport());
     }
 
-    private void rebuild(RenderContext context, ClientPerfReportState.Snapshot snapshot) {
+    private void rebuild(RenderContext context,
+                         ClientPerfReportState.Snapshot snapshot,
+                         ClientWeakChunkState.Snapshot weakSnapshot) {
         coverage = context.transform().viewport().expandedBySelf();
         dimension = context.dimension();
         reportRevision = snapshot.revision();
-        plan = ChunkHeatmapModel.build(snapshot.report(), dimension, coverage);
+        basePlan = ChunkHeatmapModel.build(snapshot.report(), dimension, coverage);
+        visibleWeakChunks = visibleWeakChunks(weakSnapshot, dimension, coverage);
+        plan = ChunkHeatmapModel.applyWeakChunks(basePlan, visibleWeakChunks,
+                dimension, dimension);
+        weakRevision = weakSnapshot.revision();
         replaceBuffers(plan);
         meshValid = true;
     }
 
-    private void replaceBuffers(ChunkHeatmapModel.Plan nextPlan) {
-        closeBuffer();
-        closeIconBuffer();
-        if (!nextPlan.quads().isEmpty()) {
-            BufferBuilder builder = beginBuilder();
-            nextPlan.quads().forEach(quad -> addQuad(builder, quad.chunkX(), quad.chunkZ(), quad.argb()));
-            vertexBuffer = createBuffer(builder, VertexBuffer.Usage.STATIC);
+    private void refreshWeakChunks(RenderContext context,
+                                   ClientWeakChunkState.Snapshot weakSnapshot) {
+        weakRevision = weakSnapshot.revision();
+        var nextVisible = visibleWeakChunks(weakSnapshot, context.dimension(), coverage);
+        if (nextVisible.equals(visibleWeakChunks)) {
+            return;
         }
+        visibleWeakChunks = nextVisible;
+        plan = ChunkHeatmapModel.applyWeakChunks(basePlan, visibleWeakChunks,
+                context.dimension(), context.dimension());
+        replaceHeatmapBuffer(plan);
+    }
+
+    private static List<WeakChunkSnapshot.ChunkEntry> visibleWeakChunks(
+            ClientWeakChunkState.Snapshot snapshot,
+            String dimension,
+            HeatmapViewport coverage) {
+        if (!dimension.equals(snapshot.dimension())) {
+            return List.of();
+        }
+        return snapshot.chunks().stream()
+                .filter(entry -> coverage.intersectsChunk(entry.chunkX(), entry.chunkZ()))
+                .toList();
+    }
+
+    private void replaceBuffers(ChunkHeatmapModel.Plan nextPlan) {
+        closeIconBuffer();
+        replaceHeatmapBuffer(nextPlan);
         if (!nextPlan.icons().isEmpty()) {
             BufferBuilder builder = beginBuilder();
             nextPlan.icons().forEach(icon -> addIcon(builder, icon));
             iconBuffer = createBuffer(builder, VertexBuffer.Usage.STATIC);
+        }
+    }
+
+    private void replaceHeatmapBuffer(ChunkHeatmapModel.Plan nextPlan) {
+        closeBuffer();
+        if (!nextPlan.quads().isEmpty()) {
+            BufferBuilder builder = beginBuilder();
+            nextPlan.quads().forEach(quad -> addQuad(builder, quad.chunkX(), quad.chunkZ(),
+                    quad.argb(), nextPlan.weakEdgeMaskAt(quad.chunkX(), quad.chunkZ())));
+            vertexBuffer = createBuffer(builder, VertexBuffer.Usage.STATIC);
         }
     }
 
@@ -100,12 +147,35 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     }
 
     private static void addQuad(BufferBuilder builder, int chunkX, int chunkZ, int color) {
+        addQuad(builder, chunkX, chunkZ, color, 0);
+    }
+
+    private static void addQuad(BufferBuilder builder,
+                                int chunkX,
+                                int chunkZ,
+                                int color,
+                                int weakEdgeMask) {
         float centerX = (chunkX << 4) + 8.0F;
         float centerZ = (chunkZ << 4) + 8.0F;
-        addVertex(builder, centerX, centerZ, -1.0F, 1.0F, color);
-        addVertex(builder, centerX, centerZ, 1.0F, 1.0F, color);
-        addVertex(builder, centerX, centerZ, 1.0F, -1.0F, color);
-        addVertex(builder, centerX, centerZ, -1.0F, -1.0F, color);
+        int encodedColor = encodeWeakPattern(color, weakEdgeMask);
+        addVertex(builder, centerX, centerZ, -1.0F, 1.0F, encodedColor);
+        addVertex(builder, centerX, centerZ, 1.0F, 1.0F, encodedColor);
+        addVertex(builder, centerX, centerZ, 1.0F, -1.0F, encodedColor);
+        addVertex(builder, centerX, centerZ, -1.0F, -1.0F, encodedColor);
+    }
+
+    private static int encodeWeakPattern(int color, int weakEdgeMask) {
+        int red = color >> 16 & 0xFF;
+        int green = color >> 8 & 0xFF;
+        int blue = color & 0xFF;
+        if (weakEdgeMask != 0) {
+            red = (red & ~0x3) | (weakEdgeMask & 0x3);
+            green = (green & ~0x3) | (weakEdgeMask >> 2 & 0x3);
+            blue = (blue & ~0x1) | 0x1;
+        } else {
+            blue &= ~0x1;
+        }
+        return color & 0xFF000000 | red << 16 | green << 8 | blue;
     }
 
     private static void addIcon(BufferBuilder builder, ChunkHeatmapModel.LoaderIcon icon) {
@@ -126,7 +196,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
             return;
         }
         ViewTransform transform = context.transform();
-        Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix()).mul(transform.pose());
+        Matrix4f modelView = modelViewMatrix.set(RenderSystem.getModelViewMatrix()).mul(transform.pose());
         RenderType renderType = RenderType.guiOverlay();
         renderType.setupRenderState();
         try {
@@ -145,6 +215,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
             return;
         }
         float mapScale = context.transform().mapScale();
+        shader.safeGetUniform("WeakPattern").set(1);
         vertexBuffer.bind();
         drawGlow(shader, modelView, mapScale);
         drawBody(shader, modelView, mapScale);
@@ -169,19 +240,22 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_COLOR, GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-        drawPass(vertexBuffer, shader, modelView, new PassOptions(mapScale, PASS_GLOW));
+        setPass(shader, mapScale, PASS_GLOW);
+        drawBuffer(vertexBuffer, shader, modelView);
     }
 
     private void drawBody(ShaderInstance shader, Matrix4f modelView, float mapScale) {
         setPremultipliedBlend();
-        drawPass(vertexBuffer, shader, modelView, new PassOptions(mapScale, PASS_BODY));
+        setPass(shader, mapScale, PASS_BODY);
+        drawBuffer(vertexBuffer, shader, modelView);
     }
 
     private void drawHover(ShaderInstance shader, Matrix4f modelView, Hover hover, float mapScale) {
         updateHoverBuffer(hover);
         setPremultipliedBlend();
         hoverBuffer.bind();
-        drawPass(hoverBuffer, shader, modelView, new PassOptions(mapScale, PASS_HOVER));
+        setPass(shader, mapScale, PASS_HOVER);
+        drawBuffer(hoverBuffer, shader, modelView);
     }
 
     private static void setPremultipliedBlend() {
@@ -195,10 +269,12 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
         RenderSystem.defaultBlendFunc();
     }
 
-    private static void drawPass(VertexBuffer buffer, ShaderInstance shader,
-                                 Matrix4f modelView, PassOptions options) {
-        shader.safeGetUniform("MapScale").set(options.mapScale());
-        shader.safeGetUniform("Pass").set(options.pass());
+    private static void setPass(ShaderInstance shader, float mapScale, int pass) {
+        shader.safeGetUniform("MapScale").set(mapScale);
+        shader.safeGetUniform("Pass").set(pass);
+    }
+
+    private static void drawBuffer(VertexBuffer buffer, ShaderInstance shader, Matrix4f modelView) {
         buffer.drawWithShader(modelView, RenderSystem.getProjectionMatrix(), shader);
     }
 
@@ -242,10 +318,13 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
         closeBuffer();
         closeHoverBuffer();
         closeIconBuffer();
+        basePlan = ChunkHeatmapModel.Plan.EMPTY;
         plan = ChunkHeatmapModel.Plan.EMPTY;
+        visibleWeakChunks = List.of();
         coverage = null;
         dimension = null;
         reportRevision = Long.MIN_VALUE;
+        weakRevision = Long.MIN_VALUE;
         hoverChunk = Long.MIN_VALUE;
         meshValid = false;
     }
@@ -284,6 +363,4 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
                               ChunkHeatmapModel.LoaderIcon loader) {
     }
 
-    private record PassOptions(float mapScale, int pass) {
-    }
 }

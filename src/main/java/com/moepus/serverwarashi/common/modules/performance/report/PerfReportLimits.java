@@ -25,10 +25,10 @@ public final class PerfReportLimits {
             return new Limited<>(List.copyOf(entries), 0);
         }
         Comparator<T> byMspt = Comparator.comparingDouble((T value) -> metric.apply(value).mspt()).reversed();
-        Comparator<T> byP98 = Comparator.comparingDouble((T value) -> metric.apply(value).p98()).reversed();
+        Comparator<T> byMax = Comparator.comparingDouble((T value) -> metric.apply(value).max()).reversed();
         LinkedHashSet<T> selected = new LinkedHashSet<>();
         entries.stream().sorted(byMspt).limit(perMetricLimit).forEach(selected::add);
-        entries.stream().sorted(byP98).limit(perMetricLimit).forEach(selected::add);
+        entries.stream().sorted(byMax).limit(perMetricLimit).forEach(selected::add);
         List<T> result = new ArrayList<>(selected);
         result.sort(byMspt);
         return new Limited<>(List.copyOf(result), entries.size() - result.size());

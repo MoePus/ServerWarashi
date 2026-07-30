@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.mixin.ticktiming;
 
-import com.moepus.serverwarashi.common.modules.TickTimingHooks;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
+import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.mixinlite.injector.InjectLite;
@@ -15,7 +15,7 @@ public abstract class ServerLevelChunkTickMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        TickTimingHooks.beforeChunk((ServerLevel) (Object) this, chunk);
+        PerfWorkTracker.enterChunk((ServerLevel) (Object) this, chunk);
     }
 
     @InjectLite(method = "tickChunk(Lnet/minecraft/world/level/chunk/LevelChunk;I)V", at = @At("RETURN"))
@@ -23,6 +23,6 @@ public abstract class ServerLevelChunkTickMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        TickTimingHooks.afterChunk();
+        PerfWorkTracker.exit(TickType.CHUNK);
     }
 }

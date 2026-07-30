@@ -4,6 +4,8 @@ import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfRuntime;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
+import com.moepus.serverwarashi.common.modules.weakload.WeakChunkClearJobs;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -13,7 +15,7 @@ import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 @EventBusSubscriber(modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class WarashiNetwork {
-    private static final String NETWORK_VERSION = "1";
+    static final String NETWORK_VERSION = "2";
 
     private WarashiNetwork() {
     }
@@ -24,17 +26,29 @@ public final class WarashiNetwork {
                 .optional()
                 .playToClient(PerfReportPayload.TYPE, PerfReportPayload.STREAM_CODEC,
                         (payload, context) -> ClientPayloadHandlers.handlePerfReport(payload))
+                .playToClient(WeakChunkPayload.TYPE, WeakChunkPayload.STREAM_CODEC,
+                        (payload, context) -> ClientPayloadHandlers.handleWeakChunks(payload))
                 .playToServer(PerfMapSubscriptionPayload.TYPE, PerfMapSubscriptionPayload.STREAM_CODEC,
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
                                 PerfReportDelivery.setMapSubscribed(player, payload.subscribed(),
-                                        TicketPerfRuntime.currentReport(), TicketPerfRuntime.hasSession());
+                                        TicketPerfRuntime.currentReport(), TicketPerfRuntime.isProfiling());
+                                if (payload.subscribed()) {
+                                    WeakChunkDelivery.requestRefresh();
+                                }
                             }
                         })
                 .playToServer(PerfControlPayload.TYPE, PerfControlPayload.STREAM_CODEC,
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
                                 handlePerfControl(player, payload.action());
+                            }
+                        })
+                .playToServer(WeakChunkClearPayload.TYPE, WeakChunkClearPayload.STREAM_CODEC,
+                        (payload, context) -> {
+                            if (context.player() instanceof ServerPlayer player) {
+                                WeakChunkClearJobs.submit(player, new WeakChunkClearJobs.Request(
+                                        payload.dimension(), payload.chunkX(), payload.chunkZ(), payload.target()));
                             }
                         });
     }
@@ -50,20 +64,23 @@ public final class WarashiNetwork {
     }
 
     private static void toggleProfiling(ServerPlayer player) {
-        if (TicketPerfRuntime.hasSession()) {
-            TicketPerfRuntime.stopCurrentAnalysis();
+        if (TicketPerfRuntime.isProfiling()) {
+            TicketPerfRuntime.stopCurrentAnalysis(player.getServer());
+            PerfReportDelivery.publishNow(player.getServer(), TicketPerfRuntime.currentReport(), false);
         } else {
-            TicketPerfRuntime.start(player.getServer(), TicketPerfConfig.autoStopSeconds(), player.getUUID());
+            var result = TicketPerfRuntime.start(
+                    player.getServer(), TicketPerfConfig.autoStopSeconds(), player.getUUID());
+            if (result.started() && player.getServer().isPaused()) {
+                PerfReportDelivery.publishNow(player.getServer(), TicketPerfRuntime.currentReport(), true);
+            }
         }
-        PerfReportDelivery.tick(player.getServer(), TicketPerfRuntime.currentReport(),
-                TicketPerfRuntime.hasSession(), true);
     }
 
     private static void clearReport(ServerPlayer player) {
         if (!TicketPerfRuntime.clearLastReport()) {
             return;
         }
-        PerfReportDelivery.tick(player.getServer(), TicketPerfRuntime.currentReport(), false, true);
+        PerfReportDelivery.publishNow(player.getServer(), TicketPerfRuntime.currentReport(), false);
     }
 
     @SuppressWarnings("UnstableApiUsage")
@@ -80,6 +97,13 @@ public final class WarashiNetwork {
                                       PerfReportPayload.Mode mode,
                                       boolean profiling) {
         PacketDistributor.sendToPlayer(player, new PerfReportPayload(report, mode, profiling));
+    }
+
+    public static void sendWeakChunks(ServerPlayer player,
+                                      WeakChunkSnapshot snapshot,
+                                      long sweepId,
+                                      boolean sweepComplete) {
+        PacketDistributor.sendToPlayer(player, new WeakChunkPayload(snapshot, sweepId, sweepComplete));
     }
 
 }

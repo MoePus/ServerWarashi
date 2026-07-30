@@ -8,30 +8,60 @@ import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTrac
 import net.minecraft.server.MinecraftServer;
 
 import java.util.UUID;
+import java.util.function.IntSupplier;
 
 final class PerfSessionController {
     private static final int TICKS_PER_SECOND = 20;
+    private static final int TOPOLOGY_CHECK_TICKS = 5;
     private static final int ATTRIBUTION_REFRESH_TICKS = 20;
 
-    private PendingSession pending;
+    private final IntSupplier sampleIntervalMicros;
     private ActiveSession active;
     private PerfReportData lastReport;
     private long nextSessionId = 1L;
 
-    boolean schedule(int durationSeconds, UUID playerId) {
-        if (pending != null || active != null) {
+    PerfSessionController() {
+        this(TicketPerfConfig::sampleIntervalMicros);
+    }
+
+    PerfSessionController(IntSupplier sampleIntervalMicros) {
+        this.sampleIntervalMicros = sampleIntervalMicros;
+    }
+
+    boolean start(MinecraftServer server, int durationSeconds, UUID playerId) {
+        if (active != null) {
             return false;
         }
-        pending = new PendingSession(durationSeconds * (long) TICKS_PER_SECOND, playerId);
-        return true;
+        boolean started = start(durationSeconds, playerId,
+                PerfAttributionSnapshot.captureLoaderLayout(server));
+        if (started) {
+            active.attributionComplete = false;
+        }
+        return started;
+    }
+
+    boolean start(int durationSeconds, UUID playerId, PerfAttributionSnapshot attribution) {
+        if (active != null) {
+            return false;
+        }
+        PerfSamplerSession sampler = new PerfSamplerSession(
+                nextSessionId++, sampleIntervalMicros.getAsInt(), attribution);
+        try {
+            sampler.start();
+            PerfWorkTracker.activate(Thread.currentThread());
+            active = new ActiveSession(durationSeconds * (long) TICKS_PER_SECOND,
+                    playerId, sampler, attribution);
+            return true;
+        } catch (RuntimeException | Error exception) {
+            PerfWorkTracker.deactivate();
+            sampler.stop();
+            throw exception;
+        }
     }
 
     void onServerTickPre(MinecraftServer server) {
         PerfWorkTracker.clearCurrent();
         try {
-            if (active == null && pending != null) {
-                activatePending();
-            }
             beginTick(server);
         } catch (RuntimeException | Error exception) {
             if (active != null) {
@@ -64,23 +94,15 @@ final class PerfSessionController {
     }
 
     PerfReportData stop() {
-        return active == null ? null : stopActive();
+        return stop(false);
     }
 
-    boolean cancelPending() {
-        if (pending == null || active != null) {
-            return false;
-        }
-        pending = null;
-        return true;
+    PerfReportData stop(boolean retainInitialLayout) {
+        return active == null ? null : stopActive(retainInitialLayout);
     }
 
     boolean hasActiveSession() {
         return active != null;
-    }
-
-    boolean hasAnySession() {
-        return pending != null || active != null;
     }
 
     PerfReportData currentReport() {
@@ -88,7 +110,7 @@ final class PerfSessionController {
     }
 
     boolean clearLastReport() {
-        if (hasAnySession()) {
+        if (hasActiveSession()) {
             return false;
         }
         lastReport = null;
@@ -96,7 +118,6 @@ final class PerfSessionController {
     }
 
     void clear() {
-        pending = null;
         if (active != null) {
             stopActive();
         } else {
@@ -106,26 +127,15 @@ final class PerfSessionController {
         nextSessionId = 1L;
     }
 
-    private void activatePending() {
-        PendingSession requested = pending;
-        pending = null;
-        PerfSamplerSession sampler = new PerfSamplerSession(nextSessionId++, TicketPerfConfig.sampleIntervalMicros());
-        try {
-            sampler.start();
-            PerfWorkTracker.activate(Thread.currentThread());
-            active = new ActiveSession(requested.durationTicks, requested.playerId, sampler);
-        } catch (RuntimeException | Error exception) {
-            PerfWorkTracker.deactivate();
-            sampler.stop();
-            throw exception;
-        }
+    private PerfReportData stopActive() {
+        return stopActive(false);
     }
 
-    private PerfReportData stopActive() {
+    private PerfReportData stopActive(boolean retainInitialLayout) {
         ActiveSession session = active;
         active = null;
         PerfWorkTracker.deactivate();
-        lastReport = session.sampler.stop();
+        lastReport = session.sampler.stop(retainInitialLayout);
         return lastReport;
     }
 
@@ -142,18 +152,39 @@ final class PerfSessionController {
         if (session == null) {
             return;
         }
+        if (!session.attributionComplete) {
+            PerfAttributionSnapshot.Capture capture = PerfAttributionSnapshot.captureWithFingerprint(server);
+            session.attribution = capture.snapshot();
+            session.ticketFingerprint = capture.ticketFingerprint();
+            session.attributionComplete = true;
+        }
         session.sampler.beginTick(session.attribution);
         session.tickOpen = true;
-        if (session.completedTicks % ATTRIBUTION_REFRESH_TICKS == 0) {
-            session.attribution = PerfAttributionSnapshot.capture(server);
-            session.sampler.updateAttribution(session.attribution);
+        if (session.completedTicks > 0
+                && session.completedTicks % TOPOLOGY_CHECK_TICKS == 0) {
+            long topologyFingerprint = PerfAttributionSnapshot.ticketFingerprint(server);
+            boolean topologyChanged = topologyFingerprint != session.ticketFingerprint;
+            boolean periodicRefresh = session.completedTicks % ATTRIBUTION_REFRESH_TICKS == 0;
+            if (!topologyChanged && !periodicRefresh && session.attribution != null) {
+                return;
+            }
+            PerfAttributionSnapshot next = PerfAttributionSnapshot.capture(server);
+            boolean loaderLayoutChanged = !sameLoaderLayout(session.attribution, next);
+            session.attribution = next;
+            session.ticketFingerprint = topologyFingerprint;
+            session.sampler.updateAttribution(next, loaderLayoutChanged);
         }
     }
 
-    record Completion(UUID playerId, PerfReportData data) {
+    private static boolean sameLoaderLayout(PerfAttributionSnapshot previous,
+                                            PerfAttributionSnapshot next) {
+        if (previous == null) {
+            return false;
+        }
+        return previous.reportLoaderPlan().equals(next.reportLoaderPlan());
     }
 
-    private record PendingSession(long durationTicks, UUID playerId) {
+    record Completion(UUID playerId, PerfReportData data) {
     }
 
     private static final class ActiveSession {
@@ -161,13 +192,20 @@ final class PerfSessionController {
         final UUID playerId;
         final PerfSamplerSession sampler;
         PerfAttributionSnapshot attribution;
+        long ticketFingerprint = Long.MIN_VALUE;
         long completedTicks;
+        boolean attributionComplete = true;
         boolean tickOpen;
 
-        ActiveSession(long durationTicks, UUID playerId, PerfSamplerSession sampler) {
+        ActiveSession(long durationTicks,
+                      UUID playerId,
+                      PerfSamplerSession sampler,
+                      PerfAttributionSnapshot attribution) {
             this.durationTicks = durationTicks;
             this.playerId = playerId;
             this.sampler = sampler;
+            this.attribution = attribution;
         }
     }
+
 }

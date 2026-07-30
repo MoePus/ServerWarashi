@@ -4,6 +4,7 @@ import com.moepus.serverwarashi.client.network.PerfControlClient;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
 import com.moepus.serverwarashi.common.network.PerfControlPayload;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import xaero.map.gui.GuiMap;
@@ -15,16 +16,21 @@ public final class XaeroPerfControls {
     private static final int CLEAR_X = 108;
     private static final int CLEAR_WIDTH = 78;
     private static final int BUTTON_HEIGHT = 20;
+    private static final int STATUS_Y = BUTTON_Y + BUTTON_HEIGHT + 5;
+    private static final int STATUS_COLOR = 0xFFFFD166;
+    private static final int TOOLTIP_MAX_WIDTH = 240;
+    private static final float STATUS_Z = 1_000.0F;
+    private static Boolean requestedProfiling;
 
     private XaeroPerfControls() {
     }
 
     public static Controls install(GuiMap map) {
-        Button toggle = Button.builder(toggleLabel(false), ignored -> send(PerfControlPayload.Action.TOGGLE))
+        Button toggle = Button.builder(toggleLabel(false), ignored -> toggleProfiling())
                 .bounds(TOGGLE_X, BUTTON_Y, TOGGLE_WIDTH, BUTTON_HEIGHT)
                 .build();
         Button clear = Button.builder(Component.translatable("screen.serverwarashi.heatmap.clear"),
-                        ignored -> send(PerfControlPayload.Action.CLEAR))
+                        ignored -> PerfControlClient.send(PerfControlPayload.Action.CLEAR))
                 .bounds(CLEAR_X, BUTTON_Y, CLEAR_WIDTH, BUTTON_HEIGHT)
                 .build();
         map.addButton(toggle);
@@ -39,16 +45,44 @@ public final class XaeroPerfControls {
             return;
         }
         ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
+        boolean profiling = effectiveProfiling(snapshot);
+        boolean paused = isIntegratedServerPaused();
         boolean visible = hasPerfPermission();
         controls.toggle().visible = visible;
         controls.clear().visible = visible;
-        controls.toggle().setMessage(toggleLabel(snapshot.profiling()));
-        controls.clear().active = !snapshot.profiling() && hasCompletedReport(snapshot);
+        controls.toggle().active = true;
+        controls.toggle().setMessage(toggleLabel(profiling));
+        controls.clear().active = !profiling && hasCompletedReport(snapshot);
+    }
+
+    public static void renderStatus(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (!hasPerfPermission() || !isAnalysisPaused()) {
+            return;
+        }
+        var font = Minecraft.getInstance().font;
+        Component status = Component.translatable("screen.serverwarashi.profiler.analysis_paused");
+        int width = font.width(status);
+        int x = TOGGLE_X + (TOGGLE_WIDTH - width) / 2;
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(0.0F, 0.0F, STATUS_Z);
+        try {
+            graphics.drawString(font, status, x, STATUS_Y, STATUS_COLOR, true);
+            if (mouseX >= x && mouseX < x + width
+                    && mouseY >= STATUS_Y && mouseY < STATUS_Y + font.lineHeight) {
+                Component tooltip = Component.translatable(
+                        "screen.serverwarashi.profiler.game_paused_tooltip");
+                graphics.renderTooltip(font, font.split(tooltip, TOOLTIP_MAX_WIDTH), mouseX, mouseY);
+            }
+        } finally {
+            pose.popPose();
+        }
     }
 
     public static boolean isMouseOver(double mouseX, double mouseY) {
         return hasPerfPermission() && (contains(mouseX, mouseY, TOGGLE_X, TOGGLE_WIDTH)
-                || contains(mouseX, mouseY, CLEAR_X, CLEAR_WIDTH));
+                || contains(mouseX, mouseY, CLEAR_X, CLEAR_WIDTH)
+                || isOverPausedStatus(mouseX, mouseY));
     }
 
     private static boolean hasPerfPermission() {
@@ -71,8 +105,49 @@ public final class XaeroPerfControls {
                 : "screen.serverwarashi.profiler.start");
     }
 
-    private static void send(PerfControlPayload.Action action) {
-        PerfControlClient.send(action);
+    private static boolean isAnalysisPaused() {
+        return isIntegratedServerPaused()
+                && effectiveProfiling(ClientPerfReportState.snapshot());
+    }
+
+    private static boolean isOverPausedStatus(double mouseX, double mouseY) {
+        if (!isAnalysisPaused()) {
+            return false;
+        }
+        var font = Minecraft.getInstance().font;
+        int width = font.width(Component.translatable(
+                "screen.serverwarashi.profiler.analysis_paused"));
+        int x = TOGGLE_X + (TOGGLE_WIDTH - width) / 2;
+        return mouseX >= x && mouseX < x + width
+                && mouseY >= STATUS_Y && mouseY < STATUS_Y + font.lineHeight;
+    }
+
+    private static boolean effectiveProfiling(ClientPerfReportState.Snapshot snapshot) {
+        if (requestedProfiling == null) {
+            return snapshot.profiling();
+        }
+        if (snapshot.profiling() == requestedProfiling) {
+            requestedProfiling = null;
+            return snapshot.profiling();
+        }
+        return requestedProfiling;
+    }
+
+    private static boolean isIntegratedServerPaused() {
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        return server != null && server.isPaused();
+    }
+
+    private static void toggleProfiling() {
+        ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
+        boolean nextProfiling = !effectiveProfiling(snapshot);
+        if (PerfControlClient.send(PerfControlPayload.Action.TOGGLE)) {
+            requestedProfiling = nextProfiling;
+        }
+    }
+
+    public static void clear() {
+        requestedProfiling = null;
     }
 
     public record Controls(Button toggle, Button clear) {

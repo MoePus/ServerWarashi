@@ -2,8 +2,10 @@ package com.moepus.serverwarashi.client.event;
 
 import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.client.compat.xaero.XaeroHeatmapOverlay;
+import com.moepus.serverwarashi.client.compat.xaero.XaeroPerfControls;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -23,14 +25,20 @@ public final class XaeroHeatmapClientEvents {
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        if (Minecraft.getInstance().level != null) {
+            ClientWeakChunkState.tick();
+            ClientWeakChunkState.clearIfDimensionMismatch(
+                    Minecraft.getInstance().level.dimension().location().toString());
+        }
         boolean open = XAERO_LOADED && Minecraft.getInstance().level != null
                 && XaeroHeatmapOverlay.isMapOpen(Minecraft.getInstance().screen);
+        PerfMapSubscriptionClient.setMapOpen(open);
         if (open == mapOpen) {
             return;
         }
         mapOpen = open;
-        PerfMapSubscriptionClient.setMapOpen(open);
         if (!open) {
+            ClientWeakChunkState.clear();
             XaeroHeatmapOverlay.close();
         }
     }
@@ -40,6 +48,8 @@ public final class XaeroHeatmapClientEvents {
         mapOpen = false;
         PerfMapSubscriptionClient.clear();
         ClientPerfReportState.clear();
+        ClientWeakChunkState.clear();
+        XaeroPerfControls.clear();
         if (XAERO_LOADED) {
             XaeroHeatmapOverlay.close();
         }

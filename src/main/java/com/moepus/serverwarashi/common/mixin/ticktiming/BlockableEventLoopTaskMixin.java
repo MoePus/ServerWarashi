@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.mixin.ticktiming;
 
-import com.moepus.serverwarashi.common.modules.TickTimingHooks;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
+import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import net.minecraft.util.thread.BlockableEventLoop;
 import org.mixinlite.injector.InjectLite;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,7 +14,7 @@ public abstract class BlockableEventLoopTaskMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        TickTimingHooks.beforeTask((BlockableEventLoop<?>) (Object) this, task);
+        PerfWorkTracker.enterTask((BlockableEventLoop<?>) (Object) this, task);
     }
 
     @InjectLite(method = "doRunTask(Ljava/lang/Runnable;)V", at = @At("RETURN"))
@@ -22,6 +22,6 @@ public abstract class BlockableEventLoopTaskMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        TickTimingHooks.afterTask();
+        PerfWorkTracker.exit(TickType.TASK);
     }
 }

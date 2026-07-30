@@ -2,36 +2,100 @@ package com.moepus.serverwarashi.common.modules.performance.sampling;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 
-import java.util.random.RandomGenerator;
-
 final class SampleStatistics {
-    private static final double P98 = 0.98D;
-    private final FloatReservoir activeTickValues = new FloatReservoir();
+    private static final int WINDOW_TICKS = 20;
+    private static final int WINDOW_STAGGER_TICKS = WINDOW_TICKS / 2;
+    private static final long NO_WINDOW = Long.MIN_VALUE;
+    private static final double MIN_BURST_SAMPLES = 2.0D;
+    private static final double HALF_SAMPLE = 0.5D;
+    private static final double NANOS_PER_MILLISECOND = 1_000_000.0D;
     private double totalNanos;
     private double sampleWeight;
-    private long activeTicks;
+    private double maxBurstNanos;
+    private long primaryWindow = NO_WINDOW;
+    private double primaryNanos;
+    private double primarySamples;
+    private long staggeredWindow = NO_WINDOW;
+    private double staggeredNanos;
+    private double staggeredSamples;
+    private double maxEstimatedMspt;
 
-    void record(double nanos, double samples, RandomGenerator random) {
-        if (nanos <= 0.0D) {
+    void record(double nanos, double samples, long tick) {
+        if (nanos <= 0.0D || samples <= 0.0D) {
             return;
         }
+        if (tick <= 0L) {
+            throw new IllegalArgumentException("Tick must be positive");
+        }
+        advanceWindows(tick);
         totalNanos += nanos;
         sampleWeight += samples;
-        activeTicks++;
-        activeTickValues.add((float) (nanos / 1_000_000.0D), random);
+        recordBurst(nanos, samples);
+        primaryNanos += nanos;
+        primarySamples += samples;
+        if (tick > WINDOW_STAGGER_TICKS) {
+            staggeredNanos += nanos;
+            staggeredSamples += samples;
+        }
     }
 
     PerfReportData.Metric metric(long totalTicks) {
-        return metric(totalTicks, p98(totalTicks));
+        advanceWindows(totalTicks);
+        double mspt = totalTicks == 0 ? 0.0D : totalNanos / NANOS_PER_MILLISECOND / totalTicks;
+        double estimatedMax = Math.max(maxEstimatedMspt,
+                Math.max(estimate(primaryNanos, primarySamples),
+                        estimate(staggeredNanos, staggeredSamples)));
+        estimatedMax = Math.max(estimatedMax, maxBurstNanos / NANOS_PER_MILLISECOND);
+        return new PerfReportData.Metric(mspt, Math.max(mspt, estimatedMax), Math.round(sampleWeight));
     }
 
-    PerfReportData.Metric activeTickMetric(long totalTicks) {
-        return metric(totalTicks, activeTickValues.percentile(P98));
+    private void recordBurst(double nanos, double samples) {
+        if (samples < MIN_BURST_SAMPLES) {
+            return;
+        }
+        double effectiveResolution = nanos / samples;
+        double burstNanos = nanos - HALF_SAMPLE * effectiveResolution;
+        maxBurstNanos = Math.max(maxBurstNanos, burstNanos);
     }
 
-    private PerfReportData.Metric metric(long totalTicks, double p98) {
-        double mspt = totalTicks == 0 ? 0.0D : totalNanos / 1_000_000.0D / totalTicks;
-        return new PerfReportData.Metric(mspt, p98, Math.round(sampleWeight));
+    private static double estimate(double nanos, double samples) {
+        if (samples <= 0.0D) {
+            return 0.0D;
+        }
+        double upperHits = samples + 2.0D * Math.sqrt(samples + 1.0D) + 1.0D;
+        double windowMspt = nanos / NANOS_PER_MILLISECOND / WINDOW_TICKS;
+        return windowMspt * upperHits / samples;
+    }
+
+    private void advanceWindows(long tick) {
+        if (tick <= 0L) {
+            return;
+        }
+        long nextPrimary = (tick - 1L) / WINDOW_TICKS;
+        if (primaryWindow != nextPrimary) {
+            retainPrimaryAndReset(nextPrimary);
+        }
+        if (tick <= WINDOW_STAGGER_TICKS) {
+            return;
+        }
+        long nextStaggered = (tick - WINDOW_STAGGER_TICKS - 1L) / WINDOW_TICKS;
+        if (staggeredWindow != nextStaggered) {
+            retainStaggeredAndReset(nextStaggered);
+        }
+    }
+
+    private void retainPrimaryAndReset(long nextWindow) {
+        maxEstimatedMspt = Math.max(maxEstimatedMspt, estimate(primaryNanos, primarySamples));
+        primaryWindow = nextWindow;
+        primaryNanos = 0.0D;
+        primarySamples = 0.0D;
+    }
+
+    private void retainStaggeredAndReset(long nextWindow) {
+        maxEstimatedMspt = Math.max(maxEstimatedMspt, estimate(staggeredNanos, staggeredSamples));
+        staggeredWindow = nextWindow;
+        staggeredNanos = 0.0D;
+        staggeredSamples = 0.0D;
     }
 
     double totalNanos() {
@@ -40,18 +104,5 @@ final class SampleStatistics {
 
     double sampleWeight() {
         return sampleWeight;
-    }
-
-    private double p98(long totalTicks) {
-        if (totalTicks == 0 || activeTicks == 0) {
-            return 0.0D;
-        }
-        long zeroTicks = totalTicks - activeTicks;
-        long rank = (long) Math.ceil(P98 * totalTicks);
-        if (rank <= zeroTicks) {
-            return 0.0D;
-        }
-        double activeQuantile = (rank - zeroTicks) / (double) activeTicks;
-        return activeTickValues.percentile(activeQuantile);
     }
 }

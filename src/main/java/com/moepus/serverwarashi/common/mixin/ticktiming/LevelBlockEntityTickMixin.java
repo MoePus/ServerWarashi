@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.mixin.ticktiming;
 
-import com.moepus.serverwarashi.common.modules.TickTimingHooks;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
+import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.mixinlite.injector.InjectLite;
 import org.spongepowered.asm.mixin.Final;
@@ -26,7 +26,7 @@ public abstract class LevelBlockEntityTickMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        TickTimingHooks.beforeBlockEntity(blockEntity);
+        PerfWorkTracker.enterBlockEntity(blockEntity);
     }
 
     @InjectLite(method = "tick()V", at = @At("RETURN"))
@@ -34,6 +34,6 @@ public abstract class LevelBlockEntityTickMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        TickTimingHooks.afterBlockEntity();
+        PerfWorkTracker.exit(TickType.BLOCK_ENTITY);
     }
 }

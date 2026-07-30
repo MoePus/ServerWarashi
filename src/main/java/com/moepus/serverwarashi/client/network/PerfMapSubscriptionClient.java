@@ -6,30 +6,36 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 public final class PerfMapSubscriptionClient {
-    private static boolean mapOpen;
+    private static boolean requestedOpen;
+    private static boolean subscribed;
 
     private PerfMapSubscriptionClient() {
     }
 
     public static boolean setMapOpen(boolean open) {
-        if (mapOpen == open) {
+        requestedOpen = open;
+        if (subscribed == requestedOpen) {
             return false;
         }
-        mapOpen = open;
-        send(open);
+        if (!send(requestedOpen)) {
+            return false;
+        }
+        subscribed = requestedOpen;
         return true;
     }
 
     public static void clear() {
-        mapOpen = false;
+        requestedOpen = false;
+        subscribed = false;
     }
 
-    private static void send(boolean subscribed) {
+    private static boolean send(boolean subscribed) {
         var connection = Minecraft.getInstance().getConnection();
         if (connection == null || !NetworkRegistry.hasChannel(
                 connection, PerfMapSubscriptionPayload.TYPE.id())) {
-            return;
+            return false;
         }
         PacketDistributor.sendToServer(new PerfMapSubscriptionPayload(subscribed));
+        return true;
     }
 }

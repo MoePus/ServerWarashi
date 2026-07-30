@@ -4,10 +4,12 @@ import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.client.screen.PerfReportScreen;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportTextRenderer;
 import com.moepus.serverwarashi.common.network.ClientPayloadHandlers;
 import com.moepus.serverwarashi.common.network.PerfReportPayload;
+import com.moepus.serverwarashi.common.network.WeakChunkPayload;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -26,6 +28,17 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         ClientPayloadHandlers.setPerfReportHandler(ClientSetup::handlePerfReport);
+        ClientPayloadHandlers.setWeakChunkHandler(ClientSetup::handleWeakChunks);
+    }
+
+    private static void handleWeakChunks(WeakChunkPayload payload) {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> {
+            if (minecraft.level != null && minecraft.level.dimension().location().toString()
+                    .equals(payload.snapshot().dimension())) {
+                ClientWeakChunkState.update(payload);
+            }
+        });
     }
 
     private static void handlePerfReport(PerfReportPayload payload) {

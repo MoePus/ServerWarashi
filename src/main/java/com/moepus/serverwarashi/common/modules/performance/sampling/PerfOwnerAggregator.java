@@ -7,9 +7,10 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.SplittableRandom;
+import java.util.Set;
 
 final class PerfOwnerAggregator {
     private static final int VIEW_LIMIT = 1024;
@@ -24,17 +25,18 @@ final class PerfOwnerAggregator {
     private PerfAttributionSnapshot latestAttribution;
     private int dropsUntilReplacement = REPLACEMENT_INTERVAL;
 
-    void accept(TickSamples tick, SplittableRandom random) {
+    void accept(TickSamples tick, long tickIndex) {
         updateMetadata(tick.attribution);
-        TickAttribution attribution = new TickAttribution(random);
+        TickAttribution attribution = new TickAttribution();
         for (var entry : tick.chunks.entrySet()) {
-            double nanos = estimate(tick.durationNanos, entry.getValue(), tick.totalSamples);
+            int samples = entry.getValue();
+            double nanos = estimate(tick.durationNanos, samples, tick.totalSamples);
             List<PerfAttributionSnapshot.Bucket> buckets = tick.attribution == null
                     ? List.of(PerfAttributionSnapshot.UNKNOWN)
                     : tick.attribution.owners(entry.getKey().dimension(), entry.getKey().position());
-            attribution.record(buckets, nanos, entry.getValue());
+            attribution.record(buckets, nanos, samples);
         }
-        attribution.commit();
+        attribution.commit(tickIndex);
     }
 
     void updateMetadata(PerfAttributionSnapshot attribution) {
@@ -68,12 +70,15 @@ final class PerfOwnerAggregator {
                 loaders.omittedSources, loaders.sources);
     }
 
-    private LoaderBuild loaderSources() {
-        if (latestAttribution == null) {
+    LoaderBuild loaderSources() {
+        return loaderSources(latestAttribution);
+    }
+
+    static LoaderBuild loaderSources(PerfAttributionSnapshot attribution) {
+        if (attribution == null) {
             return new LoaderBuild(0, List.of());
         }
-        var plan = latestAttribution.loaderPlan(PerfReportLimits.MAX_LOADER_SOURCES,
-                PerfReportLimits.MAX_LOADER_REGIONS, PerfReportLimits.MAX_LOADER_REGION_SPAN);
+        var plan = attribution.reportLoaderPlan();
         List<PerfReportData.LoaderSourceEntry> sources = plan.sources().stream()
                 .map(PerfOwnerAggregator::loaderSource)
                 .toList();
@@ -172,13 +177,6 @@ final class PerfOwnerAggregator {
         return durationNanos * (samples / (double) totalSamples);
     }
 
-    static double equalShare(double value, int bucketCount) {
-        if (bucketCount <= 0) {
-            throw new IllegalArgumentException("bucketCount must be positive");
-        }
-        return value / bucketCount;
-    }
-
     private int omitted(long limited) {
         return (int) Math.min(Integer.MAX_VALUE, limited + droppedSourceHashes.size());
     }
@@ -189,7 +187,7 @@ final class PerfOwnerAggregator {
                  List<PerfReportData.LoaderSourceEntry> loaderSources) {
     }
 
-    private record LoaderBuild(int omittedSources, List<PerfReportData.LoaderSourceEntry> sources) {
+    record LoaderBuild(int omittedSources, List<PerfReportData.LoaderSourceEntry> sources) {
     }
 
     private record OwnerKey(PerfReportData.AttributionKind kind, String id) {
@@ -215,33 +213,33 @@ final class PerfOwnerAggregator {
     private final class TickAttribution {
         private final Map<OwnerKey, Estimate> ownerCosts = new HashMap<>();
         private final Map<SourceAggregate, Estimate> sourceCosts = new HashMap<>();
-        private final SplittableRandom random;
-
-        private TickAttribution(SplittableRandom random) {
-            this.random = random;
-        }
-
         void record(List<PerfAttributionSnapshot.Bucket> buckets, double nanos, int samples) {
-            double sharedNanos = equalShare(nanos, buckets.size());
-            double sharedSamples = equalShare(samples, buckets.size());
+            Set<OwnerKey> recordedOwners = new HashSet<>();
+            Set<OwnerSourceKey> recordedSources = new HashSet<>();
             for (PerfAttributionSnapshot.Bucket bucket : buckets) {
                 OwnerKey owner = OwnerKey.from(bucket);
                 ownerMetadata.put(owner, bucket);
-                ownerCosts.computeIfAbsent(owner, ignored -> new Estimate()).add(sharedNanos, sharedSamples);
-                SourceAggregate source = sourceAggregate(OwnerSourceKey.from(bucket));
+                if (recordedOwners.add(owner)) {
+                    ownerCosts.computeIfAbsent(owner, ignored -> new Estimate()).add(nanos, samples);
+                }
+                OwnerSourceKey sourceKey = OwnerSourceKey.from(bucket);
+                if (!recordedSources.add(sourceKey)) {
+                    continue;
+                }
+                SourceAggregate source = sourceAggregate(sourceKey);
                 if (source != null) {
                     source.metadata = bucket;
-                    sourceCosts.computeIfAbsent(source, ignored -> new Estimate()).add(sharedNanos, sharedSamples);
+                    sourceCosts.computeIfAbsent(source, ignored -> new Estimate()).add(nanos, samples);
                 }
             }
         }
 
-        void commit() {
+        void commit(long tickIndex) {
             ownerCosts.forEach((owner, estimate) -> owners
                     .computeIfAbsent(owner, ignored -> new SampleStatistics())
-                    .record(estimate.nanos, estimate.samples, random));
+                    .record(estimate.nanos, estimate.samples, tickIndex));
             sourceCosts.forEach((source, estimate) ->
-                    source.stats.record(estimate.nanos, estimate.samples, random));
+                    source.stats.record(estimate.nanos, estimate.samples, tickIndex));
         }
     }
 

@@ -51,7 +51,7 @@ final class TicketPerfCommands {
 
     private static int open(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        if (!PerfReportDelivery.open(player, TicketPerfRuntime.currentReport(), TicketPerfRuntime.hasSession())) {
+        if (!PerfReportDelivery.open(player, TicketPerfRuntime.currentReport(), TicketPerfRuntime.isProfiling())) {
             context.getSource().sendFailure(Component.literal(
                     "Client does not support the performance profiler window."));
             return 0;
@@ -60,10 +60,10 @@ final class TicketPerfCommands {
     }
 
     private static int stop(CommandContext<CommandSourceStack> context) {
-        var result = TicketPerfRuntime.stopCurrentAnalysis();
+        var result = TicketPerfRuntime.stopCurrentAnalysis(context.getSource().getServer());
         if (result.data() != null) {
             PerfReportDelivery.toCommandSource(context.getSource(), result.data());
-            PerfReportDelivery.tick(context.getSource().getServer(), result.data(), false, true);
+            PerfReportDelivery.publishNow(context.getSource().getServer(), result.data(), false);
         } else {
             context.getSource().sendSuccess(result::message, false);
         }

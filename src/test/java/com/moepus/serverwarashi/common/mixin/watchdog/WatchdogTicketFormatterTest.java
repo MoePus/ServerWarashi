@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.mixin.watchdog;
 
+import com.moepus.serverwarashi.common.watchdog.WatchdogTicketFormatter;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

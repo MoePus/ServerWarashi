@@ -6,6 +6,8 @@ import java.util.function.Consumer;
 public final class ClientPayloadHandlers {
     private static Consumer<PerfReportPayload> perfReportHandler = ignored -> {
     };
+    private static Consumer<WeakChunkPayload> weakChunkHandler = ignored -> {
+    };
 
     private ClientPayloadHandlers() {
     }
@@ -16,6 +18,14 @@ public final class ClientPayloadHandlers {
 
     public static void handlePerfReport(PerfReportPayload payload) {
         perfReportHandler.accept(payload);
+    }
+
+    public static void setWeakChunkHandler(Consumer<WeakChunkPayload> handler) {
+        weakChunkHandler = Objects.requireNonNull(handler, "handler");
+    }
+
+    public static void handleWeakChunks(WeakChunkPayload payload) {
+        weakChunkHandler.accept(payload);
     }
 
 }

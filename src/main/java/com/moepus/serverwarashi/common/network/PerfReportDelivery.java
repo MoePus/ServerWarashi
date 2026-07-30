@@ -44,7 +44,12 @@ public final class PerfReportDelivery {
         if (!WarashiNetwork.canSendPerfReport(player)) {
             return false;
         }
-        VIEWERS.openScreen(player.getUUID());
+        boolean deferred = shouldDeferInitialReport(report, profiling,
+                player.getServer() != null && player.getServer().isPaused());
+        VIEWERS.openScreen(player.getUUID(), deferred);
+        if (deferred) {
+            return true;
+        }
         WarashiNetwork.sendPerfReport(player, report, PerfReportPayload.Mode.OPEN, profiling);
         return true;
     }
@@ -62,18 +67,15 @@ public final class PerfReportDelivery {
             return;
         }
         VIEWERS.setMap(playerId, true);
-        WarashiNetwork.sendPerfReport(player, report, PerfReportPayload.Mode.UPDATE, profiling);
+        boolean paused = player.getServer() != null && player.getServer().isPaused();
+        if (!shouldDeferInitialReport(report, profiling, paused)) {
+            WarashiNetwork.sendPerfReport(player, report, PerfReportPayload.Mode.UPDATE, profiling);
+        }
     }
 
     public static void tick(MinecraftServer server,
                             PerfReportData report,
-                            boolean profiling,
-                            boolean force) {
-        if (force) {
-            resetPushClock();
-            pushToViewers(server, report, profiling);
-            return;
-        }
+                            boolean profiling) {
         if (VIEWERS.isEmpty() || report == null || !profiling) {
             resetPushClock();
             return;
@@ -83,6 +85,13 @@ public final class PerfReportDelivery {
         }
         lastPushedTickCount = report.tickCount();
         pushToViewers(server, report, true);
+    }
+
+    public static void publishNow(MinecraftServer server,
+                                  PerfReportData report,
+                                  boolean profiling) {
+        resetPushClock();
+        pushToViewers(server, report, profiling);
     }
 
     static boolean hasNewSnapshot(PerfReportData report, long previousTickCount) {
@@ -102,7 +111,7 @@ public final class PerfReportDelivery {
                 VIEWERS.setMap(viewer, false);
             }
             if (VIEWERS.isScreenViewer(viewer) || VIEWERS.isMapViewer(viewer)) {
-                WarashiNetwork.sendPerfReport(player, report, PerfReportPayload.Mode.UPDATE, profiling);
+                WarashiNetwork.sendPerfReport(player, report, VIEWERS.nextMode(viewer), profiling);
             }
         }
     }
@@ -114,6 +123,18 @@ public final class PerfReportDelivery {
     public static void clearRuntimeState() {
         VIEWERS.clear();
         resetPushClock();
+    }
+
+    static Iterable<UUID> mapViewers() {
+        return VIEWERS.mapViewers();
+    }
+
+    static boolean isMapViewer(UUID playerId) {
+        return VIEWERS.isMapViewer(playerId);
+    }
+
+    static boolean hasMapRecipients() {
+        return VIEWERS.hasMapRecipients();
     }
 
     private static void resetPushClock() {
@@ -131,12 +152,28 @@ public final class PerfReportDelivery {
         return supportsChannel && hasPermission;
     }
 
+    static boolean shouldDeferInitialReport(PerfReportData report,
+                                            boolean profiling,
+                                            boolean serverPaused) {
+        return profiling && !serverPaused && report != null && report.tickCount() == 0L;
+    }
+
     static final class ViewerSubscriptions {
         private final Set<UUID> screen = new HashSet<>();
         private final Set<UUID> map = new HashSet<>();
+        private final Set<UUID> pendingScreenOpen = new HashSet<>();
 
         void openScreen(UUID playerId) {
+            openScreen(playerId, false);
+        }
+
+        void openScreen(UUID playerId, boolean deferred) {
             screen.add(playerId);
+            if (deferred) {
+                pendingScreenOpen.add(playerId);
+            } else {
+                pendingScreenOpen.remove(playerId);
+            }
         }
 
         void setMap(UUID playerId, boolean subscribed) {
@@ -159,10 +196,23 @@ public final class PerfReportDelivery {
             return isScreenViewer(playerId) || isMapViewer(playerId);
         }
 
+        PerfReportPayload.Mode nextMode(UUID playerId) {
+            return pendingScreenOpen.remove(playerId)
+                    ? PerfReportPayload.Mode.OPEN : PerfReportPayload.Mode.UPDATE;
+        }
+
         Set<UUID> recipients() {
             Set<UUID> result = new HashSet<>(screen);
             result.addAll(map);
             return result;
+        }
+
+        Iterable<UUID> mapViewers() {
+            return map;
+        }
+
+        boolean hasMapRecipients() {
+            return !map.isEmpty();
         }
 
         boolean isEmpty() {
@@ -172,11 +222,13 @@ public final class PerfReportDelivery {
         void remove(UUID playerId) {
             screen.remove(playerId);
             map.remove(playerId);
+            pendingScreenOpen.remove(playerId);
         }
 
         void clear() {
             screen.clear();
             map.clear();
+            pendingScreenOpen.clear();
         }
     }
 }

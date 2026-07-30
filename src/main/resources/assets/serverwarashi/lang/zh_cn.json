@@ -5,6 +5,8 @@
   "screen.serverwarashi.profiler.title": "性能分析器",
   "screen.serverwarashi.profiler.start": "开始分析",
   "screen.serverwarashi.profiler.stop": "停止分析",
+  "screen.serverwarashi.profiler.analysis_paused": "分析已暂停",
+  "screen.serverwarashi.profiler.game_paused_tooltip": "Xaero 世界地图会暂停单人游戏，无法在地图打开时采集性能数据。你需要关闭地图才能正常采集。",
   "screen.serverwarashi.profiler.page": "第 %1$s/%2$s 页",
   "screen.serverwarashi.profiler.summary": "服务器 %1$s MSPT | %2$s 秒 | %3$s tick | %4$s 微秒 | 省略 %5$s",
   "screen.serverwarashi.profiler.no_data": "暂无数据",
@@ -36,11 +38,17 @@
   "screen.serverwarashi.profiler.time.hours_ago": "%s 小时前",
   "screen.serverwarashi.profiler.time.days_ago": "%s 天前",
   "screen.serverwarashi.heatmap.mspt": "MSPT：%s 毫秒",
-  "screen.serverwarashi.heatmap.p98": "P98：%s 毫秒",
+  "screen.serverwarashi.heatmap.max": "MAX：%s 毫秒",
+  "screen.serverwarashi.heatmap.possible_weak": "可能成为弱加载",
+  "screen.serverwarashi.heatmap.weak_entities": "弱加载实体：%s",
+  "screen.serverwarashi.heatmap.estimated_entity_types": "估算数量",
   "screen.serverwarashi.heatmap.loaded_by": "来自 %s 加载",
   "screen.serverwarashi.heatmap.loaded_by_more": "另有 %s 个区块加载器",
   "screen.serverwarashi.heatmap.loader_data_incomplete": "区块加载器覆盖范围已截断",
   "screen.serverwarashi.heatmap.loader_name": "区块加载器：%s",
+  "screen.serverwarashi.heatmap.loader_chunk": "区域图标区块：%s, %s",
   "screen.serverwarashi.heatmap.loader_position": "坐标：%s, %s, %s",
-  "screen.serverwarashi.heatmap.clear": "清除分析"
+  "screen.serverwarashi.heatmap.clear": "清除分析",
+  "gui.serverwarashi.weak_clear": "清除：%1$s",
+  "gui.serverwarashi.weak_clear_confirm": "确认清除：%1$s"
 }

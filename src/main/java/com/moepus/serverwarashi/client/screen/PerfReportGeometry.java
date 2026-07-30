@@ -9,7 +9,7 @@ record PerfReportGeometry(int panelX,
                           int rowsY,
                           int rowsBottom) {
     private static final int MSPT_MAX_WIDTH = 70;
-    private static final int P98_MAX_WIDTH = 70;
+    private static final int MAX_MAX_WIDTH = 70;
     private static final int SAMPLES_MAX_WIDTH = 68;
     private static final int TYPE_MAX_WIDTH = 68;
     private static final int COUNT_MAX_WIDTH = 34;
@@ -34,15 +34,15 @@ record PerfReportGeometry(int panelX,
 
     int labelWidth(int auxiliaryWidth) {
         return Math.max(1, contentWidth - positionWidth()
-                - msptWidth() - p98Width() - samplesWidth() - auxiliaryWidth);
+                - msptWidth() - maxWidth() - samplesWidth() - auxiliaryWidth);
     }
 
     int msptWidth() {
         return numericWidth(MSPT_MAX_WIDTH);
     }
 
-    int p98Width() {
-        return numericWidth(P98_MAX_WIDTH);
+    int maxWidth() {
+        return numericWidth(MAX_MAX_WIDTH);
     }
 
     int samplesWidth() {

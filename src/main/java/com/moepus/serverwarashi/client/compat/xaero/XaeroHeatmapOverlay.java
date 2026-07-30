@@ -4,10 +4,12 @@ import com.mojang.blaze3d.platform.Window;
 import com.moepus.serverwarashi.client.heatmap.ChunkHeatmapModel;
 import com.moepus.serverwarashi.client.heatmap.ChunkHeatmapRenderer;
 import com.moepus.serverwarashi.client.heatmap.HeatmapViewport;
+import com.moepus.serverwarashi.client.heatmap.HeatmapOffscreenIndicators;
 import com.moepus.serverwarashi.client.screen.PerfDisplayText;
 import com.moepus.serverwarashi.common.mixin.compat.xaero.XaeroGuiMapAccessor;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
+import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,6 +21,7 @@ import xaero.map.gui.ScreenBase;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 public final class XaeroHeatmapOverlay {
@@ -64,6 +67,9 @@ public final class XaeroHeatmapOverlay {
                         view.hoverChunkX(), view.hoverChunkZ())));
         pose.popPose();
 
+        HeatmapOffscreenIndicators.render(graphics, new HeatmapOffscreenIndicators.RenderContext(
+                dimension, view.viewport(), cameraX, cameraZ, screen.width, screen.height));
+
         if (hover != null && !XaeroPerfControls.isMouseOver(mouseX, mouseY)) {
             if (hover.loader() != null) {
                 renderLoaderTooltip(graphics, mouseX, mouseY, hover.loader());
@@ -99,8 +105,12 @@ public final class XaeroHeatmapOverlay {
             lines.add(Component.translatable(
                     "screen.serverwarashi.heatmap.mspt", format(hover.metric().mspt())));
             lines.add(Component.translatable(
-                    "screen.serverwarashi.heatmap.p98", format(hover.metric().p98())));
+                    "screen.serverwarashi.heatmap.max", format(hover.metric().max())));
         }
+        if (hover.possibleWeak()) {
+            lines.add(Component.translatable("screen.serverwarashi.heatmap.possible_weak"));
+        }
+        appendWeakEntities(lines, hover);
         appendTopObjects(lines, hover.topEntities(), TickType.ENTITY);
         appendTopObjects(lines, hover.topBlockEntities(), TickType.BLOCK_ENTITY);
         for (ChunkHeatmapModel.LoaderSource source : hover.loaderSources()) {
@@ -115,6 +125,22 @@ public final class XaeroHeatmapOverlay {
             lines.add(Component.translatable("screen.serverwarashi.heatmap.loader_data_incomplete"));
         }
         graphics.renderTooltip(Minecraft.getInstance().font, lines, Optional.empty(), mouseX, mouseY);
+    }
+
+    private static void appendWeakEntities(List<Component> lines, ChunkHeatmapModel.HoverInfo hover) {
+        if (hover.weakEntityCount() == 0) {
+            return;
+        }
+        lines.add(Component.translatable("screen.serverwarashi.heatmap.weak_entities",
+                hover.weakEntityCount()));
+        lines.add(Component.translatable("screen.serverwarashi.heatmap.estimated_entity_types"));
+        hover.entityTypeCounts().entrySet().stream()
+                .sorted(Map.Entry.<WeakEntityType, Integer>comparingByValue().reversed()
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .limit(3)
+                .forEach(entry -> lines.add(Component.translatable(
+                        "screen.serverwarashi.heatmap.object_count",
+                        PerfDisplayText.sampledEntityName(entry.getKey()), entry.getValue())));
     }
 
     private static void appendTopObjects(List<Component> lines,
@@ -135,11 +161,14 @@ public final class XaeroHeatmapOverlay {
 
     private static void renderLoaderTooltip(GuiGraphics graphics, int mouseX, int mouseY,
                                             ChunkHeatmapModel.LoaderIcon loader) {
-        List<Component> lines = List.of(
-                Component.translatable("screen.serverwarashi.heatmap.loader_name",
-                        PerfDisplayText.resource(loader.name())),
-                Component.translatable("screen.serverwarashi.heatmap.loader_position",
-                        loader.x(), loader.y(), loader.z()));
+        Component location = loader.derivedFromRegion()
+                ? Component.translatable("screen.serverwarashi.heatmap.loader_chunk",
+                Math.floorDiv(loader.x(), 16), Math.floorDiv(loader.z(), 16))
+                : Component.translatable("screen.serverwarashi.heatmap.loader_position",
+                loader.x(), loader.y(), loader.z());
+        List<Component> lines = List.of(Component.translatable(
+                "screen.serverwarashi.heatmap.loader_name",
+                PerfDisplayText.resource(loader.name())), location);
         graphics.renderTooltip(Minecraft.getInstance().font, lines, Optional.empty(), mouseX, mouseY);
     }
 
@@ -149,6 +178,8 @@ public final class XaeroHeatmapOverlay {
 
     public static void close() {
         RENDERER.close();
+        HeatmapOffscreenIndicators.close();
+        XaeroWeakChunkClearMenu.clear();
     }
 
     public static void disable() {

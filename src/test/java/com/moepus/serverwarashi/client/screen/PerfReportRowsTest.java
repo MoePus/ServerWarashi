@@ -26,18 +26,18 @@ class PerfReportRowsTest {
         List<PerfReportRows.Row> rows = PerfReportRows.chunks(report, PerfReportRows.SortKey.MSPT, Map.of());
 
         assertEquals(List.of("slow [1, 2]", "fast [3, 4]"), labels(rows));
-        assertEquals(3.0, rows.get(0).metric().p98());
+        assertEquals(3.0, rows.get(0).metric().max());
     }
 
     @Test
-    void tickablesSortByP98Descending() {
+    void tickablesSortByMaxDescending() {
         PerfReportData report = report(
                 List.of(),
                 List.of(tickable("FastTick", metric(5.0, 2.0)),
                         tickable("SpikyTick", metric(1.0, 9.0))),
                 List.of());
 
-        List<PerfReportRows.Row> rows = PerfReportRows.tickables(report, PerfReportRows.SortKey.P98, Map.of());
+        List<PerfReportRows.Row> rows = PerfReportRows.tickables(report, PerfReportRows.SortKey.MAX, Map.of());
 
         assertEquals(List.of("SpikyTick#1 @ test (1, 2, 3)",
                 "FastTick#1 @ test (1, 2, 3)"), labels(rows));
@@ -120,12 +120,12 @@ class PerfReportRowsTest {
         PerfReportGeometry geometry = new PerfReportGeometry(0, 0, 760, 400, 12, 730, 100, 380);
 
         assertEquals(List.of(PerfReportRows.SortKey.ENTITIES, PerfReportRows.SortKey.BLOCK_ENTITIES,
-                        PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.P98, PerfReportRows.SortKey.SAMPLES),
+                        PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX, PerfReportRows.SortKey.SAMPLES),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.CHUNKS));
-        assertEquals(List.of(PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.P98,
+        assertEquals(List.of(PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX,
                         PerfReportRows.SortKey.SAMPLES),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.TICKABLES));
-        assertEquals(List.of(PerfReportRows.SortKey.CHUNKS, PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.P98,
+        assertEquals(List.of(PerfReportRows.SortKey.CHUNKS, PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX,
                         PerfReportRows.SortKey.SAMPLES),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.PLAYERS));
     }
@@ -141,9 +141,9 @@ class PerfReportRowsTest {
                 .getStyle().isItalic());
         assertTrue(PerfReportTableRenderer.headerLabel("MSPT", PerfReportRows.SortKey.MSPT, stale)
                 .getStyle().isItalic());
-        assertFalse(PerfReportTableRenderer.headerLabel("P98", PerfReportRows.SortKey.P98, stale)
+        assertFalse(PerfReportTableRenderer.headerLabel("MAX", PerfReportRows.SortKey.MAX, stale)
                 .getStyle().isBold());
-        assertFalse(PerfReportTableRenderer.headerLabel("P98", PerfReportRows.SortKey.P98, stale)
+        assertFalse(PerfReportTableRenderer.headerLabel("MAX", PerfReportRows.SortKey.MAX, stale)
                 .getStyle().isItalic());
     }
 
@@ -152,7 +152,7 @@ class PerfReportRowsTest {
         PerfReportTabState state = new PerfReportTabState();
         PerfReportData refreshed = report(List.of(
                 chunk("high-mspt", 0, 0, metric(9.0, 1.0)),
-                chunk("high-p98", 1, 0, metric(1.0, 9.0))), List.of(), List.of());
+                chunk("high-max", 1, 0, metric(1.0, 9.0))), List.of(), List.of());
         state.rows = PerfReportRows.chunks(refreshed,
                 PerfReportRows.SortKey.MSPT, Map.of());
         state.rememberOrder();
@@ -160,16 +160,16 @@ class PerfReportRowsTest {
         state.refresh();
         assertTrue(state.stale);
 
-        state.resort(PerfReportRows.SortKey.P98);
+        state.resort(PerfReportRows.SortKey.MAX);
         state.rows = PerfReportRows.chunks(refreshed, state.sort, state.stableOrder);
         state.rememberOrder();
 
         assertFalse(state.stale);
-        assertEquals(List.of("high-p98 [1, 0]", "high-mspt [0, 0]"), labels(state.rows));
+        assertEquals(List.of("high-max [1, 0]", "high-mspt [0, 0]"), labels(state.rows));
 
         state.refresh();
         assertTrue(state.stale);
-        assertEquals(List.of("high-p98 [1, 0]", "high-mspt [0, 0]"), labels(
+        assertEquals(List.of("high-max [1, 0]", "high-mspt [0, 0]"), labels(
                 PerfReportRows.chunks(refreshed, state.sort, state.stableOrder)));
     }
 
@@ -183,10 +183,10 @@ class PerfReportRowsTest {
         PerfReportData report = report(List.of(), List.of(), List.of(alice, bob));
 
         assertEquals(List.of("Bob(4, 65, 6)", "Alice(4, 65, 6)"),
-                labels(PerfReportRows.players(report, PerfReportRows.SortKey.P98, Set.of(), Map.of())));
+                labels(PerfReportRows.players(report, PerfReportRows.SortKey.MAX, Set.of(), Map.of())));
 
         List<PerfReportRows.Row> expanded = PerfReportRows.players(
-                report, PerfReportRows.SortKey.P98, Set.of("owner:PLAYER:alice"), Map.of());
+                report, PerfReportRows.SortKey.MAX, Set.of("owner:PLAYER:alice"), Map.of());
         assertEquals(List.of("Bob(4, 65, 6)", "Alice(4, 65, 6)",
                 "LoaderA(8, 64, 9)", "screen.serverwarashi.profiler.source.self"), labels(expanded));
         assertEquals(List.of(0, 0, 1, 1), expanded.stream().map(PerfReportRows.Row::depth).toList());
@@ -308,11 +308,11 @@ class PerfReportRowsTest {
         return new PerfReportData.Position(dimension, x, y, z);
     }
 
-    private static PerfReportData.Metric metric(double mspt, double p98) {
-        return new PerfReportData.Metric(mspt, p98, 10);
+    private static PerfReportData.Metric metric(double mspt, double max) {
+        return new PerfReportData.Metric(mspt, max, 10);
     }
 
-    private static PerfReportData.Metric metric(double mspt, double p98, long samples) {
-        return new PerfReportData.Metric(mspt, p98, samples);
+    private static PerfReportData.Metric metric(double mspt, double max, long samples) {
+        return new PerfReportData.Metric(mspt, max, samples);
     }
 }

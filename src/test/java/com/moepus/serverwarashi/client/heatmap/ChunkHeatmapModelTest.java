@@ -2,10 +2,13 @@ package com.moepus.serverwarashi.client.heatmap;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
+import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
+import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChunkHeatmapModelTest {
+    private static final WeakEntityType COW =
+            new WeakEntityType(WeakEntityType.Kind.ENTITY, "minecraft:cow");
+    private static final WeakEntityType COBBLESTONE =
+            new WeakEntityType(WeakEntityType.Kind.ITEM, "minecraft:cobblestone");
     @Test
     void skipsOnlyWhenBothMetricsAreBelowThreshold() {
         assertFalse(ChunkHeatmapModel.shouldRender(metric(0.499D, 2.999D)));
@@ -29,6 +36,59 @@ class ChunkHeatmapModelTest {
         assertEquals(0x88F44336, ChunkHeatmapModel.color(metric(2.0D, 12.0D)));
         assertEquals(0xA0BE2DDC, ChunkHeatmapModel.color(metric(4.0D, 24.0D)));
         assertEquals(0xA0BE2DDC, ChunkHeatmapModel.color(metric(40.0D, 240.0D)));
+    }
+
+    @Test
+    void interpolatesWeakEntityRiskAcrossAllColorStops() {
+        assertEquals(0x60FFD640, ChunkHeatmapModel.weakColor(50));
+        assertEquals(0x68FFB430, ChunkHeatmapModel.weakColor(125));
+        assertEquals(0x70FF9120, ChunkHeatmapModel.weakColor(200));
+        assertEquals(0x7CFA6A2B, ChunkHeatmapModel.weakColor(275));
+        assertEquals(0x88F44336, ChunkHeatmapModel.weakColor(350));
+        assertEquals(0x94D93889, ChunkHeatmapModel.weakColor(425));
+        assertEquals(0xA0BE2DDC, ChunkHeatmapModel.weakColor(500));
+    }
+
+    @Test
+    void combinesWeakAndPerformanceContributionsBeforeChoosingColor() {
+        PerfReportData.Metric yellowPerformance = metric(0.5D, 3.0D);
+        assertEquals(0x70FF9120, ChunkHeatmapModel.combinedColor(yellowPerformance, 50));
+
+        WeakChunkSnapshot weak = weakSnapshot("minecraft:overworld", 1, 2, 50);
+        HeatmapViewport coverage = new HeatmapViewport(16, 32, 16, 16);
+        var plan = ChunkHeatmapModel.applyWeakChunks(ChunkHeatmapModel.build(
+                report(List.of(chunk("minecraft:overworld", 1, 2, yellowPerformance))),
+                "minecraft:overworld", coverage), weak, "minecraft:overworld", coverage);
+        assertEquals(0x70FF9120, plan.quads().getFirst().argb());
+        assertEquals(50, plan.hoverAt(1, 2).weakEntityCount());
+        assertEquals(Map.of(COW, 50), plan.hoverAt(1, 2).entityTypeCounts());
+    }
+
+    @Test
+    void ignoresWeakSnapshotFromAnotherDimension() {
+        var plan = ChunkHeatmapModel.applyWeakChunks(ChunkHeatmapModel.Plan.EMPTY,
+                weakSnapshot("minecraft:the_nether", 1, 2, 50), "minecraft:overworld",
+                new HeatmapViewport(16, 32, 16, 16));
+        assertEquals(0, plan.vertexCount());
+    }
+
+    @Test
+    void rendersWarningsBeyondSinglePayloadLimit() {
+        List<WeakChunkSnapshot.ChunkEntry> warnings = new ArrayList<>();
+        for (int index = 0; index < 9; index++) {
+            int count = index == 8 ? 2_000 : 50;
+            warnings.add(new WeakChunkSnapshot.ChunkEntry(index, 0, count,
+                    Map.of(COBBLESTONE, count)));
+        }
+
+        var plan = ChunkHeatmapModel.applyWeakChunks(ChunkHeatmapModel.Plan.EMPTY, warnings,
+                "minecraft:overworld", "minecraft:overworld");
+
+        assertEquals(9, plan.quads().size());
+        assertEquals(2_000, plan.hoverAt(8, 0).weakEntityCount());
+        assertEquals(0xA0BE2DDC, plan.quads().stream()
+                .filter(quad -> quad.chunkX() == 8 && quad.chunkZ() == 0)
+                .findFirst().orElseThrow().argb());
     }
 
     @Test
@@ -121,6 +181,37 @@ class ChunkHeatmapModelTest {
     }
 
     @Test
+    void derivesOneIconForEachConnectedPositionlessLoaderArea() {
+        var ftb = loaderAt(new LoaderFixture("ftb-source", "FTB Chunks", "minecraft:overworld",
+                null),
+                new PerfReportData.LoaderRegion(0, 0, 1, 3),
+                new PerfReportData.LoaderRegion(1, 2, 2, 1),
+                new PerfReportData.LoaderRegion(5, -2, 1, 1));
+
+        var plan = ChunkHeatmapModel.build(report(List.of(), List.of(ftb)),
+                "minecraft:overworld", new HeatmapViewport(-64, -64, 192, 192));
+
+        assertEquals(List.of(
+                new ChunkHeatmapModel.LoaderIcon("ftb-source", "FTB Chunks", 8, null, 24),
+                new ChunkHeatmapModel.LoaderIcon("ftb-source", "FTB Chunks", 88, null, -24)),
+                plan.icons());
+        assertTrue(plan.icons().stream().allMatch(ChunkHeatmapModel.LoaderIcon::derivedFromRegion));
+    }
+
+    @Test
+    void marksOnlyLoaderRegionEdgesAsPossibleWeakChunks() {
+        var loader = loader("loader-1", "test:chunk_loader",
+                new PerfReportData.LoaderRegion(2, 3, 2, 1));
+        var plan = ChunkHeatmapModel.build(report(List.of(), List.of(loader)),
+                "minecraft:overworld", new HeatmapViewport(32, 48, 32, 16));
+
+        assertEquals(13, plan.weakEdgeMaskAt(2, 3));
+        assertEquals(14, plan.weakEdgeMaskAt(3, 3));
+        assertTrue(plan.hoverAt(2, 3).possibleWeak());
+        assertTrue(plan.hoverAt(3, 3).possibleWeak());
+    }
+
+    @Test
     void keepsIconScreenSizeUntilMapIsVerySmall() {
         assertEquals(7.0F, ChunkHeatmapRenderer.iconHalfWorld(1.0F));
         assertEquals(14.0F, ChunkHeatmapRenderer.iconHalfWorld(0.5F));
@@ -194,8 +285,8 @@ class ChunkHeatmapModelTest {
         assertFalse(coverage.contains(new HeatmapViewport(450, -50, 100, 80)));
     }
 
-    private static PerfReportData.Metric metric(double mspt, double p98) {
-        return new PerfReportData.Metric(mspt, p98, 1L);
+    private static PerfReportData.Metric metric(double mspt, double max) {
+        return new PerfReportData.Metric(mspt, max, 1L);
     }
 
     private static PerfReportData.ChunkEntry chunk(String dimension, int x, int z,
@@ -211,6 +302,11 @@ class ChunkHeatmapModelTest {
                                          List<PerfReportData.LoaderSourceEntry> loaderSources) {
         return new PerfReportData(10.0D, 1_000L, 123L, 20L, 10L, 1_000,
                 0, 0, 0, 0, chunks, List.of(), List.of(), loaderSources);
+    }
+
+    private static WeakChunkSnapshot weakSnapshot(String dimension, int x, int z, int count) {
+        return new WeakChunkSnapshot(dimension, 1L, List.of(
+                new WeakChunkSnapshot.ChunkEntry(x, z, count, Map.of(COW, count))));
     }
 
     private static PerfReportData.LoaderSourceEntry loader(

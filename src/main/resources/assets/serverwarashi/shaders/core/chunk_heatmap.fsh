@@ -6,6 +6,7 @@ uniform int Pass;
 in vec2 localCoord;
 in vec4 vertexColor;
 in float glowRadiusPixels;
+in float weakEdgeMask;
 
 out vec4 fragColor;
 
@@ -24,6 +25,45 @@ float loaderEdgeOpacity() {
             log2(max(1.0 / max(MapScale, 0.0001), 1.0)));
     float loaderWeight = (1.0 - heatWeight) * zoomOut;
     return mix(1.0, ZOOMED_OUT_LOADER_EDGE_ALPHA, loaderWeight);
+}
+
+void applyWeakHatch(inout vec3 color, inout float alpha);
+
+float indicatorCoverage(float distance) {
+    float edge = max(fwidth(distance) * 1.15, 0.006);
+    return 1.0 - smoothstep(-edge, edge, distance);
+}
+
+vec4 indicatorLayer(vec3 color, float alpha) {
+    return vec4(color * alpha, alpha);
+}
+
+vec4 indicatorOver(vec4 under, vec4 upper) {
+    return upper + under * (1.0 - upper.a);
+}
+
+void renderIndicator() {
+    vec2 point = localCoord;
+    float horizontal = abs(point.x);
+    float curve = 0.32 - 0.38 * point.x * point.x;
+    float taper = 1.0 - smoothstep(0.62, 0.98, horizontal);
+    float halfWidth = 0.045 + 0.115 * taper;
+    float stroke = abs(point.y - curve) - halfWidth;
+    float shape = max(stroke, horizontal - 0.94);
+    float glow = (1.0 - smoothstep(0.02, 0.30, max(shape, 0.0)))
+            * vertexColor.a * 0.24;
+    float outline = indicatorCoverage(shape - 0.055) * vertexColor.a * 0.86;
+    float fill = indicatorCoverage(shape) * vertexColor.a;
+    float highlight = smoothstep(-0.10, 0.16, point.y - curve) * 0.30;
+    vec3 base = vertexColor.rgb;
+    vec3 face = mix(base * 0.82, mix(base, vec3(1.0), 0.40), highlight);
+    vec4 color = indicatorLayer(base, glow);
+    color = indicatorOver(color, indicatorLayer(vec3(0.045, 0.012, 0.070), outline));
+    color = indicatorOver(color, indicatorLayer(face, fill));
+    if (color.a <= 0.002) {
+        discard;
+    }
+    fragColor = color;
 }
 
 void renderGlow(float distancePixels) {
@@ -50,10 +90,31 @@ void renderBody(float distancePixels) {
     color = mix(color, vec3(0.025, 0.035, 0.045), darkEdge * 0.92);
     float edgeAlpha = max(brightEdge * 0.78, darkEdge * 0.88) * loaderEdgeOpacity();
     float alpha = max(vertexColor.a, edgeAlpha);
+    applyWeakHatch(color, alpha);
     if (alpha <= 0.001) {
         discard;
     }
     fragColor = vec4(color * alpha, alpha);
+}
+
+void applyWeakHatch(inout vec3 color, inout float alpha) {
+    if (weakEdgeMask < 0.5) {
+        return;
+    }
+    float west = mod(floor(weakEdgeMask), 2.0);
+    float east = mod(floor(weakEdgeMask / 2.0), 2.0);
+    float north = mod(floor(weakEdgeMask / 4.0), 2.0);
+    float south = mod(floor(weakEdgeMask / 8.0), 2.0);
+    float edge = 0.0;
+    edge = max(edge, west * (1.0 - smoothstep(-0.95, -0.72, localCoord.x)));
+    edge = max(edge, east * smoothstep(0.72, 0.95, localCoord.x));
+    edge = max(edge, north * (1.0 - smoothstep(-0.95, -0.72, localCoord.y)));
+    edge = max(edge, south * smoothstep(0.72, 0.95, localCoord.y));
+    float distanceToStripe = abs(fract((localCoord.x + localCoord.y) * 3.2) - 0.5);
+    float stripe = 1.0 - smoothstep(0.07, 0.18, distanceToStripe);
+    float hatch = edge * stripe * 0.72;
+    color = mix(color, vec3(0.82, 0.96, 1.0), hatch);
+    alpha = max(alpha, hatch * 0.72);
 }
 
 void renderHover(float distancePixels) {
@@ -71,6 +132,10 @@ void renderHover(float distancePixels) {
 }
 
 void main() {
+    if (Pass == 3) {
+        renderIndicator();
+        return;
+    }
     float distancePixels = boxDistancePixels();
     if (Pass == 0) {
         renderGlow(distancePixels);

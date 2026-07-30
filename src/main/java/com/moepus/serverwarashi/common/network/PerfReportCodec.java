@@ -289,7 +289,7 @@ public final class PerfReportCodec {
 
     private static void writeMetric(RegistryFriendlyByteBuf buffer, PerfReportData.Metric metric) {
         buffer.writeDouble(metric.mspt());
-        buffer.writeDouble(metric.p98());
+        buffer.writeDouble(metric.max());
         buffer.writeVarLong(metric.samples());
     }
 

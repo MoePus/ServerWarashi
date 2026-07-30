@@ -38,4 +38,5 @@ public final class ChunkHeatmapShaders {
     static ShaderInstance iconShader() {
         return iconShader;
     }
+
 }

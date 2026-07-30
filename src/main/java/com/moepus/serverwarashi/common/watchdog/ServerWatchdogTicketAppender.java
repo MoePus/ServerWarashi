@@ -1,4 +1,4 @@
-package com.moepus.serverwarashi.common.mixin.watchdog;
+package com.moepus.serverwarashi.common.watchdog;
 
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
 import com.moepus.serverwarashi.common.core.owner.TicketOwner;
@@ -12,11 +12,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
-final class ServerWatchdogTicketAppender {
+public final class ServerWatchdogTicketAppender {
     private ServerWatchdogTicketAppender() {
     }
 
-    static void appendTicketInfoToReport(CrashReport report, Iterable<ServerLevel> levels) {
+    public static void appendTicketInfoToReport(CrashReport report, Iterable<ServerLevel> levels) {
         try {
             CrashReportCategory category = report.addCategory("ServerWarashi Ticket Info");
             List<WatchdogTicketFormatter.Dimension> dimensions = new ArrayList<>();

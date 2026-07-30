@@ -3,19 +3,17 @@ package com.moepus.serverwarashi.common.core.owner;
 import com.moepus.serverwarashi.common.core.ticket.TicketScanService;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -35,6 +33,7 @@ public final class PerfAttributionSnapshot {
             new Source("unknown", "Unknown", null), 0, 0);
     private final Map<ChunkKey, List<Bucket>> byChunk;
     private final List<Bucket> buckets;
+    private volatile LoaderPlan reportLoaderPlan;
 
     private PerfAttributionSnapshot(Map<ChunkKey, List<Bucket>> byChunk) {
         this.byChunk = Map.copyOf(byChunk);
@@ -45,13 +44,35 @@ public final class PerfAttributionSnapshot {
     }
 
     public static PerfAttributionSnapshot capture(MinecraftServer server) {
+        return captureWithFingerprint(server).snapshot();
+    }
+
+    public static Capture captureWithFingerprint(MinecraftServer server) {
+        Map<ChunkKey, Set<Bucket>> expanded = new HashMap<>();
+        TicketTopologyFingerprint fingerprint = new TicketTopologyFingerprint();
+        for (ServerLevel level : server.getAllLevels()) {
+            fingerprint.addDimension(level);
+            captureLevel(level, expanded, fingerprint);
+        }
+        return new Capture(fromExpanded(expanded), fingerprint.value());
+    }
+
+    public static PerfAttributionSnapshot captureLoaderLayout(MinecraftServer server) {
         Map<ChunkKey, Set<Bucket>> expanded = new HashMap<>();
         for (ServerLevel level : server.getAllLevels()) {
-            captureLevel(level, expanded);
+            captureLoaderLevel(level, expanded);
         }
+        return fromExpanded(expanded);
+    }
+
+    private static PerfAttributionSnapshot fromExpanded(Map<ChunkKey, Set<Bucket>> expanded) {
         Map<ChunkKey, List<Bucket>> result = new HashMap<>();
         expanded.forEach((chunk, buckets) -> result.put(chunk, List.copyOf(buckets)));
         return new PerfAttributionSnapshot(withChunkCounts(result));
+    }
+
+    public static long ticketFingerprint(MinecraftServer server) {
+        return TicketTopologyFingerprint.capture(server);
     }
 
     public static PerfAttributionSnapshot create(String dimension, Map<Long, List<Bucket>> chunks) {
@@ -85,20 +106,54 @@ public final class PerfAttributionSnapshot {
                 new LoaderRegionPlanner.Options(sourceLimit, regionLimit, maxRegionSpan));
     }
 
+    public LoaderPlan reportLoaderPlan() {
+        LoaderPlan cached = reportLoaderPlan;
+        if (cached != null) {
+            return cached;
+        }
+        cached = loaderPlan(PerfReportLimits.MAX_LOADER_SOURCES,
+                PerfReportLimits.MAX_LOADER_REGIONS, PerfReportLimits.MAX_LOADER_REGION_SPAN);
+        reportLoaderPlan = cached;
+        return cached;
+    }
+
     private static boolean isLoaderSource(Bucket bucket) {
         return bucket.owner.kind == PerfReportData.AttributionKind.LOADER
                 || bucket.owner.kind == PerfReportData.AttributionKind.PLAYER
                 && !"self".equals(bucket.source.id);
     }
 
-    private static void captureLevel(ServerLevel level, Map<ChunkKey, Set<Bucket>> output) {
+    private static void captureLevel(ServerLevel level,
+                                     Map<ChunkKey, Set<Bucket>> output,
+                                     TicketTopologyFingerprint fingerprint) {
         String dimension = level.dimension().location().toString();
         TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
+            fingerprint.addTickets(chunkPos, tickets);
             for (Ticket<?> ticket : tickets) {
                 if (!TicketUtils.asPauseable(ticket).serverWarashi$isPaused()) {
                     resolve(level, chunkPos, ticket).forEach(
                             bucket -> addInfluence(output, dimension, chunkPos, bucket));
                 }
+            }
+        });
+    }
+
+    private static void captureLoaderLevel(ServerLevel level, Map<ChunkKey, Set<Bucket>> output) {
+        String dimension = level.dimension().location().toString();
+        TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
+            for (Ticket<?> ticket : tickets) {
+                if (TicketUtils.asPauseable(ticket).serverWarashi$isPaused()) {
+                    continue;
+                }
+                List<Bucket> c2meBuckets = C2meNoTickAttribution.resolve(level, chunkPos, ticket);
+                if (c2meBuckets != null) {
+                    c2meBuckets.forEach(bucket -> addInfluence(output, dimension, chunkPos, bucket));
+                    continue;
+                }
+                var forced = TicketOwnerResolver.readForcedOwner(
+                        TicketUtils.asPauseable(ticket).serverWarashi$getKey());
+                forced.ifPresent(owner -> addInfluence(output, dimension, chunkPos,
+                        forcedBucket(level, owner, ticket)));
             }
         });
     }
@@ -116,7 +171,11 @@ public final class PerfAttributionSnapshot {
     private static List<Bucket> resolve(ServerLevel level, long chunkPos, Ticket<?> ticket) {
         String typeName = ticket.getType().toString();
         if (ticket.getType() == TicketType.PLAYER) {
-            return selfBuckets(level, chunkPos);
+            return PlayerAttribution.selfBuckets(level, chunkPos);
+        }
+        List<Bucket> c2meBuckets = C2meNoTickAttribution.resolve(level, chunkPos, ticket);
+        if (c2meBuckets != null) {
+            return c2meBuckets;
         }
         var forced = TicketOwnerResolver.readForcedOwner(
                 TicketUtils.asPauseable(ticket).serverWarashi$getKey());
@@ -129,23 +188,16 @@ public final class PerfAttributionSnapshot {
         return List.of(unknownBucket(level, ticket, typeName));
     }
 
-    private static List<Bucket> selfBuckets(ServerLevel level, long chunkPos) {
-        ChunkPos pos = new ChunkPos(chunkPos);
-        List<Bucket> buckets = new ArrayList<>();
-        for (ServerPlayer player : level.players()) {
-            if (player.getChunkTrackingView().contains(pos.x, pos.z)) {
-                buckets.add(new Bucket(playerOwner(player), new Source("self", "Self", null), 0, 0));
-            }
-        }
-        return buckets.isEmpty() ? List.of(UNKNOWN) : buckets;
-    }
-
     private static Bucket forcedBucket(ServerLevel level,
                                        TicketOwnerResolver.ForcedOwner forced,
                                        Ticket<?> ticket) {
+        Bucket ftbBucket = FtbForcedChunkAttribution.resolve(level, forced, ticket).orElse(null);
+        if (ftbBucket != null) {
+            return ftbBucket;
+        }
         Loader loader = loader(level, forced);
         Owner resolved = forced.owner() instanceof UUID uuid
-                ? playerOwnerForEntity(level, uuid)
+                ? PlayerAttribution.forEntity(level, uuid)
                 : UNKNOWN_OWNER;
         String sourceId = level.dimension().location() + ":" + forced.id() + ":" + forced.owner();
         Owner owner = resolved.kind() == PerfReportData.AttributionKind.PLAYER
@@ -181,37 +233,6 @@ public final class PerfAttributionSnapshot {
     private static Owner loaderOwner(String id, Loader loader) {
         return new Owner(PerfReportData.AttributionKind.LOADER, id, loader.name,
                 false, 0L, loader.position);
-    }
-
-    private static Owner playerOwnerForEntity(ServerLevel level, UUID entityId) {
-        Entity entity = level.getEntity(entityId);
-        if (entity instanceof ServerPlayer player) {
-            return playerOwner(player);
-        }
-        if (entity instanceof OwnableEntity ownable && ownable.getOwnerUUID() != null) {
-            return knownPlayerOwner(level.getServer(), ownable.getOwnerUUID());
-        }
-        if (entity == null && level.getServer().getProfileCache().get(entityId).isPresent()) {
-            return knownPlayerOwner(level.getServer(), entityId);
-        }
-        return UNKNOWN_OWNER;
-    }
-
-    private static Owner knownPlayerOwner(MinecraftServer server, UUID playerId) {
-        ServerPlayer online = server.getPlayerList().getPlayer(playerId);
-        if (online != null) {
-            return playerOwner(online);
-        }
-        String name = server.getProfileCache().get(playerId)
-                .map(profile -> profile.getName()).orElse(playerId.toString());
-        return new Owner(PerfReportData.AttributionKind.PLAYER, playerId.toString(), name,
-                false, PlayerLoginTime.fromCache(server, playerId), null);
-    }
-
-    private static Owner playerOwner(ServerPlayer player) {
-        return new Owner(PerfReportData.AttributionKind.PLAYER, player.getUUID().toString(),
-                player.getName().getString(), true, 0L,
-                position(player.serverLevel(), player.blockPosition()));
     }
 
     private static Bucket systemBucket(ServerLevel level, Ticket<?> ticket, String typeName) {
@@ -265,6 +286,9 @@ public final class PerfAttributionSnapshot {
     private static boolean isVanillaSystem(TicketType<?> type) {
         return type == TicketType.START || type == TicketType.DRAGON || type == TicketType.PORTAL
                 || type == TicketType.POST_TELEPORT || type == TicketType.UNKNOWN;
+    }
+
+    public record Capture(PerfAttributionSnapshot snapshot, long ticketFingerprint) {
     }
 
     public record Position(String dimension, int x, int y, int z) {
@@ -333,4 +357,5 @@ public final class PerfAttributionSnapshot {
 
     private record Loader(String name, Position position) {
     }
+
 }

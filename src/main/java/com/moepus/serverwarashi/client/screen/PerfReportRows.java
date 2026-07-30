@@ -227,7 +227,7 @@ final class PerfReportRows {
 
     enum SortKey {
         MSPT(row -> row.metric().mspt()),
-        P98(row -> row.metric().p98()),
+        MAX(row -> row.metric().max()),
         SAMPLES(row -> row.metric().samples()),
         CHUNKS(Row::chunkCount),
         ENTITIES(Row::entityCount),

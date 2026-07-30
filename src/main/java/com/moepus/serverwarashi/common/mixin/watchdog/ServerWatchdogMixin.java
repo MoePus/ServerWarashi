@@ -2,6 +2,7 @@ package com.moepus.serverwarashi.common.mixin.watchdog;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.moepus.serverwarashi.common.watchdog.ServerWatchdogTicketAppender;
 import net.minecraft.CrashReport;
 import net.minecraft.ReportType;
 import net.minecraft.server.dedicated.DedicatedServer;
