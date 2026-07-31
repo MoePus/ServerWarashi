@@ -1,6 +1,7 @@
 #version 150
 
 in vec2 localCoord;
+in float loaderWorking;
 
 out vec4 fragColor;
 
@@ -47,6 +48,12 @@ void main() {
 
     if (color.a <= 0.001) {
         discard;
+    }
+    if (loaderWorking < 0.5) {
+        vec3 straightColor = color.rgb / max(color.a, 0.001);
+        float luminance = dot(straightColor, vec3(0.2126, 0.7152, 0.0722));
+        vec3 neutral = mix(vec3(0.25), vec3(0.72), clamp(luminance, 0.0, 1.0));
+        color.rgb = neutral * color.a;
     }
     fragColor = color;
 }

@@ -50,5 +50,17 @@
   "screen.serverwarashi.heatmap.loader_position": "坐标：%s, %s, %s",
   "screen.serverwarashi.heatmap.clear": "清除分析",
   "gui.serverwarashi.weak_clear": "清除：%1$s",
-  "gui.serverwarashi.weak_clear_confirm": "确认清除：%1$s"
+  "gui.serverwarashi.weak_clear_confirm": "确认清除：%1$s",
+  "screen.serverwarashi.heatmap.loader_working": "状态：工作中",
+  "screen.serverwarashi.heatmap.loader_inactive": "状态：未工作",
+  "gui.serverwarashi.loader_freeze": "冻结：%1$s",
+  "gui.serverwarashi.loader_unfreeze": "解冻：%1$s",
+  "gui.serverwarashi.loader_control_more": "另有 %s 个加载器操作",
+  "message.serverwarashi.loader_control.frozen": "已冻结加载器 %s",
+  "message.serverwarashi.loader_control.unfrozen": "已解冻加载器 %s",
+  "message.serverwarashi.loader_control.unchanged": "加载器 %s 已经是该状态",
+  "message.serverwarashi.loader_control.stale": "加载器 %s 的报告已过期，请刷新后重试",
+  "message.serverwarashi.loader_control.missing": "加载器 %s 已没有匹配的 ticket",
+  "message.serverwarashi.loader_control.unsupported": "加载器 %s 不支持控制",
+  "message.serverwarashi.loader_control.denied": "你没有控制加载器 %s 的权限"
 }

@@ -2,10 +2,14 @@ package com.moepus.serverwarashi.common.modules.performance.report;
 
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
+import java.util.Objects;
 
-public record PerfReportData(double serverMspt,
+public record PerfReportData(long reportId,
+                             double serverMspt,
                              long elapsedMillis,
                              long generatedAtEpochMillis,
                              long tickCount,
@@ -20,6 +24,9 @@ public record PerfReportData(double serverMspt,
                              List<OwnerEntry> owners,
                              List<LoaderSourceEntry> loaderSources) {
     public PerfReportData {
+        if (reportId < 0L) {
+            throw new IllegalArgumentException("Report ID must be non-negative");
+        }
         if (omittedChunks < 0 || omittedTickables < 0
                 || omittedOwnerSources < 0 || omittedLoaderSources < 0) {
             throw new IllegalArgumentException("Omitted report counts must be non-negative");
@@ -39,17 +46,43 @@ public record PerfReportData(double serverMspt,
                           int omittedChunks,
                           int omittedTickables,
                           int omittedOwnerSources,
+                          int omittedLoaderSources,
+                          List<ChunkEntry> chunks,
+                          List<TickableEntry> tickables,
+                          List<OwnerEntry> owners,
+                          List<LoaderSourceEntry> loaderSources) {
+        this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
+                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
+                omittedLoaderSources, chunks, tickables, owners, loaderSources);
+    }
+
+    public PerfReportData(double serverMspt,
+                          long elapsedMillis,
+                          long generatedAtEpochMillis,
+                          long tickCount,
+                          long totalSamples,
+                          int intervalMicros,
+                          int omittedChunks,
+                          int omittedTickables,
+                          int omittedOwnerSources,
                           List<ChunkEntry> chunks,
                           List<TickableEntry> tickables,
                           List<OwnerEntry> owners) {
-        this(serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples, intervalMicros,
+        this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples, intervalMicros,
                 omittedChunks, omittedTickables, omittedOwnerSources, 0,
                 chunks, tickables, owners, List.of());
     }
 
     public static PerfReportData empty(int intervalMicros) {
-        return new PerfReportData(0.0D, 0L, 0L, 0L, 0L, intervalMicros,
-                0, 0, 0, List.of(), List.of(), List.of());
+        return new PerfReportData(0L, 0.0D, 0L, 0L, 0L, 0L, intervalMicros,
+                0, 0, 0, 0, List.of(), List.of(), List.of(), List.of());
+    }
+
+    public PerfReportData withLoaderSources(List<LoaderSourceEntry> nextLoaderSources) {
+        return loaderSources.equals(nextLoaderSources) ? this : new PerfReportData(
+                reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
+                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
+                omittedLoaderSources, chunks, tickables, owners, nextLoaderSources);
     }
 
     public record Metric(double mspt, double max, long samples) {
@@ -63,12 +96,33 @@ public record PerfReportData(double serverMspt,
                                     String loaderName,
                                     LoaderPosition position,
                                     int omittedRegions,
-                                    List<LoaderRegion> regions) {
+                                    List<LoaderRegion> regions,
+                                    LoaderControl control) {
         public LoaderSourceEntry {
             if (omittedRegions < 0) {
                 throw new IllegalArgumentException("Omitted loader region count must be non-negative");
             }
             regions = List.copyOf(regions);
+        }
+
+        public LoaderSourceEntry(String dimension, String sourceId, String loaderName,
+                                 LoaderPosition position, int omittedRegions, List<LoaderRegion> regions) {
+            this(dimension, sourceId, loaderName, position, omittedRegions, regions, null);
+        }
+
+        public LoaderSourceEntry withControl(LoaderControl nextControl) {
+            return Objects.equals(control, nextControl) ? this : new LoaderSourceEntry(
+                    dimension, sourceId, loaderName, position, omittedRegions, regions, nextControl);
+        }
+    }
+
+    public record LoaderControl(ResourceLocation controllerId,
+                                BlockPos ownerPos,
+                                boolean manuallyFrozen,
+                                boolean working) {
+        public LoaderControl {
+            controllerId = Objects.requireNonNull(controllerId, "controllerId");
+            ownerPos = Objects.requireNonNull(ownerPos, "ownerPos").immutable();
         }
     }
 

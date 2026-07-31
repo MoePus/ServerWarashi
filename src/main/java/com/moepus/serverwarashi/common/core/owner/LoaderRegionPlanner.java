@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.core.owner;
 
+import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderRef;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
@@ -116,7 +117,8 @@ final class LoaderRegionPlanner {
     }
 
     record SourceKey(String dimension, String sourceId, String loaderName,
-                     PerfAttributionSnapshot.Position position) {
+                     PerfAttributionSnapshot.Position position,
+                     BlockLoaderRef loaderRef) {
         private static final Comparator<SourceKey> ORDER = Comparator
                 .comparingLong((SourceKey key) -> Integer.toUnsignedLong(key.sourceId.hashCode()))
                 .thenComparing(SourceKey::dimension)
@@ -147,7 +149,8 @@ final class LoaderRegionPlanner {
 
         PerfAttributionSnapshot.LoaderSource build() {
             return new PerfAttributionSnapshot.LoaderSource(key.dimension, key.sourceId, key.loaderName,
-                    key.position, regions.size() - selectedCount, regions.subList(0, selectedCount));
+                    key.position, regions.size() - selectedCount, regions.subList(0, selectedCount),
+                    key.loaderRef, null);
         }
     }
 

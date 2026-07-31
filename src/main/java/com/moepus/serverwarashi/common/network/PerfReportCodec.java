@@ -19,6 +19,7 @@ public final class PerfReportCodec {
 
     private static void write(RegistryFriendlyByteBuf buffer, PerfReportData report) {
         EntryBudget budget = new EntryBudget();
+        buffer.writeVarLong(report.reportId());
         buffer.writeDouble(report.serverMspt());
         buffer.writeVarLong(report.elapsedMillis());
         buffer.writeVarLong(report.generatedAtEpochMillis());
@@ -32,11 +33,12 @@ public final class PerfReportCodec {
         writeList(buffer, report.chunks(), PerfReportCodec::writeChunk, budget);
         writeList(buffer, report.tickables(), PerfReportCodec::writeTickable, budget);
         writeList(buffer, report.owners(), PerfReportCodec::writeOwner, budget);
-        writeLoaderSources(buffer, report.loaderSources(), budget);
+        PerfLoaderReportCodec.write(buffer, report.loaderSources(), budget);
     }
 
     private static PerfReportData read(RegistryFriendlyByteBuf buffer) {
         EntryBudget budget = new EntryBudget();
+        long reportId = buffer.readVarLong();
         double serverMspt = buffer.readDouble();
         long elapsedMillis = buffer.readVarLong();
         long generatedAtEpochMillis = buffer.readVarLong();
@@ -50,91 +52,10 @@ public final class PerfReportCodec {
         List<PerfReportData.ChunkEntry> chunks = readList(buffer, PerfReportCodec::readChunk, budget);
         List<PerfReportData.TickableEntry> tickables = readList(buffer, PerfReportCodec::readTickable, budget);
         List<PerfReportData.OwnerEntry> owners = readList(buffer, PerfReportCodec::readOwner, budget);
-        List<PerfReportData.LoaderSourceEntry> loaders = readLoaderSources(buffer, budget);
-        return new PerfReportData(serverMspt, elapsedMillis, generatedAtEpochMillis,
+        List<PerfReportData.LoaderSourceEntry> loaders = PerfLoaderReportCodec.read(buffer, budget);
+        return new PerfReportData(reportId, serverMspt, elapsedMillis, generatedAtEpochMillis,
                 tickCount, totalSamples, intervalMicros, omittedChunks, omittedTickables,
                 omittedOwnerSources, omittedLoaderSources, chunks, tickables, owners, loaders);
-    }
-
-    private static void writeLoaderSources(RegistryFriendlyByteBuf buffer,
-                                           List<PerfReportData.LoaderSourceEntry> sources,
-                                           EntryBudget budget) {
-        requireSize(sources.size(), PerfReportLimits.MAX_LOADER_SOURCES, "loader source");
-        budget.claimEntries(sources.size());
-        buffer.writeVarInt(sources.size());
-        for (PerfReportData.LoaderSourceEntry source : sources) {
-            writeString(buffer, source.dimension(), budget);
-            writeString(buffer, source.sourceId(), budget);
-            writeString(buffer, source.loaderName(), budget);
-            writeLoaderPosition(buffer, source.position());
-            buffer.writeVarInt(source.omittedRegions());
-            writeLoaderRegions(buffer, source.regions(), budget);
-        }
-    }
-
-    private static List<PerfReportData.LoaderSourceEntry> readLoaderSources(
-            RegistryFriendlyByteBuf buffer, EntryBudget budget) {
-        int size = readSize(buffer, PerfReportLimits.MAX_LOADER_SOURCES, "loader source", budget);
-        List<PerfReportData.LoaderSourceEntry> sources = new ArrayList<>(size);
-        for (int index = 0; index < size; index++) {
-            String dimension = readString(buffer, budget);
-            String sourceId = readString(buffer, budget);
-            String loaderName = readString(buffer, budget);
-            PerfReportData.LoaderPosition position = readLoaderPosition(buffer);
-            int omittedRegions = buffer.readVarInt();
-            sources.add(new PerfReportData.LoaderSourceEntry(dimension, sourceId, loaderName, position,
-                    omittedRegions, readLoaderRegions(buffer, budget)));
-        }
-        return List.copyOf(sources);
-    }
-
-    private static void writeLoaderRegions(RegistryFriendlyByteBuf buffer,
-                                           List<PerfReportData.LoaderRegion> regions,
-                                           EntryBudget budget) {
-        requireSize(regions.size(), PerfReportLimits.MAX_LOADER_REGIONS, "loader region");
-        budget.claimLoaderRegions(regions.size());
-        budget.claimEntries(regions.size());
-        buffer.writeVarInt(regions.size());
-        regions.forEach(region -> writeLoaderRegion(buffer, region));
-    }
-
-    private static List<PerfReportData.LoaderRegion> readLoaderRegions(
-            RegistryFriendlyByteBuf buffer, EntryBudget budget) {
-        int size = readSize(buffer, PerfReportLimits.MAX_LOADER_REGIONS, "loader region", budget);
-        budget.claimLoaderRegions(size);
-        List<PerfReportData.LoaderRegion> regions = new ArrayList<>(size);
-        for (int index = 0; index < size; index++) {
-            regions.add(readLoaderRegion(buffer));
-        }
-        return List.copyOf(regions);
-    }
-
-    private static void writeLoaderRegion(RegistryFriendlyByteBuf buffer, PerfReportData.LoaderRegion region) {
-        buffer.writeInt(region.minChunkX());
-        buffer.writeInt(region.minChunkZ());
-        buffer.writeVarInt(region.width());
-        buffer.writeVarInt(region.height());
-    }
-
-    private static PerfReportData.LoaderRegion readLoaderRegion(RegistryFriendlyByteBuf buffer) {
-        return new PerfReportData.LoaderRegion(
-                buffer.readInt(), buffer.readInt(), buffer.readVarInt(), buffer.readVarInt());
-    }
-
-    private static void writeLoaderPosition(RegistryFriendlyByteBuf buffer,
-                                            PerfReportData.LoaderPosition position) {
-        buffer.writeBoolean(position != null);
-        if (position != null) {
-            buffer.writeInt(position.x());
-            buffer.writeInt(position.y());
-            buffer.writeInt(position.z());
-        }
-    }
-
-    private static PerfReportData.LoaderPosition readLoaderPosition(RegistryFriendlyByteBuf buffer) {
-        return buffer.readBoolean()
-                ? new PerfReportData.LoaderPosition(buffer.readInt(), buffer.readInt(), buffer.readInt())
-                : null;
     }
 
     private static void writeChunk(RegistryFriendlyByteBuf buffer,
@@ -276,12 +197,12 @@ public final class PerfReportCodec {
                 : null;
     }
 
-    private static void writeString(RegistryFriendlyByteBuf buffer, String value, EntryBudget budget) {
+    static void writeString(RegistryFriendlyByteBuf buffer, String value, EntryBudget budget) {
         budget.claimString(value);
         buffer.writeUtf(value, PerfReportLimits.MAX_STRING_LENGTH);
     }
 
-    private static String readString(RegistryFriendlyByteBuf buffer, EntryBudget budget) {
+    static String readString(RegistryFriendlyByteBuf buffer, EntryBudget budget) {
         String value = buffer.readUtf(PerfReportLimits.MAX_STRING_LENGTH);
         budget.claimString(value);
         return value;
@@ -318,17 +239,17 @@ public final class PerfReportCodec {
         return List.copyOf(result);
     }
 
-    private static int readSize(RegistryFriendlyByteBuf buffer,
-                                int maximum,
-                                String label,
-                                EntryBudget budget) {
+    static int readSize(RegistryFriendlyByteBuf buffer,
+                        int maximum,
+                        String label,
+                        EntryBudget budget) {
         int size = buffer.readVarInt();
         requireSize(size, maximum, label);
         budget.claimEntries(size);
         return size;
     }
 
-    private static void requireSize(int size, int maximum, String label) {
+    static void requireSize(int size, int maximum, String label) {
         if (size < 0 || size > maximum) {
             throw new IllegalArgumentException("Invalid " + label + " list size: " + size);
         }
@@ -342,7 +263,7 @@ public final class PerfReportCodec {
         return values[ordinal];
     }
 
-    private static final class EntryBudget {
+    static final class EntryBudget {
         private int entries;
         private int loaderRegions;
         private int stringChars;

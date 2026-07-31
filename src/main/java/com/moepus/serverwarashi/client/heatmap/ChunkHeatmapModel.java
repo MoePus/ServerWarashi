@@ -6,6 +6,7 @@ import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,6 +24,7 @@ public final class ChunkHeatmapModel {
     private static final int MAX_SOURCES_PER_CHUNK = 4;
     private static final HeatmapColorStop LOADER_GREEN = new HeatmapColorStop(36, 64, 220, 120);
     private static final HeatmapColorStop LOADER_CYAN = new HeatmapColorStop(48, 45, 220, 235);
+    static final int INACTIVE_LOADER_COLOR = 0x385C6268;
     private static final HeatmapColorStop[] COLORS = {
             new HeatmapColorStop(96, 255, 214, 64),
             new HeatmapColorStop(112, 255, 145, 32),
@@ -98,26 +100,30 @@ public final class ChunkHeatmapModel {
                 continue;
             }
             PerfReportData.LoaderPosition position = source.position();
+            boolean working = isWorking(source);
             if (position != null && coverage.containsPoint(position.x(), position.z())) {
                 result.add(new LoaderIcon(source.sourceId(), source.loaderName(),
-                        position.x(), position.y(), position.z()));
+                        position.x(), position.y(), position.z(), working, source.control() != null));
                 continue;
             }
             if (position == null) {
-                addRegionIcons(result, source, coverage);
+                addRegionIcons(result, source, coverage, working);
             }
         }
+        result.sort(Comparator.comparing(LoaderIcon::working));
         return List.copyOf(result);
     }
 
     private static void addRegionIcons(List<LoaderIcon> result,
                                        PerfReportData.LoaderSourceEntry source,
-                                       HeatmapViewport coverage) {
+                                       HeatmapViewport coverage,
+                                       boolean working) {
         for (LoaderRegionIcons.Anchor anchor : LoaderRegionIcons.anchors(source.regions())) {
             int x = (anchor.chunkX() << 4) + 8;
             int z = (anchor.chunkZ() << 4) + 8;
             if (coverage.containsPoint(x, z)) {
-                result.add(new LoaderIcon(source.sourceId(), source.loaderName(), x, null, z));
+                result.add(new LoaderIcon(source.sourceId(), source.loaderName(), x, null, z,
+                        working, source.control() != null));
             }
         }
     }
@@ -135,7 +141,8 @@ public final class ChunkHeatmapModel {
             if (!dimension.equals(source.dimension())) {
                 continue;
             }
-            LoaderSource loader = new LoaderSource(source.sourceId(), source.loaderName());
+            LoaderSource loader = new LoaderSource(source.sourceId(), source.loaderName(),
+                    isWorking(source), source.control() != null);
             for (PerfReportData.LoaderRegion region : source.regions()) {
                 addLoaderRegion(loader, region, context);
                 if (context.budget.exhausted) {
@@ -256,13 +263,25 @@ public final class ChunkHeatmapModel {
         return LOADER_GREEN.interpolate(LOADER_CYAN, amount);
     }
 
+    private static boolean isWorking(PerfReportData.LoaderSourceEntry source) {
+        return source.control() == null || source.control().working();
+    }
+
     public record Quad(int chunkX, int chunkZ, int argb) {
     }
 
-    public record LoaderSource(String id, String name) {
+    public record LoaderSource(String id, String name, boolean working, boolean controllable) {
+        public LoaderSource(String id, String name) {
+            this(id, name, true, false);
+        }
     }
 
-    public record LoaderIcon(String id, String name, int x, Integer y, int z) {
+    public record LoaderIcon(String id, String name, int x, Integer y, int z,
+                             boolean working, boolean controllable) {
+        public LoaderIcon(String id, String name, int x, Integer y, int z) {
+            this(id, name, x, y, z, true, false);
+        }
+
         public boolean derivedFromRegion() {
             return y == null;
         }
@@ -330,6 +349,7 @@ public final class ChunkHeatmapModel {
         private List<PerfReportData.ObjectCount> topBlockEntities = List.of();
         private int weakEdgeMask;
         private int omittedLoaderSources;
+        private boolean hasWorkingLoader;
 
         private Cell(int chunkX, int chunkZ, int argb) {
             this.chunkX = chunkX;
@@ -338,6 +358,7 @@ public final class ChunkHeatmapModel {
         }
 
         void addLoader(LoaderSource loader) {
+            hasWorkingLoader |= loader.working();
             if (loaderSources.containsKey(loader.id())) {
                 return;
             }
@@ -349,7 +370,13 @@ public final class ChunkHeatmapModel {
         }
 
         int color() {
-            return metric != null && shouldRender(metric) ? ChunkHeatmapModel.color(metric) : argb;
+            if (metric != null && shouldRender(metric)) {
+                return ChunkHeatmapModel.color(metric);
+            }
+            if (!loaderSources.isEmpty() || omittedLoaderSources > 0) {
+                return hasWorkingLoader ? loaderColor(metric) : INACTIVE_LOADER_COLOR;
+            }
+            return argb;
         }
     }
 
@@ -362,7 +389,9 @@ public final class ChunkHeatmapModel {
                 return false;
             }
             long key = ChunkPos.asLong(chunkX, chunkZ);
-            loaderChunks.add(key);
+            if (loader.working()) {
+                loaderChunks.add(key);
+            }
             Cell cell = cells.get(key);
             if (cell == null) {
                 if (cells.size() >= MAX_LOADER_QUADS) {

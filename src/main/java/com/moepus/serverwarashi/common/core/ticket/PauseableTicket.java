@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.common.core.ticket;
 import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 
 public interface PauseableTicket {
+    int PAUSE_REASON_MANUAL = 1;
     int PAUSE_REASON_AUTO = 2;
     int PAUSE_REASON_IDLE = 4;
 

@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "create_power_loader:andesite_chunk_loader",
+      "required": false
+    },
+    {
+      "id": "create_power_loader:brass_chunk_loader",
+      "required": false
+    }
+  ]
+}

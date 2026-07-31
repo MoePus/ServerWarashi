@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 @EventBusSubscriber(modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class WarashiNetwork {
-    static final String NETWORK_VERSION = "2";
+    static final String NETWORK_VERSION = "3";
 
     private WarashiNetwork() {
     }
@@ -28,6 +28,8 @@ public final class WarashiNetwork {
                         (payload, context) -> ClientPayloadHandlers.handlePerfReport(payload))
                 .playToClient(WeakChunkPayload.TYPE, WeakChunkPayload.STREAM_CODEC,
                         (payload, context) -> ClientPayloadHandlers.handleWeakChunks(payload))
+                .playToClient(LoaderControlStatePayload.TYPE, LoaderControlStatePayload.STREAM_CODEC,
+                        (payload, context) -> ClientPayloadHandlers.handleLoaderControl(payload))
                 .playToServer(PerfMapSubscriptionPayload.TYPE, PerfMapSubscriptionPayload.STREAM_CODEC,
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
@@ -49,6 +51,12 @@ public final class WarashiNetwork {
                             if (context.player() instanceof ServerPlayer player) {
                                 WeakChunkClearJobs.submit(player, new WeakChunkClearJobs.Request(
                                         payload.dimension(), payload.chunkX(), payload.chunkZ(), payload.target()));
+                            }
+                        })
+                .playToServer(LoaderFreezeActionPayload.TYPE, LoaderFreezeActionPayload.STREAM_CODEC,
+                        (payload, context) -> {
+                            if (context.player() instanceof ServerPlayer player) {
+                                LoaderFreezeDelivery.handle(player, payload);
                             }
                         });
     }
@@ -104,6 +112,11 @@ public final class WarashiNetwork {
                                       long sweepId,
                                       boolean sweepComplete) {
         PacketDistributor.sendToPlayer(player, new WeakChunkPayload(snapshot, sweepId, sweepComplete));
+    }
+
+    public static void sendLoaderControlState(
+            ServerPlayer player, LoaderControlStatePayload state) {
+        PacketDistributor.sendToPlayer(player, state);
     }
 
 }

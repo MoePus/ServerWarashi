@@ -11,13 +11,14 @@ import java.util.UUID;
 import java.util.function.IntSupplier;
 
 final class PerfSessionController {
-    private static final int TICKS_PER_SECOND = 20;
+    private static final long NANOS_PER_SECOND = 1_000_000_000L;
     private static final int TOPOLOGY_CHECK_TICKS = 5;
     private static final int ATTRIBUTION_REFRESH_TICKS = 20;
 
     private final IntSupplier sampleIntervalMicros;
     private ActiveSession active;
     private PerfReportData lastReport;
+    private PerfAttributionSnapshot lastAttribution;
     private long nextSessionId = 1L;
 
     PerfSessionController() {
@@ -44,13 +45,12 @@ final class PerfSessionController {
         if (active != null) {
             return false;
         }
-        PerfSamplerSession sampler = new PerfSamplerSession(
-                nextSessionId++, sampleIntervalMicros.getAsInt(), attribution);
+        long durationNanos = durationSeconds * NANOS_PER_SECOND;
+        PerfSamplerSession sampler = PerfSamplerSession.create(
+                nextSessionId++, sampleIntervalMicros.getAsInt(),
+                new PerfSamplerSession.Options(attribution, durationNanos));
         try {
-            sampler.start();
-            PerfWorkTracker.activate(Thread.currentThread());
-            active = new ActiveSession(durationSeconds * (long) TICKS_PER_SECOND,
-                    playerId, sampler, attribution);
+            active = new ActiveSession(playerId, sampler, attribution);
             return true;
         } catch (RuntimeException | Error exception) {
             PerfWorkTracker.deactivate();
@@ -71,6 +71,20 @@ final class PerfSessionController {
         }
     }
 
+    Completion onServerPaused() {
+        ActiveSession session = active;
+        if (session == null || !session.samplerStarted) {
+            return null;
+        }
+        if (session.sampler.pause()) {
+            PerfWorkTracker.deactivate();
+        }
+        if (!session.sampler.hasReachedDuration()) {
+            return null;
+        }
+        return new Completion(session.playerId, stopActive());
+    }
+
     Completion onServerTickPost(MinecraftServer server) {
         try {
             ActiveSession session = active;
@@ -81,7 +95,7 @@ final class PerfSessionController {
             PerfWorkTracker.clearCurrent();
             session.tickOpen = false;
             session.completedTicks++;
-            if (session.completedTicks < session.durationTicks) {
+            if (!session.sampler.hasReachedDuration()) {
                 return null;
             }
             return new Completion(session.playerId, stopActive());
@@ -109,11 +123,16 @@ final class PerfSessionController {
         return active == null ? lastReport : active.sampler.latestReport();
     }
 
+    PerfAttributionSnapshot currentAttribution() {
+        return active == null ? lastAttribution : active.attribution;
+    }
+
     boolean clearLastReport() {
         if (hasActiveSession()) {
             return false;
         }
         lastReport = null;
+        lastAttribution = null;
         return true;
     }
 
@@ -124,6 +143,7 @@ final class PerfSessionController {
             PerfWorkTracker.deactivate();
         }
         lastReport = null;
+        lastAttribution = null;
         nextSessionId = 1L;
     }
 
@@ -136,6 +156,7 @@ final class PerfSessionController {
         active = null;
         PerfWorkTracker.deactivate();
         lastReport = session.sampler.stop(retainInitialLayout);
+        lastAttribution = lastReport.reportId() == 0L ? null : session.attribution;
         return lastReport;
     }
 
@@ -158,6 +179,10 @@ final class PerfSessionController {
             session.ticketFingerprint = capture.ticketFingerprint();
             session.attributionComplete = true;
         }
+        if (!startOrResumeSampling(session)) {
+            session.tickOpen = true;
+            return;
+        }
         session.sampler.beginTick(session.attribution);
         session.tickOpen = true;
         if (session.completedTicks > 0
@@ -176,6 +201,24 @@ final class PerfSessionController {
         }
     }
 
+    private static boolean startOrResumeSampling(ActiveSession session) {
+        if (!session.samplerStarted) {
+            session.sampler.start();
+            session.samplerStarted = true;
+            PerfWorkTracker.activate(Thread.currentThread());
+            return true;
+        }
+        boolean resumed = session.sampler.resume();
+        if (session.sampler.hasReachedDuration()) {
+            PerfWorkTracker.deactivate();
+            return false;
+        }
+        if (resumed) {
+            PerfWorkTracker.activate(Thread.currentThread());
+        }
+        return true;
+    }
+
     private static boolean sameLoaderLayout(PerfAttributionSnapshot previous,
                                             PerfAttributionSnapshot next) {
         if (previous == null) {
@@ -188,20 +231,18 @@ final class PerfSessionController {
     }
 
     private static final class ActiveSession {
-        final long durationTicks;
         final UUID playerId;
         final PerfSamplerSession sampler;
         PerfAttributionSnapshot attribution;
         long ticketFingerprint = Long.MIN_VALUE;
         long completedTicks;
         boolean attributionComplete = true;
+        boolean samplerStarted;
         boolean tickOpen;
 
-        ActiveSession(long durationTicks,
-                      UUID playerId,
+        ActiveSession(UUID playerId,
                       PerfSamplerSession sampler,
                       PerfAttributionSnapshot attribution) {
-            this.durationTicks = durationTicks;
             this.playerId = playerId;
             this.sampler = sampler;
             this.attribution = attribution;

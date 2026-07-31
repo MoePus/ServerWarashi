@@ -4,6 +4,8 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -181,6 +183,40 @@ class ChunkHeatmapModelTest {
     }
 
     @Test
+    void rendersOnlyInactiveControlledLoadersInNeutralGray() {
+        var inactive = controlledLoader("inactive", false,
+                new PerfReportData.LoaderRegion(2, 3, 1, 1));
+
+        var plan = ChunkHeatmapModel.build(report(List.of(), List.of(inactive)),
+                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+
+        assertEquals(ChunkHeatmapModel.INACTIVE_LOADER_COLOR, plan.quads().getFirst().argb());
+        assertFalse(plan.hoverAt(2, 3).loaderSources().getFirst().working());
+        assertTrue(plan.hoverAt(2, 3).loaderSources().getFirst().controllable());
+        assertFalse(plan.icons().getFirst().working());
+        assertEquals(0, plan.weakEdgeMaskAt(2, 3));
+        assertFalse(plan.hoverAt(2, 3).possibleWeak());
+    }
+
+    @Test
+    void anyWorkingOrUnsupportedLoaderKeepsAnOverlapActive() {
+        var region = new PerfReportData.LoaderRegion(2, 3, 1, 1);
+        var inactive = controlledLoader("inactive", false, region);
+        var active = controlledLoader("active", true, region);
+        var unsupported = loader("unsupported", "Unsupported", region);
+
+        var controlledPlan = ChunkHeatmapModel.build(
+                report(List.of(), List.of(inactive, active)), "minecraft:overworld",
+                new HeatmapViewport(0, 0, 64, 64));
+        var unsupportedPlan = ChunkHeatmapModel.build(
+                report(List.of(), List.of(inactive, unsupported)), "minecraft:overworld",
+                new HeatmapViewport(0, 0, 64, 64));
+
+        assertEquals(ChunkHeatmapModel.loaderColor(null), controlledPlan.quads().getFirst().argb());
+        assertEquals(ChunkHeatmapModel.loaderColor(null), unsupportedPlan.quads().getFirst().argb());
+    }
+
+    @Test
     void derivesOneIconForEachConnectedPositionlessLoaderArea() {
         var ftb = loaderAt(new LoaderFixture("ftb-source", "FTB Chunks", "minecraft:overworld",
                 null),
@@ -304,6 +340,34 @@ class ChunkHeatmapModelTest {
                 0, 0, 0, 0, chunks, List.of(), List.of(), loaderSources);
     }
 
+    @Test
+    void keepsHeatColorWhenExpensiveChunkHasOnlyInactiveLoader() {
+        PerfReportData.Metric expensive = metric(1.0D, 0.0D);
+        var loader = controlledLoader("inactive", false,
+                new PerfReportData.LoaderRegion(2, 3, 1, 1));
+        var plan = ChunkHeatmapModel.build(
+                report(List.of(chunk("minecraft:overworld", 2, 3, expensive)), List.of(loader)),
+                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+
+        assertEquals(ChunkHeatmapModel.color(expensive), plan.quads().getFirst().argb());
+    }
+
+    @Test
+    void drawsAndSelectsWorkingIconAboveInactiveIconAtSamePosition() {
+        var active = controlledLoader("active", true,
+                new PerfReportData.LoaderRegion(2, 3, 1, 1));
+        var inactive = controlledLoader("inactive", false,
+                new PerfReportData.LoaderRegion(2, 3, 1, 1));
+        var plan = ChunkHeatmapModel.build(report(List.of(), List.of(active, inactive)),
+                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+
+        assertFalse(plan.icons().getFirst().working());
+        assertTrue(plan.icons().getLast().working());
+        var hovered = ChunkHeatmapRenderer.hoveredLoader(plan.icons(),
+                new ChunkHeatmapRenderer.Hover(40.5D, 56.5D, 2, 3), 1.0F);
+        assertEquals("active", hovered.id());
+    }
+
     private static WeakChunkSnapshot weakSnapshot(String dimension, int x, int z, int count) {
         return new WeakChunkSnapshot(dimension, 1L, List.of(
                 new WeakChunkSnapshot.ChunkEntry(x, z, count, Map.of(COW, count))));
@@ -319,6 +383,16 @@ class ChunkHeatmapModelTest {
             LoaderFixture fixture, PerfReportData.LoaderRegion... regions) {
         return new PerfReportData.LoaderSourceEntry(fixture.dimension, fixture.id, fixture.name,
                 fixture.position, 0, List.of(regions));
+    }
+
+    private static PerfReportData.LoaderSourceEntry controlledLoader(
+            String sourceId, boolean working, PerfReportData.LoaderRegion... regions) {
+        BlockPos owner = new BlockPos(40, 64, 56);
+        return new PerfReportData.LoaderSourceEntry(
+                "minecraft:overworld", sourceId, sourceId,
+                new PerfReportData.LoaderPosition(owner.getX(), owner.getY(), owner.getZ()),
+                0, List.of(regions), new PerfReportData.LoaderControl(
+                ResourceLocation.fromNamespaceAndPath("test", sourceId), owner, !working, working));
     }
 
     private record LoaderFixture(String id, String name, String dimension,

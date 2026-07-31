@@ -50,5 +50,17 @@
   "screen.serverwarashi.heatmap.loader_position": "Position: %s, %s, %s",
   "screen.serverwarashi.heatmap.clear": "Clear Perf",
   "gui.serverwarashi.weak_clear": "Clear: %1$s",
-  "gui.serverwarashi.weak_clear_confirm": "Confirm clearing: %1$s"
+  "gui.serverwarashi.weak_clear_confirm": "Confirm clearing: %1$s",
+  "screen.serverwarashi.heatmap.loader_working": "Status: working",
+  "screen.serverwarashi.heatmap.loader_inactive": "Status: not working",
+  "gui.serverwarashi.loader_freeze": "Freeze : %1$s",
+  "gui.serverwarashi.loader_unfreeze": "Unfreeze : %1$s",
+  "gui.serverwarashi.loader_control_more": "%s more loader controls",
+  "message.serverwarashi.loader_control.frozen": "Froze loader %s",
+  "message.serverwarashi.loader_control.unfrozen": "Unfroze loader %s",
+  "message.serverwarashi.loader_control.unchanged": "Loader %s was already in that state",
+  "message.serverwarashi.loader_control.stale": "The report for loader %s is stale; refresh it and try again",
+  "message.serverwarashi.loader_control.missing": "Loader %s no longer has a matching ticket",
+  "message.serverwarashi.loader_control.unsupported": "Loader %s cannot be controlled",
+  "message.serverwarashi.loader_control.denied": "You do not have permission to control loader %s"
 }

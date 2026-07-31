@@ -17,6 +17,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfSampleAggregatorTest {
     @Test
+    void usesObservedSampleDensityForEntityCost() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(10L);
+        TickSamples sampled = new TickSamples(null);
+        sampled.sample(new PerfWorkTracker.Snapshot(TickType.TASK, null, Runnable.class, null,
+                TickDetailKind.NONE, -1, false, 0, 0, 0, false, "server"));
+        sampled.durationNanos = 30_000_000_000L;
+        aggregator.accept(sampled);
+
+        PerfReportData report = aggregator.build(milliseconds(6_000L), 1L, 1_000);
+        assertEquals(30_000.0D, report.serverMspt(), 0.000_001D);
+        assertEquals(observedMillis(6_000L, 1), report.tickables().getFirst().metric().mspt(), 0.000_001D);
+    }
+
+    @Test
+    void countsOffTickAttemptsInGlobalSampleDensity() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(9L);
+        TickSamples sampled = new TickSamples(null);
+        sampled.sample(new PerfWorkTracker.Snapshot(TickType.TASK, null, Runnable.class, null,
+                TickDetailKind.NONE, -1, false, 0, 0, 0, false, "server"));
+        sampled.durationNanos = 20_000_000L;
+
+        aggregator.accept(sampled);
+
+        PerfReportData report = aggregator.build(milliseconds(2L), 2L, 1_000);
+        assertEquals(2L, report.totalSamples());
+        assertEquals(observedMillis(2L, 2), report.tickables().getFirst().metric().mspt(), 0.000_001D);
+    }
+
+    @Test
     void usesNeoForgeDurationAndIncludesZeroSampleTicks() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(1L);
         TickSamples sampled = new TickSamples(null);
@@ -29,11 +58,12 @@ class PerfSampleAggregatorTest {
         empty.durationNanos = 40_000_000L;
         aggregator.accept(empty);
 
-        var report = aggregator.build(100L, 1_000);
+        var report = aggregator.build(milliseconds(100L), 1L, 1_000);
         assertEquals(30.0D, report.serverMspt(), 0.000_001D);
         assertEquals(2L, report.tickCount());
         assertEquals(1L, report.totalSamples());
-        assertEquals(10.0D, report.tickables().getFirst().metric().mspt(), 0.000_001D);
+        assertEquals(observedMillis(100L, 1) / 2.0D,
+                report.tickables().getFirst().metric().mspt(), 0.000_001D);
         assertTrue(report.chunks().isEmpty());
     }
 
@@ -54,11 +84,15 @@ class PerfSampleAggregatorTest {
             aggregator.accept(quiet);
         }
 
-        PerfReportData report = aggregator.build(1_000L, 1_000);
+        PerfReportData report = aggregator.build(milliseconds(25L), 20L, 1_000);
+        double nanosPerSample = observedMillis(25L, 20) * 1_000_000.0D;
 
-        assertEquals(1.0D, report.tickables().getFirst().metric().mspt(), 0.000_001D);
-        assertEquals(19.5D, report.tickables().getFirst().metric().max(), 0.000_001D);
-        assertEquals(19.5D, report.chunks().getFirst().metric().max(), 0.000_001D);
+        assertEquals(20.0D * nanosPerSample / 1_000_000.0D / 20.0D,
+                report.tickables().getFirst().metric().mspt(), 0.000_001D);
+        assertEquals(19.5D * nanosPerSample / 1_000_000.0D,
+                report.tickables().getFirst().metric().max(), 0.000_001D);
+        assertEquals(19.5D * nanosPerSample / 1_000_000.0D,
+                report.chunks().getFirst().metric().max(), 0.000_001D);
     }
 
     @Test
@@ -77,7 +111,7 @@ class PerfSampleAggregatorTest {
             aggregator.accept(empty);
         }
 
-        var report = aggregator.build(50L, 1_000);
+        var report = aggregator.build(milliseconds(50L), 3L, 1_000);
         var chunk = report.chunks().getFirst();
         assertEquals(2, chunk.entityCount());
         assertEquals(1, chunk.blockEntityCount());
@@ -85,8 +119,11 @@ class PerfSampleAggregatorTest {
         assertEquals(2, chunk.topEntities().getFirst().count());
         assertEquals("Furnace", chunk.topBlockEntities().getFirst().className());
         assertEquals(1, chunk.topBlockEntities().getFirst().count());
-        assertEquals(25.0D, chunk.metric().max(), 0.000_001D);
-        assertEquals(2.414D, report.tickables().getFirst().metric().max(), 0.002D);
+        double nanosPerSample = observedMillis(50L, 3) * 1_000_000.0D;
+        assertEquals(2.5D * nanosPerSample / 1_000_000.0D, chunk.metric().max(), 0.000_001D);
+        assertEquals((1.0D + 2.0D * Math.sqrt(2.0D) + 1.0D) / 20.0D
+                        * nanosPerSample / 1_000_000.0D,
+                report.tickables().getFirst().metric().max(), 0.002D);
     }
 
     @Test
@@ -100,7 +137,7 @@ class PerfSampleAggregatorTest {
         sampled.durationNanos = 40_000_000L;
         aggregator.accept(sampled);
 
-        var report = aggregator.build(50L, 1_000);
+        var report = aggregator.build(milliseconds(50L), 0L, 1_000);
         long cowCoordinates = report.tickables().stream()
                 .filter(entry -> entry.type() == TickType.ENTITY && entry.className().equals("Cow"))
                 .count();
@@ -123,7 +160,7 @@ class PerfSampleAggregatorTest {
         PerfOwnerAggregator aggregator = new PerfOwnerAggregator();
         aggregator.updateMetadata(PerfAttributionSnapshot.create("test:level", chunks));
 
-        PerfOwnerAggregator.Build build = aggregator.build(1L);
+        PerfOwnerAggregator.Build build = aggregator.build(1L, 1_250_000.0D);
 
         assertTrue(build.entries().size() <= PerfReportLimits.MAX_ENTRIES);
         assertEquals(PerfReportLimits.MAX_LOADER_SOURCES, build.loaderSources().size());
@@ -154,7 +191,7 @@ class PerfSampleAggregatorTest {
         sampled.durationNanos = 1_000_000L;
         aggregator.accept(sampled);
 
-        var report = aggregator.build(50L, 1_000);
+        var report = aggregator.build(milliseconds(50L), 0L, 1_000);
         var chunk = report.chunks().getFirst();
         assertEquals(List.of("Cow", "Pig", "ItemEntityMarker"),
                 chunk.topEntities().stream().map(PerfReportData.ObjectCount::className).toList());
@@ -183,7 +220,7 @@ class PerfSampleAggregatorTest {
         sampled.durationNanos = 1_000_000L;
         aggregator.accept(sampled);
 
-        var report = aggregator.build(50L, 1_000);
+        var report = aggregator.build(milliseconds(50L), 0L, 1_000);
         var entity = report.tickables().stream()
                 .filter(entry -> entry.type() == TickType.ENTITY).findFirst().orElseThrow();
 
@@ -213,17 +250,18 @@ class PerfSampleAggregatorTest {
 
         PerfSampleAggregator aggregator = new PerfSampleAggregator(4L);
         aggregator.accept(tick);
-        PerfReportData report = aggregator.build(50L, 1_000);
+        PerfReportData report = aggregator.build(milliseconds(50L), 1L, 1_000);
+        double expectedMspt = observedMillis(50L, 1);
         PerfReportData.OwnerEntry result = report.owners().getFirst();
         Map<String, PerfReportData.OwnerSourceEntry> sources = result.sources().stream()
                 .collect(java.util.stream.Collectors.toMap(PerfReportData.OwnerSourceEntry::name, entry -> entry));
 
         assertEquals(2, result.chunkCount());
-        assertEquals(20.0D, result.metric().mspt(), 0.000_001D);
+        assertEquals(expectedMspt, result.metric().mspt(), 0.000_001D);
         assertEquals(2, sources.get("Self").chunkCount());
         assertEquals(1, sources.get("LoaderA").chunkCount());
-        assertEquals(20.0D, sources.get("Self").metric().mspt(), 0.000_001D);
-        assertEquals(20.0D, sources.get("LoaderA").metric().mspt(), 0.000_001D);
+        assertEquals(expectedMspt, sources.get("Self").metric().mspt(), 0.000_001D);
+        assertEquals(expectedMspt, sources.get("LoaderA").metric().mspt(), 0.000_001D);
         assertEquals(List.of(new PerfReportData.LoaderSourceEntry(
                         "test:level", "loader", "LoaderA",
                         new PerfReportData.LoaderPosition(8, 64, 9), 0,
@@ -243,12 +281,14 @@ class PerfSampleAggregatorTest {
 
         PerfSampleAggregator aggregator = new PerfSampleAggregator(7L);
         aggregator.accept(tick);
-        PerfReportData report = aggregator.build(50L, 1_000);
+        PerfReportData report = aggregator.build(milliseconds(50L), 1L, 1_000);
+        double expectedMspt = observedMillis(50L, 1);
 
         assertEquals(20.0D, report.serverMspt(), 0.000_001D);
         assertEquals(2, report.owners().size());
-        assertTrue(report.owners().stream().allMatch(owner -> owner.metric().mspt() == 20.0D));
-        assertEquals(40.0D, report.owners().stream()
+        assertTrue(report.owners().stream()
+                .allMatch(owner -> owner.metric().mspt() == expectedMspt));
+        assertEquals(expectedMspt * 2.0D, report.owners().stream()
                 .mapToDouble(owner -> owner.metric().mspt()).sum(), 0.000_001D);
     }
 
@@ -257,6 +297,15 @@ class PerfSampleAggregatorTest {
                 PerfReportData.AttributionKind.PLAYER, id, name, true, 0L, null);
         return new PerfAttributionSnapshot.Bucket(owner,
                 new PerfAttributionSnapshot.Source("self", "Self", null), 0, 0);
+    }
+
+    private static double observedMillis(long elapsedMillis, long attempts) {
+        return SampleDensity.nanosPerAttempt(elapsedMillis * 1_000_000L, attempts, 1_000)
+                / 1_000_000.0D;
+    }
+
+    private static long milliseconds(long value) {
+        return value * 1_000_000L;
     }
 
     private static void sampleEntities(TickSamples samples, Class<?> type, int firstId, int count) {

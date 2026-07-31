@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,6 +33,31 @@ class PerfWorkTrackerTest {
         assertEquals(OuterTask.class, PerfWorkTracker.snapshot().workClass());
         assertTrue(PerfWorkTracker.exit(TickType.TASK));
         assertNull(PerfWorkTracker.snapshot());
+    }
+
+    @Test
+    void samplerThreadObservesWorkPublishedByServerThread() throws InterruptedException {
+        TestEventLoop eventLoop = new TestEventLoop();
+        PerfSamplerSession session = PerfSamplerSession.create(
+                2L, 100, PerfSamplerSession.Options.unlimited(null));
+        PerfWorkTracker.activate(Thread.currentThread());
+        session.start();
+        session.beginTick(null);
+        boolean stopped = false;
+        try {
+            assertTrue(PerfWorkTracker.enterTask(eventLoop, new OuterTask()));
+            Thread.sleep(250L);
+            assertTrue(PerfWorkTracker.exit(TickType.TASK));
+            session.endTick(250_000_000L);
+
+            var report = session.stop();
+            stopped = true;
+            assertFalse(report.tickables().isEmpty());
+        } finally {
+            if (!stopped) {
+                session.stop();
+            }
+        }
     }
 
     private static final class TestEventLoop extends BlockableEventLoop<Runnable> {

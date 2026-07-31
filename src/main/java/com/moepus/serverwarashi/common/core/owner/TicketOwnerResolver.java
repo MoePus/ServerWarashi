@@ -2,7 +2,7 @@ package com.moepus.serverwarashi.common.core.owner;
 
 import com.moepus.serverwarashi.common.core.ticket.PauseableTicket;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
-import com.mojang.logging.LogUtils;
+import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderTicketResolver;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,23 +11,15 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
-import org.slf4j.Logger;
 
-import java.lang.reflect.Field;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 一次性解析 ticket owner 身份与展示信息。
  */
 public final class TicketOwnerResolver {
-    private static final Logger LOGGER = LogUtils.getLogger();
-    private static final String NEOFORGE_FORCED_TICKET_OWNER_CLASS =
-            "net.neoforged.neoforge.common.world.chunk.ForcedChunkManager$TicketOwner";
-    private static final ConcurrentHashMap<Class<?>, Optional<ForcedOwnerAccess>> FORCED_OWNER_ACCESS_CACHE =
-            new ConcurrentHashMap<>();
     public static final String UNKNOWN_ENTITY = "Unknown entity";
     private static final String WORLD_START = "world_start";
     private static final long OWNER_CACHE_TTL_TICKS = 100L;
@@ -110,10 +102,8 @@ public final class TicketOwnerResolver {
     }
 
     static Optional<ForcedOwner> readForcedOwner(Object key) {
-        if (key == null) {
-            return Optional.empty();
-        }
-        return forcedOwnerAccess(key.getClass()).map(access -> access.read(key));
+        return BlockLoaderTicketResolver.readOwner(key)
+                .map(owner -> new ForcedOwner(owner.controllerId(), owner.owner()));
     }
 
     static Optional<ServerPlayer> nearestPlayer(ServerLevel level, Object key) {
@@ -130,30 +120,6 @@ public final class TicketOwnerResolver {
         return new TicketOwnerKey(typeName, playerName);
     }
 
-    private static Optional<ForcedOwnerAccess> forcedOwnerAccess(Class<?> type) {
-        return FORCED_OWNER_ACCESS_CACHE.computeIfAbsent(type, TicketOwnerResolver::createForcedOwnerAccess);
-    }
-
-    private static Optional<ForcedOwnerAccess> createForcedOwnerAccess(Class<?> type) {
-        if (!NEOFORGE_FORCED_TICKET_OWNER_CLASS.equals(type.getName())) {
-            return Optional.empty();
-        }
-        try {
-            Field idField = type.getDeclaredField("id");
-            Field ownerField = type.getDeclaredField("owner");
-            idField.setAccessible(true);
-            ownerField.setAccessible(true);
-            return Optional.of(new ForcedOwnerAccess(idField, ownerField));
-        } catch (NoSuchFieldException | SecurityException e) {
-            LOGGER.warn(
-                    "Unable to access NeoForge forced chunk ticket owner fields on {}",
-                    type.getName(),
-                    e
-            );
-            return Optional.empty();
-        }
-    }
-
     private static TicketOwnerKey nonPlayerKey(Ticket<?> ticket, Object rawKey, String typeName) {
         if (ticket.getType() == TicketType.START) {
             return new TicketOwnerKey(typeName, WORLD_START);
@@ -166,20 +132,5 @@ public final class TicketOwnerResolver {
     }
 
     record ForcedOwner(Object id, Object owner) {
-    }
-
-    private record ForcedOwnerAccess(Field idField, Field ownerField) {
-        ForcedOwner read(Object key) {
-            try {
-                return new ForcedOwner(idField.get(key), ownerField.get(key));
-            } catch (IllegalAccessException | RuntimeException e) {
-                LOGGER.warn(
-                        "Unable to read NeoForge forced chunk ticket owner values from {}",
-                        key.getClass().getName(),
-                        e
-                );
-                return new ForcedOwner(null, key);
-            }
-        }
     }
 }

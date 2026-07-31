@@ -4,25 +4,24 @@ import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTrac
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
-import org.mixinlite.injector.InjectLite;
+import org.mixinlite.injector.MethodScope;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(value = ServerLevel.class, remap = false)
 public abstract class ServerLevelChunkTickMixin {
-    @InjectLite(method = "tickChunk(Lnet/minecraft/world/level/chunk/LevelChunk;I)V", at = @At("HEAD"))
-    private void serverWarashi$beforeChunkTick(LevelChunk chunk, int randomTickSpeed) {
-        if (!PerfWorkTracker.isProfiling) {
-            return;
-        }
-        PerfWorkTracker.enterChunk((ServerLevel) (Object) this, chunk);
+    @MethodScope(
+            method = "tickChunk(Lnet/minecraft/world/level/chunk/LevelChunk;I)V",
+            exit = "serverWarashi$exitChunkTick",
+            remap = false
+    )
+    private boolean serverWarashi$enterChunkTick(LevelChunk chunk) {
+        return PerfWorkTracker.isProfiling
+                && PerfWorkTracker.enterChunk((ServerLevel) (Object) this, chunk);
     }
 
-    @InjectLite(method = "tickChunk(Lnet/minecraft/world/level/chunk/LevelChunk;I)V", at = @At("RETURN"))
-    private void serverWarashi$afterChunkTick(LevelChunk chunk, int randomTickSpeed) {
-        if (!PerfWorkTracker.isProfiling) {
-            return;
+    private void serverWarashi$exitChunkTick(boolean entered) {
+        if (entered) {
+            PerfWorkTracker.exit(TickType.CHUNK);
         }
-        PerfWorkTracker.exit(TickType.CHUNK);
     }
 }

@@ -23,6 +23,7 @@ public final class WarashiCommands {
         var root = Commands.literal("warashi")
                 .requires(ADMIN_PERMISSION);
         TicketPerfCommands.register(root);
+        LoaderPolicyCommands.register(root);
         // 把装配好的根节点注册进全局命令派发器
         dispatcher.register(root);
     }

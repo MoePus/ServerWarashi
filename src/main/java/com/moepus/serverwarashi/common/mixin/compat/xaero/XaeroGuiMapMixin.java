@@ -2,6 +2,7 @@ package com.moepus.serverwarashi.common.mixin.compat.xaero;
 
 import com.mojang.logging.LogUtils;
 import com.moepus.serverwarashi.client.compat.xaero.XaeroHeatmapOverlay;
+import com.moepus.serverwarashi.client.compat.xaero.XaeroLoaderFreezeMenu;
 import com.moepus.serverwarashi.client.compat.xaero.XaeroPerfControls;
 import com.moepus.serverwarashi.client.compat.xaero.XaeroWeakChunkClearMenu;
 import net.minecraft.client.gui.GuiGraphics;
@@ -65,6 +66,7 @@ public abstract class XaeroGuiMapMixin {
         }
         try {
             XaeroWeakChunkClearMenu.addOption((GuiMap) (Object) this, callback.getReturnValue());
+            XaeroLoaderFreezeMenu.addOptions((GuiMap) (Object) this, callback.getReturnValue());
         } catch (Throwable throwable) {
             serverwarashi$disable("right-click menu", throwable);
         }

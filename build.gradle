@@ -62,9 +62,15 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
+        loaderTester {
+            client()
+            gameDirectory = project.file('run-loader-tester')
+            programArguments.addAll '--username', 'LoaderTester'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
         server {
             server()
-            programArgument '--nogui'
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 

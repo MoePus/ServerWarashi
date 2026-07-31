@@ -76,6 +76,7 @@ public final class PerfReportDelivery {
     public static void tick(MinecraftServer server,
                             PerfReportData report,
                             boolean profiling) {
+        LoaderFreezeDelivery.publishQueued(server);
         if (VIEWERS.isEmpty() || report == null || !profiling) {
             resetPushClock();
             return;

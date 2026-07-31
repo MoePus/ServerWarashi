@@ -3,79 +3,152 @@ package com.moepus.serverwarashi.common.modules.performance.sampling;
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 
-import java.util.ArrayDeque;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.SplittableRandom;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.LongSupplier;
 
 public final class PerfSamplerSession {
     private static final int REPORT_INTERVAL_TICKS = 20;
     private static final int TICKABLE_ENTRY_KIND = 1;
     private static final int CHUNK_ENTRY_KIND = 1 << 1;
-    private final Object lock = new Object();
-    private final Queue<TickSamples> closedTicks = new ArrayDeque<>();
+    // stateLock guards clock/currentTick/attempts; aggregationLock guards report construction.
+    // Acquire them separately so neither lock is ever nested inside the other.
+    private final Object stateLock = new Object();
+    private final Object aggregationLock = new Object();
+    private final Queue<TickSamples> closedTicks = new ConcurrentLinkedQueue<>();
     private final PerfSampleAggregator aggregator;
     private final int intervalMicros;
+    private final long durationNanos;
     private final SplittableRandom intervalRandom;
-    private final long startedAtNanos;
+    private final AnalysisClock analysisClock;
     private final Thread samplerThread;
+    private final WindowsTimerResolution timerResolution = new WindowsTimerResolution();
     private volatile PerfReportData latestReport;
     private volatile TickSamples currentTick;
+    private long sampleAttempts;
     private long acceptedTicks;
     private int publishedEntryKinds;
-    private boolean reportRefreshRequested;
-    private volatile boolean running = true;
 
-    public PerfSamplerSession(long sessionId,
-                              int intervalMicros,
-                              PerfAttributionSnapshot initialAttribution) {
+    public static PerfSamplerSession create(long sessionId,
+                                            int intervalMicros,
+                                            Options options) {
+        return new PerfSamplerSession(sessionId, intervalMicros, options);
+    }
+
+    private PerfSamplerSession(long sessionId,
+                               int intervalMicros,
+                               Options options) {
+        Objects.requireNonNull(options, "options");
         if (intervalMicros <= 0) {
             throw new IllegalArgumentException("Sample interval must be positive");
         }
         this.intervalMicros = intervalMicros;
+        durationNanos = options.durationNanos();
         aggregator = new PerfSampleAggregator(sessionId);
-        startedAtNanos = System.nanoTime();
-        latestReport = initialAttribution == null
+        analysisClock = new AnalysisClock(options.nanoTime());
+        latestReport = options.initialAttribution() == null
                 ? PerfReportData.empty(intervalMicros)
-                : aggregator.buildLoaderLayoutOnly(initialAttribution, intervalMicros);
-        intervalRandom = new SplittableRandom(sessionId ^ startedAtNanos);
+                : aggregator.buildLoaderLayoutOnly(options.initialAttribution(), intervalMicros);
+        intervalRandom = new SplittableRandom(sessionId ^ options.nanoTime().getAsLong());
         samplerThread = new Thread(this::runSampler, "ServerWarashi-PerfSampler");
         samplerThread.setDaemon(true);
     }
 
+    public record Options(PerfAttributionSnapshot initialAttribution,
+                          long durationNanos,
+                          LongSupplier nanoTime) {
+        public Options(PerfAttributionSnapshot initialAttribution, long durationNanos) {
+            this(initialAttribution, durationNanos, System::nanoTime);
+        }
+
+        public static Options unlimited(PerfAttributionSnapshot initialAttribution) {
+            return new Options(initialAttribution, Long.MAX_VALUE);
+        }
+
+        public Options {
+            if (durationNanos <= 0L) {
+                throw new IllegalArgumentException("Analysis duration must be positive");
+            }
+            Objects.requireNonNull(nanoTime, "nanoTime");
+        }
+    }
+
     public void start() {
-        samplerThread.start();
+        synchronized (stateLock) {
+            analysisClock.start();
+        }
+        try {
+            samplerThread.start();
+        } catch (RuntimeException | Error exception) {
+            synchronized (stateLock) {
+                analysisClock.stop();
+            }
+            throw exception;
+        }
+    }
+
+    public boolean pause() {
+        Measurement measurement;
+        synchronized (stateLock) {
+            if (!analysisClock.pause()) {
+                return false;
+            }
+            measurement = measurementLocked();
+        }
+        LockSupport.unpark(samplerThread);
+        flushCurrentReport(measurement);
+        return true;
+    }
+
+    public boolean resume() {
+        boolean changed;
+        synchronized (stateLock) {
+            changed = analysisClock.resume();
+        }
+        if (changed) {
+            LockSupport.unpark(samplerThread);
+        }
+        return changed;
+    }
+
+    public boolean hasReachedDuration() {
+        synchronized (stateLock) {
+            return analysisClock.elapsedNanos() >= durationNanos;
+        }
     }
 
     public void beginTick(PerfAttributionSnapshot attribution) {
-        synchronized (lock) {
+        synchronized (stateLock) {
+            if (analysisClock.state() != AnalysisClock.State.RUNNING) {
+                throw new IllegalStateException("Cannot begin a tick while sampling is not running");
+            }
             currentTick = new TickSamples(attribution);
         }
-        LockSupport.unpark(samplerThread);
     }
 
     public void updateAttribution(PerfAttributionSnapshot attribution, boolean refreshReport) {
-        synchronized (lock) {
-            if (currentTick != null) {
-                currentTick.attribution = attribution;
-            }
-            if (refreshReport) {
-                reportRefreshRequested = true;
+        synchronized (stateLock) {
+            TickSamples tick = currentTick;
+            if (tick != null) {
+                tick.attribution = attribution;
+                tick.refreshReport |= refreshReport;
             }
         }
     }
 
     public void endTick(long durationNanos) {
-        synchronized (lock) {
+        synchronized (stateLock) {
             TickSamples tick = currentTick;
             if (tick == null) {
                 return;
             }
             tick.durationNanos = durationNanos;
-            closedTicks.add(tick);
             currentTick = null;
+            closedTicks.add(tick);
         }
-        LockSupport.unpark(samplerThread);
     }
 
     public PerfReportData stop() {
@@ -83,16 +156,21 @@ public final class PerfSamplerSession {
     }
 
     public PerfReportData stop(boolean retainInitialLayout) {
-        synchronized (lock) {
+        Measurement measurement;
+        synchronized (stateLock) {
             currentTick = null;
+            analysisClock.stop();
+            measurement = measurementLocked();
         }
-        running = false;
         LockSupport.unpark(samplerThread);
         joinSampler();
-        if (acceptedTicks > 0L) {
-            latestReport = aggregator.build(elapsedMillis(), intervalMicros);
-        } else if (!retainInitialLayout) {
-            latestReport = PerfReportData.empty(intervalMicros);
+        synchronized (aggregationLock) {
+            drainClosedTicks(measurement);
+            if (acceptedTicks > 0L) {
+                latestReport = buildReport(measurement);
+            } else if (!retainInitialLayout) {
+                latestReport = PerfReportData.empty(intervalMicros);
+            }
         }
         return latestReport;
     }
@@ -103,79 +181,66 @@ public final class PerfSamplerSession {
 
     private void runSampler() {
         long intervalNanos = intervalMicros * 1_000L;
-        while (running) {
-            if (!hasSamplingWork()) {
-                LockSupport.park();
-                continue;
-            }
-            drainClosedTicks();
-            TickSamples expected = currentTick;
-            if (expected == null
-                    || !waitForDelay(initialDelay(intervalNanos, intervalRandom.nextLong()), expected)) {
-                continue;
-            }
-            while (running && currentTick == expected) {
-                sampleCurrent(expected);
-                long delay = jitteredDelay(intervalNanos, intervalRandom.nextLong());
-                if (!waitForDelay(delay, expected)) {
-                    break;
+        try {
+            while (true) {
+                SamplerStatus status = sampleCurrent();
+                drainClosedTicksIfPresent();
+                if (status == SamplerStatus.STOPPED) {
+                    return;
                 }
+                if (status == SamplerStatus.IDLE) {
+                    timerResolution.disable();
+                    LockSupport.park();
+                    continue;
+                }
+                timerResolution.enable();
+                waitForNextAttempt(jitteredDelay(intervalNanos, intervalRandom.nextLong()));
             }
-        }
-        drainClosedTicks();
-    }
-
-    private boolean hasSamplingWork() {
-        synchronized (lock) {
-            return currentTick != null || !closedTicks.isEmpty();
+        } finally {
+            timerResolution.disable();
+            drainClosedTicksIfPresent();
         }
     }
 
-    static long initialDelay(long intervalNanos, long randomValue) {
-        return Math.floorMod(randomValue, intervalNanos);
+    private void waitForNextAttempt(long delayNanos) {
+        LockSupport.parkNanos(delayNanos);
     }
 
     static long jitteredDelay(long intervalNanos, long randomValue) {
         return intervalNanos / 2L + Math.floorMod(randomValue, intervalNanos);
     }
 
-    private void sampleCurrent(TickSamples expected) {
+    private SamplerStatus sampleCurrent() {
+        if (analysisClock.state() != AnalysisClock.State.RUNNING) {
+            return stateSnapshot();
+        }
+        TickSamples expected = currentTick;
         PerfWorkTracker.Snapshot snapshot = PerfWorkTracker.snapshot();
-        synchronized (lock) {
-            if (currentTick == expected) {
+        synchronized (stateLock) {
+            SamplerStatus status = samplerStatusLocked();
+            if (status != SamplerStatus.RUNNING) {
+                return status;
+            }
+            sampleAttempts++;
+            if (expected != null && currentTick == expected) {
                 expected.sample(snapshot);
             }
+            return SamplerStatus.RUNNING;
         }
     }
 
-    private boolean waitForDelay(long delayNanos, TickSamples expected) {
-        long deadline = System.nanoTime() + delayNanos;
-        while (running && currentTick == expected) {
-            long remaining = deadline - System.nanoTime();
-            if (remaining <= 0L) {
-                return true;
-            }
-            LockSupport.parkNanos(remaining);
-        }
-        return running && currentTick == expected;
-    }
-
-    private void drainClosedTicks() {
+    private void drainClosedTicks(Measurement measurement) {
         while (true) {
-            TickSamples tick;
-            synchronized (lock) {
-                tick = closedTicks.poll();
-            }
+            TickSamples tick = closedTicks.poll();
             if (tick == null) {
                 return;
             }
             aggregator.accept(tick);
             acceptedTicks++;
-            boolean refreshReport = consumeReportRefreshRequest();
             int entryKinds = entryKinds(tick);
             boolean firstEntryKind = (entryKinds & ~publishedEntryKinds) != 0;
-            if (shouldPublishReport(acceptedTicks, refreshReport, firstEntryKind)) {
-                latestReport = aggregator.build(elapsedMillis(), intervalMicros);
+            if (shouldPublishReport(acceptedTicks, tick.refreshReport, firstEntryKind)) {
+                latestReport = buildReport(measurement);
             }
             publishedEntryKinds |= entryKinds;
         }
@@ -193,16 +258,57 @@ public final class PerfSamplerSession {
         return tick.chunks.isEmpty() ? kinds : kinds | CHUNK_ENTRY_KIND;
     }
 
-    private boolean consumeReportRefreshRequest() {
-        synchronized (lock) {
-            boolean requested = reportRefreshRequested;
-            reportRefreshRequested = false;
-            return requested;
+    private long activeElapsedNanosLocked() {
+        return Math.min(analysisClock.elapsedNanos(), durationNanos);
+    }
+
+    private SamplerStatus stateSnapshot() {
+        synchronized (stateLock) {
+            return samplerStatusLocked();
         }
     }
 
-    private long elapsedMillis() {
-        return (System.nanoTime() - startedAtNanos) / 1_000_000L;
+    private SamplerStatus samplerStatusLocked() {
+        AnalysisClock.State state = analysisClock.state();
+        if (state == AnalysisClock.State.STOPPED) {
+            return SamplerStatus.STOPPED;
+        }
+        return state == AnalysisClock.State.RUNNING
+                && analysisClock.elapsedNanos() < durationNanos
+                ? SamplerStatus.RUNNING : SamplerStatus.IDLE;
+    }
+
+    private Measurement measurement() {
+        synchronized (stateLock) {
+            return measurementLocked();
+        }
+    }
+
+    private Measurement measurementLocked() {
+        return new Measurement(activeElapsedNanosLocked(), sampleAttempts);
+    }
+
+    private void drainClosedTicksIfPresent() {
+        if (closedTicks.isEmpty()) {
+            return;
+        }
+        Measurement measurement = measurement();
+        synchronized (aggregationLock) {
+            drainClosedTicks(measurement);
+        }
+    }
+
+    private void flushCurrentReport(Measurement measurement) {
+        synchronized (aggregationLock) {
+            drainClosedTicks(measurement);
+            if (acceptedTicks > 0L) {
+                latestReport = buildReport(measurement);
+            }
+        }
+    }
+
+    private PerfReportData buildReport(Measurement measurement) {
+        return aggregator.build(measurement.elapsedNanos(), measurement.sampleAttempts(), intervalMicros);
     }
 
     private void joinSampler() {
@@ -212,5 +318,14 @@ public final class PerfSamplerSession {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while stopping perf sampler", exception);
         }
+    }
+
+    private record Measurement(long elapsedNanos, long sampleAttempts) {
+    }
+
+    private enum SamplerStatus {
+        RUNNING,
+        IDLE,
+        STOPPED
     }
 }

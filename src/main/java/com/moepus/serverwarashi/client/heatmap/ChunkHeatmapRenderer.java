@@ -23,6 +23,8 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     private static final int PASS_BODY = 1;
     private static final int PASS_HOVER = 2;
     private static final int HOVER_COLOR = 0xFFE8FFFF;
+    private static final int ACTIVE_ICON_STATE = 0xFFFFFFFF;
+    private static final int INACTIVE_ICON_STATE = 0xFF000000;
     private static final float ICON_HALF_PIXELS = 7.0F;
     private static final float MAX_ICON_HALF_WORLD = 32.0F;
 
@@ -181,10 +183,11 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     private static void addIcon(BufferBuilder builder, ChunkHeatmapModel.LoaderIcon icon) {
         float centerX = icon.x() + 0.5F;
         float centerZ = icon.z() + 0.5F;
-        addVertex(builder, centerX, centerZ, -1.0F, 1.0F, 0xFFFFFFFF);
-        addVertex(builder, centerX, centerZ, 1.0F, 1.0F, 0xFFFFFFFF);
-        addVertex(builder, centerX, centerZ, 1.0F, -1.0F, 0xFFFFFFFF);
-        addVertex(builder, centerX, centerZ, -1.0F, -1.0F, 0xFFFFFFFF);
+        int state = icon.working() ? ACTIVE_ICON_STATE : INACTIVE_ICON_STATE;
+        addVertex(builder, centerX, centerZ, -1.0F, 1.0F, state);
+        addVertex(builder, centerX, centerZ, 1.0F, 1.0F, state);
+        addVertex(builder, centerX, centerZ, 1.0F, -1.0F, state);
+        addVertex(builder, centerX, centerZ, -1.0F, -1.0F, state);
     }
 
     private static void addVertex(BufferBuilder builder, float x, float z, float u, float v, int color) {
@@ -294,14 +297,19 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     }
 
     private ChunkHeatmapModel.LoaderIcon hoveredLoader(Hover hover, float mapScale) {
+        return hoveredLoader(plan.icons(), hover, mapScale);
+    }
+
+    static ChunkHeatmapModel.LoaderIcon hoveredLoader(
+            List<ChunkHeatmapModel.LoaderIcon> icons, Hover hover, float mapScale) {
         double halfWorld = iconHalfWorld(mapScale);
         ChunkHeatmapModel.LoaderIcon nearest = null;
         double nearestDistance = Double.POSITIVE_INFINITY;
-        for (ChunkHeatmapModel.LoaderIcon icon : plan.icons()) {
+        for (ChunkHeatmapModel.LoaderIcon icon : icons) {
             double dx = Math.abs(hover.worldX() - icon.x() - 0.5D);
             double dz = Math.abs(hover.worldZ() - icon.z() - 0.5D);
             double distance = Math.max(dx, dz);
-            if (distance <= halfWorld && distance < nearestDistance) {
+            if (distance <= halfWorld && distance <= nearestDistance) {
                 nearest = icon;
                 nearestDistance = distance;
             }

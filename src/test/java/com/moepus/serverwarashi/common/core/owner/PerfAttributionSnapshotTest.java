@@ -1,6 +1,12 @@
 package com.moepus.serverwarashi.common.core.owner;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderRef;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfAttributionSnapshotTest {
@@ -98,6 +105,34 @@ class PerfAttributionSnapshotTest {
         assertEquals(4, regions.size());
         assertEquals(9, regions.stream().mapToInt(region -> region.width() * region.height()).sum());
         assertTrue(regions.stream().allMatch(region -> region.width() <= 2 && region.height() <= 2));
+    }
+
+    @Test
+    void exposesControlOnlyWhenTheSourceLayoutIsComplete() {
+        ResourceLocation dimensionId = ResourceLocation.parse("test:level");
+        BlockLoaderRef ref = new BlockLoaderRef(
+                ResourceKey.create(Registries.DIMENSION, dimensionId),
+                ResourceLocation.parse("test:loader"), new BlockPos(8, 64, 8));
+        var owner = new PerfAttributionSnapshot.Owner(PerfReportData.AttributionKind.LOADER,
+                "loader", "test:loader", false, 0L, null);
+        var source = new PerfAttributionSnapshot.Source("source", "test:loader",
+                new PerfAttributionSnapshot.Position("test:level", 8, 64, 8), ref);
+        var bucket = new PerfAttributionSnapshot.Bucket(owner, source, 0, 0);
+        var snapshot = PerfAttributionSnapshot.create("test:level", Map.of(
+                        ChunkPos.asLong(0, 0), List.of(bucket),
+                        ChunkPos.asLong(2, 0), List.of(bucket)),
+                Map.of(ref, new PerfAttributionSnapshot.LoaderControl(ref, false, true)));
+
+        var truncated = snapshot.loaderPlan(1, 1, 4_096).sources().getFirst();
+        var complete = snapshot.loaderPlan(1, 2, 4_096).sources().getFirst();
+
+        assertEquals(1, truncated.omittedRegions());
+        assertEquals(null, truncated.control());
+        assertEquals(new PerfAttributionSnapshot.LoaderControl(ref, false, true), complete.control());
+        assertTrue(snapshot.updateLoaderControl(ref, true, false));
+        assertEquals(1L, snapshot.loaderControlRevision());
+        assertFalse(snapshot.updateLoaderControl(ref, true, false));
+        assertEquals(1L, snapshot.loaderControlRevision());
     }
 
     private static PerfAttributionSnapshot.Bucket loaderBucket(String sourceId) {

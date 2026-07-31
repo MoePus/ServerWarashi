@@ -30,11 +30,10 @@ final class PerfOwnerAggregator {
         TickAttribution attribution = new TickAttribution();
         for (var entry : tick.chunks.entrySet()) {
             int samples = entry.getValue();
-            double nanos = estimate(tick.durationNanos, samples, tick.totalSamples);
             List<PerfAttributionSnapshot.Bucket> buckets = tick.attribution == null
                     ? List.of(PerfAttributionSnapshot.UNKNOWN)
                     : tick.attribution.owners(entry.getKey().dimension(), entry.getKey().position());
-            attribution.record(buckets, nanos, samples);
+            attribution.record(buckets, samples);
         }
         attribution.commit(tickIndex);
     }
@@ -55,14 +54,15 @@ final class PerfOwnerAggregator {
         });
     }
 
-    Build build(long tickCount) {
-        List<SourceChild> children = sourceEntries(tickCount);
+    Build build(long tickCount, double nanosPerSample) {
+        List<SourceChild> children = sourceEntries(tickCount, nanosPerSample);
         var limited = PerfReportLimits.topMetricUnion(children, VIEW_LIMIT, value -> value.entry.metric());
         Map<OwnerKey, List<PerfReportData.OwnerSourceEntry>> grouped = new HashMap<>();
         limited.entries().forEach(child -> grouped
                 .computeIfAbsent(child.owner, ignored -> new ArrayList<>()).add(child.entry));
         List<PerfReportData.OwnerEntry> entries = new ArrayList<>(owners.size());
-        owners.forEach((owner, stats) -> entries.add(ownerEntry(owner, stats, grouped, tickCount)));
+        owners.forEach((owner, stats) -> entries.add(
+                ownerEntry(owner, stats, grouped, tickCount, nanosPerSample)));
         var limitedOwners = PerfReportLimits.topMetricUnion(entries, OWNER_LIMIT_PER_METRIC,
                 PerfReportData.OwnerEntry::metric);
         LoaderBuild loaders = loaderSources();
@@ -92,7 +92,17 @@ final class PerfOwnerAggregator {
                         region.width(), region.height()))
                 .toList();
         return new PerfReportData.LoaderSourceEntry(source.dimension(), source.sourceId(),
-                source.loaderName(), loaderPosition(source.position()), source.omittedRegions(), regions);
+                source.loaderName(), loaderPosition(source.position()), source.omittedRegions(), regions,
+                loaderControl(source.control()));
+    }
+
+    private static PerfReportData.LoaderControl loaderControl(
+            PerfAttributionSnapshot.LoaderControl control) {
+        if (control == null) {
+            return null;
+        }
+        return new PerfReportData.LoaderControl(control.ref().controllerId(), control.ref().ownerPos(),
+                control.manuallyFrozen(), control.working());
     }
 
     private static PerfReportData.LoaderPosition loaderPosition(PerfAttributionSnapshot.Position position) {
@@ -124,7 +134,7 @@ final class PerfOwnerAggregator {
         OwnerSourceKey lightest = null;
         double weight = Double.POSITIVE_INFINITY;
         for (var entry : sources.entrySet()) {
-            double candidate = entry.getValue().stats.totalNanos();
+            double candidate = entry.getValue().stats.totalWeight();
             if (candidate < weight) {
                 lightest = entry.getKey();
                 weight = candidate;
@@ -142,7 +152,7 @@ final class PerfOwnerAggregator {
         }
     }
 
-    private List<SourceChild> sourceEntries(long tickCount) {
+    private List<SourceChild> sourceEntries(long tickCount, double nanosPerSample) {
         List<SourceChild> result = new ArrayList<>(sources.size());
         sources.forEach((key, source) -> {
             if (source.metadata != null) {
@@ -150,7 +160,7 @@ final class PerfOwnerAggregator {
                 var detail = metadata.source();
                 result.add(new SourceChild(key.owner, new PerfReportData.OwnerSourceEntry(
                         detail.id(), detail.name(), position(detail.position()), metadata.sourceChunkCount(),
-                        source.stats.metric(tickCount))));
+                        source.stats.metric(tickCount, nanosPerSample))));
             }
         });
         return result;
@@ -160,21 +170,18 @@ final class PerfOwnerAggregator {
             OwnerKey owner,
             SampleStatistics stats,
             Map<OwnerKey, List<PerfReportData.OwnerSourceEntry>> grouped,
-            long tickCount) {
+            long tickCount,
+            double nanosPerSample) {
         PerfAttributionSnapshot.Bucket metadata = ownerMetadata.get(owner);
         PerfAttributionSnapshot.Owner detail = metadata.owner();
         return new PerfReportData.OwnerEntry(owner.kind, owner.id, detail.name(), detail.online(),
                 detail.lastLoginEpochMillis(), position(detail.position()), metadata.ownerChunkCount(),
-                stats.metric(tickCount), grouped.getOrDefault(owner, List.of()));
+                stats.metric(tickCount, nanosPerSample), grouped.getOrDefault(owner, List.of()));
     }
 
     private static PerfReportData.Position position(PerfAttributionSnapshot.Position position) {
         return position == null ? null : new PerfReportData.Position(
                 position.dimension(), position.x(), position.y(), position.z());
-    }
-
-    private static double estimate(long durationNanos, int samples, int totalSamples) {
-        return durationNanos * (samples / (double) totalSamples);
     }
 
     private int omitted(long limited) {
@@ -213,14 +220,14 @@ final class PerfOwnerAggregator {
     private final class TickAttribution {
         private final Map<OwnerKey, Estimate> ownerCosts = new HashMap<>();
         private final Map<SourceAggregate, Estimate> sourceCosts = new HashMap<>();
-        void record(List<PerfAttributionSnapshot.Bucket> buckets, double nanos, int samples) {
+        void record(List<PerfAttributionSnapshot.Bucket> buckets, int samples) {
             Set<OwnerKey> recordedOwners = new HashSet<>();
             Set<OwnerSourceKey> recordedSources = new HashSet<>();
             for (PerfAttributionSnapshot.Bucket bucket : buckets) {
                 OwnerKey owner = OwnerKey.from(bucket);
                 ownerMetadata.put(owner, bucket);
                 if (recordedOwners.add(owner)) {
-                    ownerCosts.computeIfAbsent(owner, ignored -> new Estimate()).add(nanos, samples);
+                    ownerCosts.computeIfAbsent(owner, ignored -> new Estimate()).add(samples);
                 }
                 OwnerSourceKey sourceKey = OwnerSourceKey.from(bucket);
                 if (!recordedSources.add(sourceKey)) {
@@ -229,7 +236,7 @@ final class PerfOwnerAggregator {
                 SourceAggregate source = sourceAggregate(sourceKey);
                 if (source != null) {
                     source.metadata = bucket;
-                    sourceCosts.computeIfAbsent(source, ignored -> new Estimate()).add(nanos, samples);
+                    sourceCosts.computeIfAbsent(source, ignored -> new Estimate()).add(samples);
                 }
             }
         }
@@ -237,18 +244,16 @@ final class PerfOwnerAggregator {
         void commit(long tickIndex) {
             ownerCosts.forEach((owner, estimate) -> owners
                     .computeIfAbsent(owner, ignored -> new SampleStatistics())
-                    .record(estimate.nanos, estimate.samples, tickIndex));
-            sourceCosts.forEach((source, estimate) ->
-                    source.stats.record(estimate.nanos, estimate.samples, tickIndex));
+                    .record(estimate.samples, tickIndex));
+        sourceCosts.forEach((source, estimate) ->
+                source.stats.record(estimate.samples, tickIndex));
         }
     }
 
     private static final class Estimate {
-        double nanos;
         double samples;
 
-        void add(double nanos, double samples) {
-            this.nanos += nanos;
+        void add(double samples) {
             this.samples += samples;
         }
     }

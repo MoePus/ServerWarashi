@@ -7,7 +7,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChunkHeatmapShaderResourceTest {
     @Test
@@ -22,6 +24,25 @@ class ChunkHeatmapShaderResourceTest {
             var object = uniform.getAsJsonObject();
             assertEquals(object.get("count").getAsInt(), object.getAsJsonArray("values").size(),
                     object.get("name").getAsString());
+        }
+    }
+
+    @Test
+    void inactiveIconStateChangesColorWithoutChangingGeometry() throws Exception {
+        String vertex = resource("/assets/serverwarashi/shaders/core/chunk_loader_icon.vsh");
+        String fragment = resource("/assets/serverwarashi/shaders/core/chunk_loader_icon.fsh");
+
+        assertTrue(vertex.contains("localCoord = UV0;"));
+        assertFalse(vertex.contains("UV0 * Color.r"));
+        assertTrue(vertex.contains("loaderWorking = Color.r;"));
+        assertTrue(fragment.contains("loaderWorking < 0.5"));
+    }
+
+    private static String resource(String path) throws Exception {
+        var stream = ChunkHeatmapShaderResourceTest.class.getResourceAsStream(path);
+        assertNotNull(stream);
+        try (stream) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 }

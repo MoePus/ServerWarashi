@@ -18,6 +18,10 @@
     "accessor.ServerLevelAccessor",
     "accessor.TickTaskAccessor",
     "accessor.TickingTrackerAccessor",
+    "loaderfreeze.DistanceManagerForceTicksMixin",
+    "loaderfreeze.DistanceManagerTicketInsertionMixin",
+    "loaderfreeze.ForcedChunkManagerMixin",
+    "loaderfreeze.ServerChunkCacheRegionTicketMixin",
     "runtime.MinecraftServerRuntimeMixin",
     "ticket.ChunkTicketTrackerMixin",
     "ticket.DistanceManagerMixin",
@@ -25,6 +29,7 @@
     "ticket.TickingTrackerMixin",
     "ticktiming.BlockableEventLoopTaskMixin",
     "ticktiming.LevelBlockEntityTickMixin",
+    "ticktiming.NaturalSpawnerChunkMixin",
     "ticktiming.ServerLevelChunkTickMixin",
     "ticktiming.ServerLevelEntityTickMixin",
     "watchdog.ServerWatchdogMixin"

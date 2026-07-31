@@ -116,6 +116,9 @@ public final class XaeroHeatmapOverlay {
         for (ChunkHeatmapModel.LoaderSource source : hover.loaderSources()) {
             lines.add(Component.translatable("screen.serverwarashi.heatmap.loaded_by",
                     PerfDisplayText.resource(source.name())));
+            if (source.controllable()) {
+                lines.add(loaderStatus(source.working()));
+            }
         }
         if (hover.omittedLoaderSources() > 0) {
             lines.add(Component.translatable("screen.serverwarashi.heatmap.loaded_by_more",
@@ -166,10 +169,20 @@ public final class XaeroHeatmapOverlay {
                 Math.floorDiv(loader.x(), 16), Math.floorDiv(loader.z(), 16))
                 : Component.translatable("screen.serverwarashi.heatmap.loader_position",
                 loader.x(), loader.y(), loader.z());
-        List<Component> lines = List.of(Component.translatable(
-                "screen.serverwarashi.heatmap.loader_name",
-                PerfDisplayText.resource(loader.name())), location);
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatable("screen.serverwarashi.heatmap.loader_name",
+                PerfDisplayText.resource(loader.name())));
+        lines.add(location);
+        if (loader.controllable()) {
+            lines.add(loaderStatus(loader.working()));
+        }
         graphics.renderTooltip(Minecraft.getInstance().font, lines, Optional.empty(), mouseX, mouseY);
+    }
+
+    private static Component loaderStatus(boolean working) {
+        return Component.translatable(working
+                ? "screen.serverwarashi.heatmap.loader_working"
+                : "screen.serverwarashi.heatmap.loader_inactive");
     }
 
     private static String format(double value) {

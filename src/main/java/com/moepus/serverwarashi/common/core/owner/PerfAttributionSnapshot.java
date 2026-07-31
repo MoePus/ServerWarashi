@@ -2,25 +2,23 @@ package com.moepus.serverwarashi.common.core.owner;
 
 import com.moepus.serverwarashi.common.core.ticket.TicketScanService;
 import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
+import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderRef;
+import com.moepus.serverwarashi.common.modules.loaderfreeze.LoaderStateData;
+import com.moepus.serverwarashi.common.modules.loaderfreeze.LoaderTicketTarget;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
-import net.minecraft.server.level.TicketType;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PerfAttributionSnapshot {
     private static final Owner SYSTEM_OWNER = new Owner(
@@ -32,11 +30,21 @@ public final class PerfAttributionSnapshot {
     public static final Bucket UNKNOWN = new Bucket(UNKNOWN_OWNER,
             new Source("unknown", "Unknown", null), 0, 0);
     private final Map<ChunkKey, List<Bucket>> byChunk;
+    private final Map<ChunkKey, List<Bucket>> loaderByChunk;
+    private final Map<BlockLoaderRef, List<LoaderTicketTarget>> loaderTargets;
+    private final Map<BlockLoaderRef, LoaderControl> loaderControls;
     private final List<Bucket> buckets;
     private volatile LoaderPlan reportLoaderPlan;
+    private volatile long loaderControlRevision;
 
-    private PerfAttributionSnapshot(Map<ChunkKey, List<Bucket>> byChunk) {
+    private PerfAttributionSnapshot(Map<ChunkKey, List<Bucket>> byChunk,
+                                    Map<ChunkKey, List<Bucket>> loaderByChunk,
+                                    Map<BlockLoaderRef, List<LoaderTicketTarget>> loaderTargets,
+                                    Map<BlockLoaderRef, LoaderControl> loaderControls) {
         this.byChunk = Map.copyOf(byChunk);
+        this.loaderByChunk = Map.copyOf(loaderByChunk);
+        this.loaderTargets = copyTargets(loaderTargets);
+        this.loaderControls = new ConcurrentHashMap<>(loaderControls);
         Map<SourceIdentity, Bucket> unique = new HashMap<>();
         byChunk.values().forEach(values -> values.forEach(
                 bucket -> unique.put(SourceIdentity.from(bucket), bucket)));
@@ -48,27 +56,39 @@ public final class PerfAttributionSnapshot {
     }
 
     public static Capture captureWithFingerprint(MinecraftServer server) {
-        Map<ChunkKey, Set<Bucket>> expanded = new HashMap<>();
+        CaptureMaps maps = new CaptureMaps();
         TicketTopologyFingerprint fingerprint = new TicketTopologyFingerprint();
         for (ServerLevel level : server.getAllLevels()) {
             fingerprint.addDimension(level);
-            captureLevel(level, expanded, fingerprint);
+            captureLevel(level, maps, fingerprint, true);
         }
-        return new Capture(fromExpanded(expanded), fingerprint.value());
+        return new Capture(fromCapture(maps), fingerprint.value());
     }
 
     public static PerfAttributionSnapshot captureLoaderLayout(MinecraftServer server) {
-        Map<ChunkKey, Set<Bucket>> expanded = new HashMap<>();
+        CaptureMaps maps = new CaptureMaps();
         for (ServerLevel level : server.getAllLevels()) {
-            captureLoaderLevel(level, expanded);
+            captureLevel(level, maps, null, false);
         }
-        return fromExpanded(expanded);
+        return fromCapture(maps);
     }
 
-    private static PerfAttributionSnapshot fromExpanded(Map<ChunkKey, Set<Bucket>> expanded) {
+    private static PerfAttributionSnapshot fromCapture(CaptureMaps maps) {
+        return new PerfAttributionSnapshot(withChunkCounts(freezeExpanded(maps.active)),
+                withChunkCounts(freezeExpanded(maps.loaders)), maps.targets, maps.controls);
+    }
+
+    private static Map<ChunkKey, List<Bucket>> freezeExpanded(Map<ChunkKey, Set<Bucket>> expanded) {
         Map<ChunkKey, List<Bucket>> result = new HashMap<>();
         expanded.forEach((chunk, buckets) -> result.put(chunk, List.copyOf(buckets)));
-        return new PerfAttributionSnapshot(withChunkCounts(result));
+        return result;
+    }
+
+    private static Map<BlockLoaderRef, List<LoaderTicketTarget>> copyTargets(
+            Map<BlockLoaderRef, List<LoaderTicketTarget>> source) {
+        Map<BlockLoaderRef, List<LoaderTicketTarget>> result = new HashMap<>();
+        source.forEach((ref, targets) -> result.put(ref, new java.util.ArrayList<>(targets)));
+        return result;
     }
 
     public static long ticketFingerprint(MinecraftServer server) {
@@ -76,10 +96,18 @@ public final class PerfAttributionSnapshot {
     }
 
     public static PerfAttributionSnapshot create(String dimension, Map<Long, List<Bucket>> chunks) {
+        return create(dimension, chunks, Map.of());
+    }
+
+    public static PerfAttributionSnapshot create(
+            String dimension,
+            Map<Long, List<Bucket>> chunks,
+            Map<BlockLoaderRef, LoaderControl> controls) {
         Map<ChunkKey, List<Bucket>> result = new HashMap<>();
         chunks.forEach((position, buckets) ->
                 result.put(new ChunkKey(dimension, position), List.copyOf(buckets)));
-        return new PerfAttributionSnapshot(withChunkCounts(result));
+        Map<ChunkKey, List<Bucket>> counted = withChunkCounts(result);
+        return new PerfAttributionSnapshot(counted, counted, Map.of(), controls);
     }
 
     public List<Bucket> owners(String dimension, long chunkPos) {
@@ -92,29 +120,88 @@ public final class PerfAttributionSnapshot {
 
     public LoaderPlan loaderPlan(int sourceLimit, int regionLimit, int maxRegionSpan) {
         Map<LoaderRegionPlanner.SourceKey, Set<Long>> grouped = new HashMap<>();
-        for (var entry : byChunk.entrySet()) {
+        for (var entry : loaderByChunk.entrySet()) {
             for (Bucket bucket : entry.getValue()) {
                 if (isLoaderSource(bucket)) {
                     var key = new LoaderRegionPlanner.SourceKey(
                             entry.getKey().dimension, bucket.source.id,
-                            bucket.source.name, bucket.source.position);
+                            bucket.source.name, bucket.source.position, bucket.source.loaderRef);
                     grouped.computeIfAbsent(key, ignored -> new HashSet<>()).add(entry.getKey().chunkPos);
                 }
             }
         }
-        return LoaderRegionPlanner.plan(grouped,
+        LoaderPlan geometry = LoaderRegionPlanner.plan(grouped,
                 new LoaderRegionPlanner.Options(sourceLimit, regionLimit, maxRegionSpan));
+        return withLoaderControls(geometry);
     }
 
     public LoaderPlan reportLoaderPlan() {
         LoaderPlan cached = reportLoaderPlan;
         if (cached != null) {
-            return cached;
+            return withLoaderControls(cached);
         }
-        cached = loaderPlan(PerfReportLimits.MAX_LOADER_SOURCES,
-                PerfReportLimits.MAX_LOADER_REGIONS, PerfReportLimits.MAX_LOADER_REGION_SPAN);
+        cached = withoutLoaderControls(loaderPlan(PerfReportLimits.MAX_LOADER_SOURCES,
+                PerfReportLimits.MAX_LOADER_REGIONS, PerfReportLimits.MAX_LOADER_REGION_SPAN));
         reportLoaderPlan = cached;
-        return cached;
+        return withLoaderControls(cached);
+    }
+
+    public synchronized List<LoaderTicketTarget> loaderTargets(BlockLoaderRef ref) {
+        return List.copyOf(loaderTargets.getOrDefault(ref, List.of()));
+    }
+
+    public Optional<LoaderControl> loaderControl(BlockLoaderRef ref) {
+        return Optional.ofNullable(loaderControls.get(ref));
+    }
+
+    public long loaderControlRevision() {
+        return loaderControlRevision;
+    }
+
+    public synchronized boolean appendLoaderTarget(BlockLoaderRef ref, LoaderTicketTarget target) {
+        List<LoaderTicketTarget> targets = loaderTargets.get(ref);
+        if (targets == null || targets.stream().anyMatch(existing -> existing.ticket() == target.ticket())) {
+            return false;
+        }
+        targets.add(target);
+        LoaderControl control = loaderControls.get(ref);
+        if (control != null && !TicketUtils.asPauseable(target.ticket()).serverWarashi$isPaused()) {
+            LoaderControl updated = new LoaderControl(ref, control.manuallyFrozen, true);
+            if (!control.equals(updated)) {
+                loaderControls.put(ref, updated);
+                loaderControlRevision++;
+            }
+        }
+        return true;
+    }
+
+    public synchronized boolean updateLoaderControl(BlockLoaderRef ref,
+                                                     boolean manuallyFrozen,
+                                                     boolean working) {
+        LoaderControl previous = loaderControls.get(ref);
+        if (previous == null) {
+            return false;
+        }
+        LoaderControl updated = new LoaderControl(ref, manuallyFrozen, working);
+        if (previous.equals(updated)) {
+            return false;
+        }
+        loaderControls.put(ref, updated);
+        loaderControlRevision++;
+        return true;
+    }
+
+    private LoaderPlan withLoaderControls(LoaderPlan plan) {
+        return new LoaderPlan(plan.sources.stream().map(source -> {
+            LoaderControl control = source.omittedRegions == 0 && source.loaderRef != null
+                    ? loaderControls.get(source.loaderRef) : null;
+            return source.withControl(control);
+        }).toList(), plan.omittedSources);
+    }
+
+    private static LoaderPlan withoutLoaderControls(LoaderPlan plan) {
+        return new LoaderPlan(plan.sources.stream().map(source -> source.withControl(null)).toList(),
+                plan.omittedSources);
     }
 
     private static boolean isLoaderSource(Bucket bucket) {
@@ -124,38 +211,37 @@ public final class PerfAttributionSnapshot {
     }
 
     private static void captureLevel(ServerLevel level,
-                                     Map<ChunkKey, Set<Bucket>> output,
-                                     TicketTopologyFingerprint fingerprint) {
+                                     CaptureMaps maps,
+                                     TicketTopologyFingerprint fingerprint,
+                                     boolean collectAttribution) {
         String dimension = level.dimension().location().toString();
         TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
-            fingerprint.addTickets(chunkPos, tickets);
+            if (fingerprint != null) {
+                fingerprint.addTickets(chunkPos, tickets);
+            }
             for (Ticket<?> ticket : tickets) {
-                if (!TicketUtils.asPauseable(ticket).serverWarashi$isPaused()) {
-                    resolve(level, chunkPos, ticket).forEach(
-                            bucket -> addInfluence(output, dimension, chunkPos, bucket));
-                }
+                captureTicket(level, dimension, chunkPos, ticket, maps, collectAttribution);
             }
         });
     }
 
-    private static void captureLoaderLevel(ServerLevel level, Map<ChunkKey, Set<Bucket>> output) {
-        String dimension = level.dimension().location().toString();
-        TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
-            for (Ticket<?> ticket : tickets) {
-                if (TicketUtils.asPauseable(ticket).serverWarashi$isPaused()) {
-                    continue;
-                }
-                List<Bucket> c2meBuckets = C2meNoTickAttribution.resolve(level, chunkPos, ticket);
-                if (c2meBuckets != null) {
-                    c2meBuckets.forEach(bucket -> addInfluence(output, dimension, chunkPos, bucket));
-                    continue;
-                }
-                var forced = TicketOwnerResolver.readForcedOwner(
-                        TicketUtils.asPauseable(ticket).serverWarashi$getKey());
-                forced.ifPresent(owner -> addInfluence(output, dimension, chunkPos,
-                        forcedBucket(level, owner, ticket)));
-            }
-        });
+    private static void captureTicket(ServerLevel level,
+                                      String dimension,
+                                      long chunkPos,
+                                      Ticket<?> ticket,
+                                      CaptureMaps maps,
+                                      boolean collectAttribution) {
+        PerfTicketAttribution.Resolved resolved = PerfTicketAttribution.resolve(
+                level, chunkPos, ticket, collectAttribution);
+        boolean paused = TicketUtils.asPauseable(ticket).serverWarashi$isPaused();
+        resolved.buckets().stream().filter(PerfAttributionSnapshot::isLoaderSource)
+                .forEach(bucket -> addInfluence(maps.loaders, dimension, chunkPos, bucket));
+        if (collectAttribution && !paused) {
+            resolved.buckets().forEach(bucket -> addInfluence(maps.active, dimension, chunkPos, bucket));
+        }
+        if (resolved.loaderRef() != null) {
+            maps.addTarget(level, resolved.loaderRef(), new LoaderTicketTarget(chunkPos, ticket), !paused);
+        }
     }
 
     private static void addInfluence(Map<ChunkKey, Set<Bucket>> output,
@@ -166,96 +252,6 @@ public final class PerfAttributionSnapshot {
         LoaderTicketInfluence.visit(center, bucket.influenceRadius, position -> output
                 .computeIfAbsent(new ChunkKey(dimension, position), ignored -> new LinkedHashSet<>())
                 .add(stored));
-    }
-
-    private static List<Bucket> resolve(ServerLevel level, long chunkPos, Ticket<?> ticket) {
-        String typeName = ticket.getType().toString();
-        if (ticket.getType() == TicketType.PLAYER) {
-            return PlayerAttribution.selfBuckets(level, chunkPos);
-        }
-        List<Bucket> c2meBuckets = C2meNoTickAttribution.resolve(level, chunkPos, ticket);
-        if (c2meBuckets != null) {
-            return c2meBuckets;
-        }
-        var forced = TicketOwnerResolver.readForcedOwner(
-                TicketUtils.asPauseable(ticket).serverWarashi$getKey());
-        if (forced.isPresent()) {
-            return List.of(forcedBucket(level, forced.get(), ticket));
-        }
-        if (isVanillaSystem(ticket.getType())) {
-            return List.of(systemBucket(level, ticket, typeName));
-        }
-        return List.of(unknownBucket(level, ticket, typeName));
-    }
-
-    private static Bucket forcedBucket(ServerLevel level,
-                                       TicketOwnerResolver.ForcedOwner forced,
-                                       Ticket<?> ticket) {
-        Bucket ftbBucket = FtbForcedChunkAttribution.resolve(level, forced, ticket).orElse(null);
-        if (ftbBucket != null) {
-            return ftbBucket;
-        }
-        Loader loader = loader(level, forced);
-        Owner resolved = forced.owner() instanceof UUID uuid
-                ? PlayerAttribution.forEntity(level, uuid)
-                : UNKNOWN_OWNER;
-        String sourceId = level.dimension().location() + ":" + forced.id() + ":" + forced.owner();
-        Owner owner = resolved.kind() == PerfReportData.AttributionKind.PLAYER
-                ? resolved : loaderOwner(sourceId, loader);
-        return new Bucket(owner, new Source(sourceId, loader.name, loader.position),
-                0, 0, LoaderTicketInfluence.blockTickingRadius(ticket));
-    }
-
-    private static Loader loader(ServerLevel level, TicketOwnerResolver.ForcedOwner forced) {
-        if (forced.owner() instanceof BlockPos pos) {
-            return new Loader(loaderBlockId(level, pos, String.valueOf(forced.id())), position(level, pos));
-        }
-        if (forced.owner() instanceof UUID uuid) {
-            Entity entity = level.getEntity(uuid);
-            if (entity != null) {
-                String name = entity.hasCustomName() ? entity.getName().getString() : entity.getClass().getSimpleName();
-                return new Loader(name, position(level, entity.blockPosition()));
-            }
-        }
-        return new Loader(String.valueOf(forced.id()), null);
-    }
-
-    private static String loaderBlockId(ServerLevel level, BlockPos pos, String fallback) {
-        var holder = level.getChunkSource().chunkMap.visibleChunkMap.get(ChunkPos.asLong(pos));
-        if (holder == null) {
-            return fallback;
-        }
-        var chunk = holder.getChunkIfPresent(ChunkStatus.FULL);
-        return chunk == null ? fallback
-                : BuiltInRegistries.BLOCK.getKey(chunk.getBlockState(pos).getBlock()).toString();
-    }
-
-    private static Owner loaderOwner(String id, Loader loader) {
-        return new Owner(PerfReportData.AttributionKind.LOADER, id, loader.name,
-                false, 0L, loader.position);
-    }
-
-    private static Bucket systemBucket(ServerLevel level, Ticket<?> ticket, String typeName) {
-        Position position = ticket.getType() == TicketType.START
-                ? position(level, level.getSharedSpawnPos()) : null;
-        return new Bucket(SYSTEM_OWNER, source(level, ticket, typeName, position), 0, 0);
-    }
-
-    private static Bucket unknownBucket(ServerLevel level, Ticket<?> ticket, String typeName) {
-        Object key = TicketUtils.asPauseable(ticket).serverWarashi$getKey();
-        Position position = key instanceof BlockPos pos ? position(level, pos)
-                : key instanceof ChunkPos pos ? position(level, pos.getWorldPosition()) : null;
-        return new Bucket(UNKNOWN_OWNER, source(level, ticket, typeName, position), 0, 0);
-    }
-
-    private static Source source(ServerLevel level, Ticket<?> ticket, String name, Position position) {
-        Object key = TicketUtils.asPauseable(ticket).serverWarashi$getKey();
-        String id = level.dimension().location() + ":" + name + ":" + key;
-        return new Source(id, name, position);
-    }
-
-    private static Position position(ServerLevel level, BlockPos pos) {
-        return new Position(level.dimension().location().toString(), pos.getX(), pos.getY(), pos.getZ());
     }
 
     private static Map<ChunkKey, List<Bucket>> withChunkCounts(Map<ChunkKey, List<Bucket>> source) {
@@ -283,11 +279,6 @@ public final class PerfAttributionSnapshot {
         sources.forEach(source -> sourceCounts.merge(source, 1, Integer::sum));
     }
 
-    private static boolean isVanillaSystem(TicketType<?> type) {
-        return type == TicketType.START || type == TicketType.DRAGON || type == TicketType.PORTAL
-                || type == TicketType.POST_TELEPORT || type == TicketType.UNKNOWN;
-    }
-
     public record Capture(PerfAttributionSnapshot snapshot, long ticketFingerprint) {
     }
 
@@ -305,10 +296,25 @@ public final class PerfAttributionSnapshot {
                                String loaderName,
                                Position position,
                                int omittedRegions,
-                               List<LoaderRegion> regions) {
+                               List<LoaderRegion> regions,
+                               BlockLoaderRef loaderRef,
+                               LoaderControl control) {
         public LoaderSource {
             regions = List.copyOf(regions);
         }
+
+        public LoaderSource(String dimension, String sourceId, String loaderName,
+                            Position position, int omittedRegions, List<LoaderRegion> regions) {
+            this(dimension, sourceId, loaderName, position, omittedRegions, regions, null, null);
+        }
+
+        LoaderSource withControl(LoaderControl nextControl) {
+            return new LoaderSource(dimension, sourceId, loaderName, position,
+                    omittedRegions, regions, loaderRef, nextControl);
+        }
+    }
+
+    public record LoaderControl(BlockLoaderRef ref, boolean manuallyFrozen, boolean working) {
     }
 
     public record LoaderRegion(int minChunkX, int minChunkZ, int width, int height) {
@@ -318,7 +324,10 @@ public final class PerfAttributionSnapshot {
                         boolean online, long lastLoginEpochMillis, Position position) {
     }
 
-    public record Source(String id, String name, Position position) {
+    public record Source(String id, String name, Position position, BlockLoaderRef loaderRef) {
+        public Source(String id, String name, Position position) {
+            this(id, name, position, null);
+        }
     }
 
     public record Bucket(Owner owner,
@@ -338,6 +347,30 @@ public final class PerfAttributionSnapshot {
             return influenceRadius == 0 ? this
                     : new Bucket(owner, source, ownerChunkCount, sourceChunkCount, 0);
         }
+
+        Bucket withLoaderRef(BlockLoaderRef ref) {
+            return ref == null ? this : new Bucket(owner,
+                    new Source(source.id, source.name, source.position, ref),
+                    ownerChunkCount, sourceChunkCount, influenceRadius);
+        }
+    }
+
+    private static final class CaptureMaps {
+        final Map<ChunkKey, Set<Bucket>> active = new HashMap<>();
+        final Map<ChunkKey, Set<Bucket>> loaders = new HashMap<>();
+        final Map<BlockLoaderRef, List<LoaderTicketTarget>> targets = new HashMap<>();
+        final Map<BlockLoaderRef, LoaderControl> controls = new HashMap<>();
+
+        void addTarget(ServerLevel level, BlockLoaderRef ref,
+                       LoaderTicketTarget target, boolean ticketWorking) {
+            targets.computeIfAbsent(ref, ignored -> new java.util.ArrayList<>()).add(target);
+            LoaderControl previous = controls.get(ref);
+            boolean frozen = previous == null
+                    ? LoaderStateData.get(level).isManuallyFrozen(ref.controllerId(), ref.ownerPos())
+                    : previous.manuallyFrozen;
+            controls.put(ref, new LoaderControl(ref, frozen,
+                    ticketWorking || previous != null && previous.working));
+        }
     }
 
     private record ChunkKey(String dimension, long chunkPos) {
@@ -353,9 +386,6 @@ public final class PerfAttributionSnapshot {
         static SourceIdentity from(Bucket bucket) {
             return new SourceIdentity(OwnerIdentity.from(bucket), bucket.source.id);
         }
-    }
-
-    private record Loader(String name, Position position) {
     }
 
 }

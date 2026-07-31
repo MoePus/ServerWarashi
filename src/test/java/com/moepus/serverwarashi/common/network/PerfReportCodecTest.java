@@ -5,8 +5,10 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimi
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -21,7 +23,7 @@ class PerfReportCodecTest {
     void roundTripsTypedReport() {
         PerfReportData.Metric metric = new PerfReportData.Metric(1.25D, 3.5D, 42L);
         PerfReportData expected = new PerfReportData(
-                48.75D, 10_000L, 123_456_789L, 200L, 9_999L, 1_000, 2, 3, 4, 5,
+                17L, 48.75D, 10_000L, 123_456_789L, 200L, 9_999L, 1_000, 2, 3, 4, 5,
                 List.of(new PerfReportData.ChunkEntry("minecraft:overworld", 2, -3, 7, 4,
                         List.of(new PerfReportData.ObjectCount("ItemEntity", "minecraft:stone",
                                 TickDetailKind.ITEM, 3, 33, 64, -40)),
@@ -40,7 +42,9 @@ class PerfReportCodecTest {
                 List.of(new PerfReportData.LoaderSourceEntry(
                         "minecraft:overworld", "loader-id", "minecraft:lodestone",
                         new PerfReportData.LoaderPosition(40, 63, -40), 2,
-                        List.of(new PerfReportData.LoaderRegion(2, -3, 7, 7))))
+                        List.of(new PerfReportData.LoaderRegion(2, -3, 7, 7)),
+                        new PerfReportData.LoaderControl(
+                                ResourceLocation.parse("test:loader"), new BlockPos(40, 63, -40), true, false)))
         );
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         try {
@@ -83,6 +87,29 @@ class PerfReportCodecTest {
         try {
             PerfControlPayload.STREAM_CODEC.encode(buffer, expected);
             assertEquals(expected, PerfControlPayload.STREAM_CODEC.decode(buffer));
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void roundTripsLoaderFreezeActionAndAuthoritativeState() {
+        ResourceLocation dimension = ResourceLocation.parse("minecraft:overworld");
+        ResourceLocation controller = ResourceLocation.parse("test:loader");
+        BlockPos owner = new BlockPos(12, 64, -7);
+        LoaderFreezeActionPayload action = new LoaderFreezeActionPayload(
+                9L, dimension, controller, owner, true);
+        LoaderControlStatePayload state = new LoaderControlStatePayload(
+                9L, dimension, controller, owner, true, false,
+                LoaderControlStatePayload.Status.APPLIED);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            LoaderFreezeActionPayload.STREAM_CODEC.encode(buffer, action);
+            assertEquals(action, LoaderFreezeActionPayload.STREAM_CODEC.decode(buffer));
+            LoaderControlStatePayload.STREAM_CODEC.encode(buffer, state);
+            LoaderControlStatePayload decoded = LoaderControlStatePayload.STREAM_CODEC.decode(buffer);
+            assertEquals(state, decoded);
+            assertTrue(decoded.hasAuthoritativeState());
         } finally {
             buffer.release();
         }
@@ -147,6 +174,7 @@ class PerfReportCodecTest {
                 buffer.writeUtf(repeated);
                 buffer.writeUtf(repeated);
                 buffer.writeUtf(repeated);
+                buffer.writeBoolean(false);
                 buffer.writeBoolean(false);
                 buffer.writeVarInt(0);
                 buffer.writeVarInt(0);
@@ -220,6 +248,7 @@ class PerfReportCodecTest {
     }
 
     private static void writeEmptyReportHeader(RegistryFriendlyByteBuf buffer) {
+        buffer.writeVarLong(0L);
         buffer.writeDouble(0.0D);
         buffer.writeVarLong(0L);
         buffer.writeVarLong(0L);
@@ -239,6 +268,7 @@ class PerfReportCodecTest {
         buffer.writeUtf("test:level");
         buffer.writeUtf("loader");
         buffer.writeUtf("Loader");
+        buffer.writeBoolean(false);
         buffer.writeBoolean(false);
         buffer.writeVarInt(0);
         buffer.writeVarInt(regions);

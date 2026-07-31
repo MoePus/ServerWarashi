@@ -14,6 +14,7 @@ final class TickSamples {
     PerfAttributionSnapshot attribution;
     long durationNanos;
     int totalSamples;
+    boolean refreshReport;
 
     TickSamples(PerfAttributionSnapshot attribution) {
         this.attribution = attribution;
