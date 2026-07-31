@@ -27,7 +27,6 @@
     "ticket.DistanceManagerMixin",
     "ticket.TicketMixin",
     "ticket.TickingTrackerMixin",
-    "ticktiming.BlockableEventLoopTaskMixin",
     "ticktiming.LevelBlockEntityTickMixin",
     "ticktiming.NaturalSpawnerChunkMixin",
     "ticktiming.ServerLevelChunkTickMixin",
