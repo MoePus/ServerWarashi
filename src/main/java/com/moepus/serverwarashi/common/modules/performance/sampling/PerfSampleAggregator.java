@@ -16,7 +16,8 @@ import java.util.SplittableRandom;
 import java.util.function.ToDoubleFunction;
 
 final class PerfSampleAggregator {
-    private static final int VIEW_LIMIT = 512;
+    private static final int CHUNK_VIEW_LIMIT_PER_METRIC = 256;
+    private static final int TICKABLE_VIEW_LIMIT_PER_METRIC = 256;
     private static final int MAX_COORDINATES_PER_GROUP = 16;
     private static final int TRACKED_KEY_LIMIT = 16_384;
     private static final int DROPPED_HASH_LIMIT = 65_536;
@@ -63,10 +64,11 @@ final class PerfSampleAggregator {
                 elapsedNanos, totalSamples, intervalMicros);
         ObjectBuild objectBuild = buildObjects(nanosPerSample);
         var limitedChunks = PerfReportLimits.topMetricUnion(
-                chunkEntries(objectBuild.chunkCounts(), nanosPerSample), VIEW_LIMIT,
+                chunkEntries(objectBuild.chunkCounts(), nanosPerSample), CHUNK_VIEW_LIMIT_PER_METRIC,
                 PerfReportData.ChunkEntry::metric);
         var sampledTickables = objectBuild.tickables();
-        var limitedTickables = PerfReportLimits.topMetricUnion(sampledTickables.entries(), VIEW_LIMIT,
+        var limitedTickables = PerfReportLimits.topMetricUnion(
+                sampledTickables.entries(), TICKABLE_VIEW_LIMIT_PER_METRIC,
                 PerfReportData.TickableEntry::metric);
         PerfOwnerAggregator.Build ownerBuild = ownerAggregator.build(tickCount, nanosPerSample);
         double serverMspt = tickCount == 0 ? 0.0D : totalTickNanos / 1_000_000.0D / tickCount;
