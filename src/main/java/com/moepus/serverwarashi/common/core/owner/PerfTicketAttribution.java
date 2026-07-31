@@ -46,6 +46,9 @@ final class PerfTicketAttribution {
 
     private static List<PerfAttributionSnapshot.Bucket> resolveOrdinary(
             ServerLevel level, long chunkPos, Ticket<?> ticket) {
+        if (ticket.getType() == TicketType.UNKNOWN) {
+            return List.of(); // UNKNOWN is inserted by cached missed getChunk
+        }
         if (ticket.getType() == TicketType.PLAYER) {
             return PlayerAttribution.selfBuckets(level, chunkPos);
         }
@@ -151,7 +154,7 @@ final class PerfTicketAttribution {
 
     private static boolean isVanillaSystem(TicketType<?> type) {
         return type == TicketType.START || type == TicketType.DRAGON || type == TicketType.PORTAL
-                || type == TicketType.POST_TELEPORT || type == TicketType.UNKNOWN;
+                || type == TicketType.POST_TELEPORT;
     }
 
     record Resolved(List<PerfAttributionSnapshot.Bucket> buckets, BlockLoaderRef loaderRef) {
