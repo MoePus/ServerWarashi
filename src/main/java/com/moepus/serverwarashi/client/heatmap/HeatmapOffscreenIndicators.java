@@ -31,8 +31,15 @@ public final class HeatmapOffscreenIndicators {
     private static final int EDGE_INSET = 20;
     private static final float HALF_TANGENT = 17.0F;
     private static final float HALF_RADIAL = 10.0F;
-    private static final HeatmapColorStop DANGER_VIOLET = new HeatmapColorStop(224, 204, 70, 255);
-    private static final HeatmapColorStop DANGER_PINK = new HeatmapColorStop(232, 255, 48, 112);
+    private static final double LOWEST_COLOR_CONTRIBUTION = 0.25D;
+    private static final HeatmapColorStop[] INDICATOR_COLORS = {
+            new HeatmapColorStop(200, 64, 245, 255),
+            new HeatmapColorStop(204, 64, 220, 120),
+            new HeatmapColorStop(208, 255, 214, 64),
+            new HeatmapColorStop(212, 255, 145, 32),
+            new HeatmapColorStop(216, 244, 67, 54),
+            new HeatmapColorStop(224, 204, 70, 255)
+    };
     private static final Matrix4f MODEL_VIEW = new Matrix4f();
     private static long cachedReportRevision = Long.MIN_VALUE;
     private static long cachedWeakRevision = Long.MIN_VALUE;
@@ -158,8 +165,7 @@ public final class HeatmapOffscreenIndicators {
                 limitY / Math.max(Math.abs(dy), 1.0E-9D));
         int x = (int) Math.round(context.screenWidth() * 0.5D + dx * edgeScale);
         int y = (int) Math.round(context.screenHeight() * 0.5D + dy * edgeScale);
-        int color = indicatorColor(chunk);
-        return new Indicator(x, y, (float) angle, color, chunk.entityCount());
+        return new Indicator(x, y, (float) angle, chunk.color(), chunk.entityCount());
     }
 
     private static double direction(DangerousChunk chunk, RenderContext context) {
@@ -174,11 +180,17 @@ public final class HeatmapOffscreenIndicators {
         return Math.floorMod(bucket, DIRECTION_BUCKETS);
     }
 
-    private static int indicatorColor(DangerousChunk chunk) {
-        double weakRatio = chunk.entityCount() / (double) DANGER_ENTITY_COUNT;
-        double contributionRatio = chunk.priority() / ChunkHeatmapModel.PURPLE_CONTRIBUTION;
-        double severity = Math.log(Math.max(weakRatio, contributionRatio)) / Math.log(8.0D);
-        return DANGER_VIOLET.interpolate(DANGER_PINK, Math.clamp(severity, 0.0D, 1.0D));
+    static int indicatorArgb(float color) {
+        double position = Math.clamp(color, 0.0F, 1.0F) * (INDICATOR_COLORS.length - 1);
+        int lower = Math.min((int) Math.floor(position), INDICATOR_COLORS.length - 1);
+        int upper = Math.min(lower + 1, INDICATOR_COLORS.length - 1);
+        return INDICATOR_COLORS[lower].interpolate(INDICATOR_COLORS[upper], position - lower);
+    }
+
+    private static float colorLevel(double contribution) {
+        double level = Math.log(contribution / LOWEST_COLOR_CONTRIBUTION)
+                / Math.log(ChunkHeatmapModel.PURPLE_CONTRIBUTION / LOWEST_COLOR_CONTRIBUTION);
+        return (float) Math.clamp(level, 0.0D, 1.0D);
     }
 
     private static void replaceBuffer(List<Indicator> indicators) {
@@ -252,10 +264,11 @@ public final class HeatmapOffscreenIndicators {
                                 int screenHeight) {
     }
 
-    record Indicator(int x, int y, float angle, int color, int entityCount) {
+    record Indicator(int x, int y, float angle, float color, int entityCount) {
     }
 
-    private record DangerousChunk(int chunkX, int chunkZ, int entityCount, double priority) {
+    private record DangerousChunk(int chunkX, int chunkZ, int entityCount,
+                                  float color, double priority) {
     }
 
     private static final class ChunkRisk {
@@ -270,13 +283,14 @@ public final class HeatmapOffscreenIndicators {
         }
 
         private DangerousChunk dangerousChunk() {
-            if (!ChunkHeatmapModel.isPurple(metric, entityCount)) {
+            double combined = ChunkHeatmapModel.combinedContribution(metric, entityCount);
+            if (combined < ChunkHeatmapModel.RED_CONTRIBUTION) {
                 return null;
             }
-            double combined = ChunkHeatmapModel.combinedContribution(metric, entityCount);
             double weakScale = entityCount / (double) DANGER_ENTITY_COUNT
                     * ChunkHeatmapModel.PURPLE_CONTRIBUTION;
-            return new DangerousChunk(chunkX, chunkZ, entityCount, Math.max(combined, weakScale));
+            return new DangerousChunk(chunkX, chunkZ, entityCount,
+                    colorLevel(combined), Math.max(combined, weakScale));
         }
     }
 
@@ -306,7 +320,7 @@ public final class HeatmapOffscreenIndicators {
             float y = centerY + tangentY * localX * HALF_TANGENT + outwardY * localY * HALF_RADIAL;
             builder.addVertex(x, y, 0.0F)
                     .setUv((localX + 1.0F) * 0.5F, (localY + 1.0F) * 0.5F)
-                    .setColor(indicator.color());
+                    .setColor(indicatorArgb(indicator.color()));
         }
     }
 }

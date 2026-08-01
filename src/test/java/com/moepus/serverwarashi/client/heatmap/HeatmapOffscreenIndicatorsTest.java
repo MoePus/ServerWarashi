@@ -18,8 +18,8 @@ class HeatmapOffscreenIndicatorsTest {
                     "minecraft:overworld", VIEWPORT, 8.0D, 8.0D, 400, 240);
 
     @Test
-    void ignoresSubThresholdAndVisibleWarnings() {
-        var indicators = planWeak(warning(20, 0, 499), warning(0, 0, 2_000));
+    void ignoresBelowRedAndVisibleWarnings() {
+        var indicators = planWeak(warning(20, 0, 349), warning(0, 0, 2_000));
 
         assertTrue(indicators.isEmpty());
     }
@@ -44,12 +44,42 @@ class HeatmapOffscreenIndicatorsTest {
     }
 
     @Test
-    void shiftsFromVioletToHotPinkAsDangerRises() {
-        int violet = planWeak(warning(20, 0, 500)).getFirst().color();
-        int hotPink = planWeak(warning(20, 0, 4_000)).getFirst().color();
+    void usesAbsoluteColorScaleFromRedToPurple() {
+        float red = planWeak(warning(20, 0, 350)).getFirst().color();
+        float between = planWeak(warning(20, 0, 425)).getFirst().color();
+        float purple = planWeak(warning(20, 0, 500)).getFirst().color();
 
-        assertEquals(0xE0CC46FF, violet);
-        assertEquals(0xE8FF3070, hotPink);
+        assertEquals(0.8F, red, 0.0001F);
+        assertEquals(0.9F, between, 0.0001F);
+        assertEquals(1.0F, purple, 0.0001F);
+    }
+
+    @Test
+    void clampsColorAtPurpleAsDangerRises() {
+        float purple = planWeak(warning(20, 0, 500)).getFirst().color();
+        float extreme = planWeak(warning(20, 0, 4_000)).getFirst().color();
+
+        assertEquals(1.0F, purple, 0.0001F);
+        assertEquals(1.0F, extreme, 0.0001F);
+    }
+
+    @Test
+    void mapsNormalizedColorAcrossTheReservedPalette() {
+        assertEquals(0xC840F5FF, HeatmapOffscreenIndicators.indicatorArgb(0.0F));
+        assertEquals(0xCC40DC78, HeatmapOffscreenIndicators.indicatorArgb(0.2F));
+        assertEquals(0xD0FFD640, HeatmapOffscreenIndicators.indicatorArgb(0.4F));
+        assertEquals(0xD4FF9120, HeatmapOffscreenIndicators.indicatorArgb(0.6F));
+        assertEquals(0xD8F44336, HeatmapOffscreenIndicators.indicatorArgb(0.8F));
+        assertEquals(0xE0CC46FF, HeatmapOffscreenIndicators.indicatorArgb(1.0F));
+    }
+
+    @Test
+    void includesRedPerformanceChunksWithoutWeakWarnings() {
+        var indicators = HeatmapOffscreenIndicators.plan(
+                report(chunk(20, 0, metric(2.0D, 12.0D))), null, CONTEXT);
+
+        assertEquals(1, indicators.size());
+        assertEquals(0.8F, indicators.getFirst().color(), 0.0001F);
     }
 
     @Test
@@ -72,7 +102,7 @@ class HeatmapOffscreenIndicatorsTest {
     }
 
     @Test
-    void ignoresPerformanceChunksBelowPurple() {
+    void ignoresPerformanceChunksBelowRed() {
         var indicators = HeatmapOffscreenIndicators.plan(
                 report(chunk(20, 0, metric(1.0D, 6.0D))), null, CONTEXT);
 

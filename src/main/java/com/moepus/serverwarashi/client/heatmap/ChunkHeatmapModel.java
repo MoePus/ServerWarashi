@@ -31,6 +31,7 @@ public final class ChunkHeatmapModel {
             new HeatmapColorStop(136, 244, 67, 54),
             new HeatmapColorStop(160, 190, 45, 220)
     };
+    static final double RED_CONTRIBUTION = 1 << (COLORS.length - 2);
     static final double PURPLE_CONTRIBUTION = 1 << (COLORS.length - 1);
 
     private ChunkHeatmapModel() {
@@ -240,10 +241,6 @@ public final class ChunkHeatmapModel {
             return performanceContribution;
         }
         return Math.pow(2.0D, weakPosition(weakEntityCount)) + performanceContribution;
-    }
-
-    static boolean isPurple(PerfReportData.Metric metric, int weakEntityCount) {
-        return combinedContribution(metric, weakEntityCount) >= PURPLE_CONTRIBUTION;
     }
 
     private static double weakPosition(int entityCount) {
