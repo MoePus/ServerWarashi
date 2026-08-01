@@ -34,6 +34,7 @@ public final class ServerWarashiEvents {
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             PerfReportDelivery.onLogout(player);
+            WeakChunkDelivery.setMapSubscribed(player.getUUID(), false);
         }
     }
 }

@@ -28,7 +28,9 @@ class WeakChunkClearJobsTest {
 
     @Test
     void rejectsWarningBelowDangerThreshold() {
-        var warning = new WeakChunkSnapshot.ChunkEntry(0, 0, 499, Map.of(FIRST, 499));
+        int belowDanger = WeakChunkSnapshot.ENTITY_RED_THRESHOLD - 1;
+        var warning = new WeakChunkSnapshot.ChunkEntry(
+                0, 0, belowDanger, Map.of(FIRST, belowDanger));
 
         assertFalse(WeakChunkClearJobs.isEstimatedTarget(warning, FIRST));
     }

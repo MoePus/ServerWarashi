@@ -63,7 +63,7 @@ public record WeakChunkPayload(WeakChunkSnapshot snapshot,
                 sweepId, sweepComplete);
     }
 
-    private static void writeChunk(RegistryFriendlyByteBuf buffer, WeakChunkSnapshot.ChunkEntry chunk) {
+    static void writeChunk(RegistryFriendlyByteBuf buffer, WeakChunkSnapshot.ChunkEntry chunk) {
         buffer.writeInt(chunk.chunkX());
         buffer.writeInt(chunk.chunkZ());
         buffer.writeVarInt(chunk.entityCount());
@@ -74,7 +74,7 @@ public record WeakChunkPayload(WeakChunkSnapshot snapshot,
         });
     }
 
-    private static WeakChunkSnapshot.ChunkEntry readChunk(RegistryFriendlyByteBuf buffer) {
+    static WeakChunkSnapshot.ChunkEntry readChunk(RegistryFriendlyByteBuf buffer) {
         int chunkX = buffer.readInt();
         int chunkZ = buffer.readInt();
         int entityCount = buffer.readVarInt();

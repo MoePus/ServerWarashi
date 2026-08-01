@@ -67,10 +67,10 @@ public final class WeakChunkCollector {
                 hasPendingSection = true;
             }
         }
-        return new ScanResult(List.copyOf(warnings), cursor.sweepId(), false, scanned);
+        return new ScanResult(List.copyOf(warnings), cursor.sweepId(), false, scanned, false);
     }
 
-    static WeakChunkSnapshot.ChunkEntry inspect(ServerLevel level, long chunkPos) {
+    public static WeakChunkSnapshot.ChunkEntry inspect(ServerLevel level, long chunkPos) {
         return collectChunk(WeakChunkEntityAccess.storage(level),
                 level.dimension().location().toString(), chunkPos);
     }
@@ -205,22 +205,22 @@ public final class WeakChunkCollector {
             wrapped = false;
             exhausted = false;
             skipStartChunk = false;
-            return new ScanResult(List.copyOf(warnings), completedSweep, true, scanned);
+            return new ScanResult(List.copyOf(warnings), completedSweep, true, scanned, false);
         }
 
         ScanResult emptyResult() {
             if (emptySweepSent) {
-                return new ScanResult(List.of(), sweepId, false, 0);
+                return new ScanResult(List.of(), sweepId, false, 0, true);
             }
             emptySweepSent = true;
             long completedSweep = sweepId++;
             initialized = false;
             wrapped = false;
             exhausted = false;
-            return new ScanResult(List.of(), completedSweep, true, 0);
+            return new ScanResult(List.of(), completedSweep, true, 0, true);
         }
 
-        long sweepId() {
+        public long sweepId() {
             return sweepId;
         }
 
@@ -241,7 +241,8 @@ public final class WeakChunkCollector {
     public record ScanResult(List<WeakChunkSnapshot.ChunkEntry> warnings,
                              long sweepId,
                              boolean sweepComplete,
-                             int scannedChunks) {
+                             int scannedChunks,
+                             boolean emptyStorage) {
         public ScanResult {
             warnings = List.copyOf(warnings);
         }

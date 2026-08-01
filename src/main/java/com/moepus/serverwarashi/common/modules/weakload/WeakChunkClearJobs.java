@@ -50,7 +50,8 @@ public final class WeakChunkClearJobs {
         return true;
     }
 
-    public static void tick(MinecraftServer server) {
+    public static List<CompletedChunk> tick(MinecraftServer server) {
+        List<CompletedChunk> completed = new ArrayList<>();
         int remaining = ENTITIES_PER_TICK;
         int jobsToVisit = JOBS.size();
         while (remaining > 0 && jobsToVisit-- > 0) {
@@ -66,10 +67,12 @@ public final class WeakChunkClearJobs {
             job.consumeAttempts(result.attempted());
             if (result.complete() || job.attemptLimitReached()) {
                 ACTIVE.remove(job.key());
+                completed.add(new CompletedChunk(job.key().dimension(), job.key().chunkPos()));
             } else {
                 JOBS.addLast(job);
             }
         }
+        return List.copyOf(completed);
     }
 
     public static void clear() {
@@ -195,6 +198,9 @@ public final class WeakChunkClearJobs {
     }
 
     public record Request(String dimension, int chunkX, int chunkZ, WeakEntityType target) {
+    }
+
+    public record CompletedChunk(ResourceKey<Level> dimension, long chunkPos) {
     }
 
     private record JobKey(ResourceKey<Level> dimension, long chunkPos) {

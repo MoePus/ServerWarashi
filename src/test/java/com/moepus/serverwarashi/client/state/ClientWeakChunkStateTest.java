@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.client.state;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import com.moepus.serverwarashi.common.network.WeakChunkPayload;
+import com.moepus.serverwarashi.common.network.WeakChunkCorrectionPayload;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +74,40 @@ class ClientWeakChunkStateTest {
         assertEquals(revision + 1L, ClientWeakChunkState.snapshot().revision());
     }
 
+    @Test
+    void correctionUpsertsAndRemovesOneChunk() {
+        ClientWeakChunkState.update(payload(0L, true, chunk(1, 2)));
+        WeakChunkSnapshot.ChunkEntry updated = chunk(1, 2, 80);
+
+        ClientWeakChunkState.correct(correction(updated));
+        assertEquals(updated, ClientWeakChunkState.chunk(DIMENSION, 1, 2));
+
+        ClientWeakChunkState.correct(new WeakChunkCorrectionPayload(
+                DIMENSION, 1, 2, 3L, java.util.Optional.empty()));
+        assertEquals(null, ClientWeakChunkState.chunk(DIMENSION, 1, 2));
+    }
+
+    @Test
+    void ignoresCorrectionForAnotherDimension() {
+        ClientWeakChunkState.update(payload(0L, true, chunk(1, 2)));
+        ClientWeakChunkState.correct(new WeakChunkCorrectionPayload(
+                "minecraft:the_nether", 1, 2, 3L, chunk(1, 2, 80)));
+
+        assertEquals(chunk(1, 2), ClientWeakChunkState.chunk(DIMENSION, 1, 2));
+    }
+
+    @Test
+    void correctionSurvivesCurrentSweepCompletion() {
+        ClientWeakChunkState.update(payload(0L, true, chunk(1, 2)));
+        ClientWeakChunkState.update(payload(1L, false));
+        WeakChunkSnapshot.ChunkEntry corrected = chunk(3, 4, 80);
+
+        ClientWeakChunkState.correct(correction(corrected));
+        ClientWeakChunkState.update(payload(1L, true));
+
+        assertEquals(List.of(corrected), ClientWeakChunkState.snapshot().chunks());
+    }
+
     private static WeakChunkPayload payload(long sweepId,
                                             boolean complete,
                                             WeakChunkSnapshot.ChunkEntry... chunks) {
@@ -81,7 +116,15 @@ class ClientWeakChunkStateTest {
     }
 
     private static WeakChunkSnapshot.ChunkEntry chunk(int x, int z) {
+        return chunk(x, z, 50);
+    }
+
+    private static WeakChunkSnapshot.ChunkEntry chunk(int x, int z, int count) {
         var item = new WeakEntityType(WeakEntityType.Kind.ITEM, "minecraft:cobblestone");
-        return new WeakChunkSnapshot.ChunkEntry(x, z, 50, Map.of(item, 50));
+        return new WeakChunkSnapshot.ChunkEntry(x, z, count, Map.of(item, count));
+    }
+
+    private static WeakChunkCorrectionPayload correction(WeakChunkSnapshot.ChunkEntry entry) {
+        return new WeakChunkCorrectionPayload(DIMENSION, entry.chunkX(), entry.chunkZ(), 2L, entry);
     }
 }

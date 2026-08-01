@@ -11,6 +11,7 @@ import com.moepus.serverwarashi.common.network.ClientPayloadHandlers;
 import com.moepus.serverwarashi.common.network.LoaderControlStatePayload;
 import com.moepus.serverwarashi.common.network.PerfReportPayload;
 import com.moepus.serverwarashi.common.network.WeakChunkPayload;
+import com.moepus.serverwarashi.common.network.WeakChunkCorrectionPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
@@ -31,6 +32,7 @@ public final class ClientSetup {
     public static void onClientSetup(FMLClientSetupEvent event) {
         ClientPayloadHandlers.setPerfReportHandler(ClientSetup::handlePerfReport);
         ClientPayloadHandlers.setWeakChunkHandler(ClientSetup::handleWeakChunks);
+        ClientPayloadHandlers.setWeakChunkCorrectionHandler(ClientSetup::handleWeakChunkCorrection);
         ClientPayloadHandlers.setLoaderControlHandler(ClientSetup::handleLoaderControl);
     }
 
@@ -40,6 +42,16 @@ public final class ClientSetup {
             if (minecraft.level != null && minecraft.level.dimension().location().toString()
                     .equals(payload.snapshot().dimension())) {
                 ClientWeakChunkState.update(payload);
+            }
+        });
+    }
+
+    private static void handleWeakChunkCorrection(WeakChunkCorrectionPayload payload) {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> {
+            if (minecraft.level != null && minecraft.level.dimension().location().toString()
+                    .equals(payload.dimension())) {
+                ClientWeakChunkState.correct(payload);
             }
         });
     }

@@ -2,6 +2,7 @@ package com.moepus.serverwarashi.client.state;
 
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.network.WeakChunkPayload;
+import com.moepus.serverwarashi.common.network.WeakChunkCorrectionPayload;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
@@ -65,6 +66,30 @@ public final class ClientWeakChunkState {
         if (renderDirty) {
             renderDirty = false;
             revision++;
+            cachedSnapshot = null;
+        }
+    }
+
+    public static void correct(WeakChunkCorrectionPayload payload) {
+        if (!java.util.Objects.equals(dimension, payload.dimension())) {
+            return;
+        }
+        long key = ChunkPos.asLong(payload.chunkX(), payload.chunkZ());
+        WeakChunkSnapshot.ChunkEntry previous;
+        boolean changed;
+        if (payload.entry().isPresent()) {
+            WeakChunkSnapshot.ChunkEntry entry = payload.entry().orElseThrow();
+            previous = ENTRIES.put(key, entry);
+            SWEEP_SEEN.add(key);
+            changed = !entry.equals(previous);
+        } else {
+            previous = ENTRIES.remove(key);
+            SWEEP_SEEN.remove(key);
+            changed = previous != null;
+        }
+        generatedAt = Math.max(generatedAt, payload.generatedAtEpochMillis());
+        if (changed) {
+            renderDirty = true;
             cachedSnapshot = null;
         }
     }

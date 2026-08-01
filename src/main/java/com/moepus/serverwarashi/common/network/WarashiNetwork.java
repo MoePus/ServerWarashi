@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 @EventBusSubscriber(modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class WarashiNetwork {
-    static final String NETWORK_VERSION = "3";
+    static final String NETWORK_VERSION = "4";
 
     private WarashiNetwork() {
     }
@@ -28,6 +28,9 @@ public final class WarashiNetwork {
                         (payload, context) -> ClientPayloadHandlers.handlePerfReport(payload))
                 .playToClient(WeakChunkPayload.TYPE, WeakChunkPayload.STREAM_CODEC,
                         (payload, context) -> ClientPayloadHandlers.handleWeakChunks(payload))
+                .playToClient(WeakChunkCorrectionPayload.TYPE,
+                        WeakChunkCorrectionPayload.STREAM_CODEC,
+                        (payload, context) -> ClientPayloadHandlers.handleWeakChunkCorrection(payload))
                 .playToClient(LoaderControlStatePayload.TYPE, LoaderControlStatePayload.STREAM_CODEC,
                         (payload, context) -> ClientPayloadHandlers.handleLoaderControl(payload))
                 .playToServer(PerfMapSubscriptionPayload.TYPE, PerfMapSubscriptionPayload.STREAM_CODEC,
@@ -35,9 +38,8 @@ public final class WarashiNetwork {
                             if (context.player() instanceof ServerPlayer player) {
                                 PerfReportDelivery.setMapSubscribed(player, payload.subscribed(),
                                         TicketPerfRuntime.currentReport(), TicketPerfRuntime.isProfiling());
-                                if (payload.subscribed()) {
-                                    WeakChunkDelivery.requestRefresh();
-                                }
+                                WeakChunkDelivery.setMapSubscribed(
+                                        player.getUUID(), payload.subscribed());
                             }
                         })
                 .playToServer(PerfControlPayload.TYPE, PerfControlPayload.STREAM_CODEC,
@@ -112,6 +114,22 @@ public final class WarashiNetwork {
                                       long sweepId,
                                       boolean sweepComplete) {
         PacketDistributor.sendToPlayer(player, new WeakChunkPayload(snapshot, sweepId, sweepComplete));
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    public static boolean canSendWeakChunks(ServerPlayer player) {
+        return NetworkRegistry.hasChannel(player.connection, WeakChunkPayload.TYPE.id());
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    public static boolean canSendWeakChunkCorrection(ServerPlayer player) {
+        return NetworkRegistry.hasChannel(
+                player.connection, WeakChunkCorrectionPayload.TYPE.id());
+    }
+
+    public static void sendWeakChunkCorrection(
+            ServerPlayer player, WeakChunkCorrectionPayload payload) {
+        PacketDistributor.sendToPlayer(player, payload);
     }
 
     public static void sendLoaderControlState(

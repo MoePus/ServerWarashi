@@ -8,6 +8,8 @@ public final class ClientPayloadHandlers {
     };
     private static Consumer<WeakChunkPayload> weakChunkHandler = ignored -> {
     };
+    private static Consumer<WeakChunkCorrectionPayload> weakChunkCorrectionHandler = ignored -> {
+    };
     private static Consumer<LoaderControlStatePayload> loaderControlHandler = ignored -> {
     };
 
@@ -28,6 +30,15 @@ public final class ClientPayloadHandlers {
 
     public static void handleWeakChunks(WeakChunkPayload payload) {
         weakChunkHandler.accept(payload);
+    }
+
+    public static void setWeakChunkCorrectionHandler(
+            Consumer<WeakChunkCorrectionPayload> handler) {
+        weakChunkCorrectionHandler = Objects.requireNonNull(handler, "handler");
+    }
+
+    public static void handleWeakChunkCorrection(WeakChunkCorrectionPayload payload) {
+        weakChunkCorrectionHandler.accept(payload);
     }
 
     public static void setLoaderControlHandler(Consumer<LoaderControlStatePayload> handler) {
