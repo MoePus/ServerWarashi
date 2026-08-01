@@ -64,7 +64,7 @@ public final class XaeroWeakChunkClearMenu {
         int chunkX = map.serverwarashi$getRightClickX() >> 4;
         int chunkZ = map.serverwarashi$getRightClickZ() >> 4;
         WeakChunkSnapshot.ChunkEntry chunk = ClientWeakChunkState.chunk(dimension, chunkX, chunkZ);
-        if (chunk == null || chunk.entityCount() < WeakChunkSnapshot.ENTITY_DANGER_THRESHOLD) {
+        if (chunk == null || chunk.entityCount() < WeakChunkSnapshot.ENTITY_RED_THRESHOLD) {
             return null;
         }
         Map.Entry<WeakEntityType, Integer> top = chunk.topTypes(1).getFirst();

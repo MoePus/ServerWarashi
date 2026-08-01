@@ -52,7 +52,8 @@ class ChunkHeatmapModelTest {
         assertEquals(0x68FFB430, ChunkHeatmapModel.weakColor(125));
         assertEquals(0x70FF9120, ChunkHeatmapModel.weakColor(200));
         assertEquals(0x7CFA6A2B, ChunkHeatmapModel.weakColor(275));
-        assertEquals(0x88F44336, ChunkHeatmapModel.weakColor(350));
+        assertEquals(0x88F44336,
+                ChunkHeatmapModel.weakColor(WeakChunkSnapshot.ENTITY_RED_THRESHOLD));
         assertEquals(0x94D93889, ChunkHeatmapModel.weakColor(425));
         assertEquals(0xA0BE2DDC, ChunkHeatmapModel.weakColor(500));
     }
