@@ -21,18 +21,10 @@ public final class ChunkHeatmapModel {
     private static final int MAX_LOADER_QUADS = 16_384;
     private static final int MAX_LOADER_ASSOCIATIONS = 65_536;
     private static final int MAX_SOURCES_PER_CHUNK = 4;
-    private static final HeatmapColorStop LOADER_GREEN = new HeatmapColorStop(36, 64, 220, 120);
+    private static final HeatmapColorStop LOADER_GREEN = HeatmapRiskScale.GREEN.withAlpha(36);
     private static final HeatmapColorStop LOADER_CYAN = new HeatmapColorStop(48, 45, 220, 235);
     static final int INACTIVE_LOADER_COLOR = 0x385C6268;
-    private static final HeatmapColorStop[] COLORS = {
-            new HeatmapColorStop(96, 255, 214, 64),
-            new HeatmapColorStop(112, 255, 145, 32),
-            new HeatmapColorStop(136, 244, 67, 54),
-            new HeatmapColorStop(160, 190, 45, 220)
-    };
-    static final double RED_CONTRIBUTION = 1 << (COLORS.length - 2);
-    static final double PURPLE_CONTRIBUTION = 1 << (COLORS.length - 1);
-    private static final double MAX_BURST_CONTRIBUTION = RED_CONTRIBUTION - 0.25D;
+    private static final double MAX_BURST_CONTRIBUTION = HeatmapRiskScale.RED_CONTRIBUTION - 0.25D;
 
     private ChunkHeatmapModel() {
     }
@@ -226,15 +218,15 @@ public final class ChunkHeatmapModel {
     }
 
     static int color(PerfReportData.Metric metric) {
-        return colorAtPosition(Math.log(Math.max(1.0D, severity(metric))) / Math.log(2.0D));
+        return HeatmapRiskScale.colorForContribution(severity(metric));
     }
 
     static int weakColor(int entityCount) {
-        return colorAtPosition(weakPosition(entityCount));
+        return HeatmapRiskScale.colorForPosition(weakPosition(entityCount));
     }
 
     static int combinedColor(PerfReportData.Metric metric, int entityCount) {
-        return colorAtPosition(Math.log(combinedContribution(metric, entityCount)) / Math.log(2.0D));
+        return HeatmapRiskScale.colorForContribution(combinedContribution(metric, entityCount));
     }
 
     static double combinedContribution(PerfReportData.Metric metric, int weakEntityCount) {
@@ -242,19 +234,12 @@ public final class ChunkHeatmapModel {
         if (weakEntityCount < WeakChunkSnapshot.ENTITY_WARNING_THRESHOLD) {
             return performanceContribution;
         }
-        return Math.pow(2.0D, weakPosition(weakEntityCount)) + performanceContribution;
+        return HeatmapRiskScale.contributionAtPosition(weakPosition(weakEntityCount))
+                + performanceContribution;
     }
 
     private static double weakPosition(int entityCount) {
-        return Math.max(0.0D, Math.min(3.0D,
-                (entityCount - WeakChunkSnapshot.ENTITY_WARNING_THRESHOLD) / 150.0D));
-    }
-
-    private static int colorAtPosition(double position) {
-        position = Math.max(0.0D, Math.min(COLORS.length - 1.0D, position));
-        int lower = Math.min((int) Math.floor(position), COLORS.length - 1);
-        int upper = Math.min(lower + 1, COLORS.length - 1);
-        return COLORS[lower].interpolate(COLORS[upper], position - lower);
+        return HeatmapRiskScale.weakPosition(entityCount);
     }
 
     static int loaderColor(PerfReportData.Metric metric) {

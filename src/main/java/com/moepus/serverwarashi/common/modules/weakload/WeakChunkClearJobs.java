@@ -86,7 +86,7 @@ public final class WeakChunkClearJobs {
 
     static boolean isEstimatedTarget(WeakChunkSnapshot.ChunkEntry warning, WeakEntityType target) {
         return warning != null
-                && warning.entityCount() >= WeakChunkSnapshot.ENTITY_DANGER_THRESHOLD
+                && warning.entityCount() >= WeakChunkSnapshot.ENTITY_RED_THRESHOLD
                 && warning.topTypes(VALIDATION_TOP_TYPES).stream()
                 .anyMatch(entry -> entry.getKey().equals(target));
     }

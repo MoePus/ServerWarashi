@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class HeatmapOffscreenIndicators {
-    static final int DANGER_ENTITY_COUNT = WeakChunkSnapshot.ENTITY_DANGER_THRESHOLD;
+    static final int DANGER_ENTITY_COUNT = WeakChunkSnapshot.ENTITY_PURPLE_THRESHOLD;
     private static final int DIRECTION_BUCKETS = 16;
     private static final int INDICATOR_PASS = 3;
     private static final int EDGE_INSET = 20;
@@ -34,10 +34,10 @@ public final class HeatmapOffscreenIndicators {
     private static final double LOWEST_COLOR_CONTRIBUTION = 0.25D;
     private static final HeatmapColorStop[] INDICATOR_COLORS = {
             new HeatmapColorStop(200, 64, 245, 255),
-            new HeatmapColorStop(204, 64, 220, 120),
-            new HeatmapColorStop(208, 255, 214, 64),
-            new HeatmapColorStop(212, 255, 145, 32),
-            new HeatmapColorStop(216, 244, 67, 54),
+            HeatmapRiskScale.GREEN.withAlpha(204),
+            HeatmapRiskScale.YELLOW.withAlpha(208),
+            HeatmapRiskScale.ORANGE.withAlpha(212),
+            HeatmapRiskScale.RED.withAlpha(216),
             new HeatmapColorStop(224, 204, 70, 255)
     };
     private static final Matrix4f MODEL_VIEW = new Matrix4f();
@@ -182,14 +182,12 @@ public final class HeatmapOffscreenIndicators {
 
     static int indicatorArgb(float color) {
         double position = Math.clamp(color, 0.0F, 1.0F) * (INDICATOR_COLORS.length - 1);
-        int lower = Math.min((int) Math.floor(position), INDICATOR_COLORS.length - 1);
-        int upper = Math.min(lower + 1, INDICATOR_COLORS.length - 1);
-        return INDICATOR_COLORS[lower].interpolate(INDICATOR_COLORS[upper], position - lower);
+        return HeatmapColorStop.interpolate(INDICATOR_COLORS, position);
     }
 
     private static float colorLevel(double contribution) {
         double level = Math.log(contribution / LOWEST_COLOR_CONTRIBUTION)
-                / Math.log(ChunkHeatmapModel.PURPLE_CONTRIBUTION / LOWEST_COLOR_CONTRIBUTION);
+                / Math.log(HeatmapRiskScale.PURPLE_CONTRIBUTION / LOWEST_COLOR_CONTRIBUTION);
         return (float) Math.clamp(level, 0.0D, 1.0D);
     }
 
@@ -284,11 +282,11 @@ public final class HeatmapOffscreenIndicators {
 
         private DangerousChunk dangerousChunk() {
             double combined = ChunkHeatmapModel.combinedContribution(metric, entityCount);
-            if (combined < ChunkHeatmapModel.RED_CONTRIBUTION) {
+            if (combined < HeatmapRiskScale.RED_CONTRIBUTION) {
                 return null;
             }
             double weakScale = entityCount / (double) DANGER_ENTITY_COUNT
-                    * ChunkHeatmapModel.PURPLE_CONTRIBUTION;
+                    * HeatmapRiskScale.PURPLE_CONTRIBUTION;
             return new DangerousChunk(chunkX, chunkZ, entityCount,
                     colorLevel(combined), Math.max(combined, weakScale));
         }
