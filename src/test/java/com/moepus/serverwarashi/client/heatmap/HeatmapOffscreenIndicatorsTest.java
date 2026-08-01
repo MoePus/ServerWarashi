@@ -76,7 +76,7 @@ class HeatmapOffscreenIndicatorsTest {
     @Test
     void includesRedPerformanceChunksWithoutWeakWarnings() {
         var indicators = HeatmapOffscreenIndicators.plan(
-                report(chunk(20, 0, metric(2.0D, 12.0D))), null, CONTEXT);
+                report(chunk(20, 0, metric(2.0D, 2.0D))), null, CONTEXT);
 
         assertEquals(1, indicators.size());
         assertEquals(0.8F, indicators.getFirst().color(), 0.0001F);
@@ -85,7 +85,7 @@ class HeatmapOffscreenIndicatorsTest {
     @Test
     void includesPurplePerformanceChunksWithoutWeakWarnings() {
         var indicators = HeatmapOffscreenIndicators.plan(
-                report(chunk(20, 0, metric(4.0D, 24.0D))), null, CONTEXT);
+                report(chunk(20, 0, metric(4.0D, 4.0D))), null, CONTEXT);
 
         assertEquals(1, indicators.size());
         assertEquals(0, indicators.getFirst().entityCount());
@@ -94,7 +94,7 @@ class HeatmapOffscreenIndicatorsTest {
     @Test
     void includesChunksWhoseCombinedRiskReachesPurple() {
         var indicators = HeatmapOffscreenIndicators.plan(
-                report(chunk(20, 0, metric(2.0D, 12.0D))),
+                report(chunk(20, 0, metric(2.0D, 2.0D))),
                 snapshot(warning(20, 0, 350)), CONTEXT);
 
         assertEquals(1, indicators.size());

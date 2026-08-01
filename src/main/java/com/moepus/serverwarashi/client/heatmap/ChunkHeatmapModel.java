@@ -17,8 +17,7 @@ import java.util.Set;
 public final class ChunkHeatmapModel {
     static final double MSPT_THRESHOLD = 0.5D;
     static final double MAX_THRESHOLD = 3.0D;
-    private static final double MSPT_WEIGHT = 0.65D;
-    private static final double MAX_WEIGHT = 0.35D;
+    private static final double LOG_TWO = Math.log(2.0D);
     private static final int MAX_LOADER_QUADS = 16_384;
     private static final int MAX_LOADER_ASSOCIATIONS = 65_536;
     private static final int MAX_SOURCES_PER_CHUNK = 4;
@@ -33,6 +32,7 @@ public final class ChunkHeatmapModel {
     };
     static final double RED_CONTRIBUTION = 1 << (COLORS.length - 2);
     static final double PURPLE_CONTRIBUTION = 1 << (COLORS.length - 1);
+    private static final double MAX_BURST_CONTRIBUTION = RED_CONTRIBUTION - 0.25D;
 
     private ChunkHeatmapModel() {
     }
@@ -219,8 +219,10 @@ public final class ChunkHeatmapModel {
 
     static double severity(PerfReportData.Metric metric) {
         double normalizedMspt = metric.mspt() / MSPT_THRESHOLD;
-        double normalizedMax = metric.max() / MAX_THRESHOLD;
-        return normalizedMspt * MSPT_WEIGHT + normalizedMax * MAX_WEIGHT;
+        double burst = Math.max(0.0D, metric.max() - metric.mspt()) / MAX_THRESHOLD;
+        double burstContribution = Math.min(
+                MAX_BURST_CONTRIBUTION, Math.log1p(burst) / LOG_TWO);
+        return normalizedMspt + burstContribution;
     }
 
     static int color(PerfReportData.Metric metric) {

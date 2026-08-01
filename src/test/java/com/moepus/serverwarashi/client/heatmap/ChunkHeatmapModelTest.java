@@ -31,13 +31,19 @@ class ChunkHeatmapModelTest {
 
     @Test
     void mapsPowerOfTwoSeverityToColorStops() {
-        assertEquals(0.65D, ChunkHeatmapModel.severity(metric(0.5D, 0.0D)), 0.0D);
-        assertEquals(0.35D, ChunkHeatmapModel.severity(metric(0.0D, 3.0D)), 0.0D);
-        assertEquals(0x60FFD640, ChunkHeatmapModel.color(metric(0.5D, 3.0D)));
-        assertEquals(0x70FF9120, ChunkHeatmapModel.color(metric(1.0D, 6.0D)));
-        assertEquals(0x88F44336, ChunkHeatmapModel.color(metric(2.0D, 12.0D)));
-        assertEquals(0xA0BE2DDC, ChunkHeatmapModel.color(metric(4.0D, 24.0D)));
-        assertEquals(0xA0BE2DDC, ChunkHeatmapModel.color(metric(40.0D, 240.0D)));
+        assertEquals(1.0D, ChunkHeatmapModel.severity(metric(0.5D, 0.5D)), 0.0D);
+        assertEquals(1.0D, ChunkHeatmapModel.severity(metric(0.0D, 3.0D)), 0.0D);
+        assertEquals(0x60FFD640, ChunkHeatmapModel.color(metric(0.5D, 0.5D)));
+        assertEquals(0x70FF9120, ChunkHeatmapModel.color(metric(1.0D, 1.0D)));
+        assertEquals(0x88F44336, ChunkHeatmapModel.color(metric(2.0D, 2.0D)));
+        assertEquals(0xA0BE2DDC, ChunkHeatmapModel.color(metric(4.0D, 4.0D)));
+        assertEquals(0xA0BE2DDC, ChunkHeatmapModel.color(metric(40.0D, 40.0D)));
+    }
+
+    @Test
+    void capsMaxJustBelowRedAndLetsAverageTipItOver() {
+        assertEquals(3.75D, ChunkHeatmapModel.severity(metric(0.0D, 50.0D)), 0.0D);
+        assertEquals(4.25D, ChunkHeatmapModel.severity(metric(0.25D, 50.0D)), 0.0D);
     }
 
     @Test
@@ -53,7 +59,7 @@ class ChunkHeatmapModelTest {
 
     @Test
     void combinesWeakAndPerformanceContributionsBeforeChoosingColor() {
-        PerfReportData.Metric yellowPerformance = metric(0.5D, 3.0D);
+        PerfReportData.Metric yellowPerformance = metric(0.5D, 0.5D);
         assertEquals(0x70FF9120, ChunkHeatmapModel.combinedColor(yellowPerformance, 50));
 
         WeakChunkSnapshot weak = weakSnapshot("minecraft:overworld", 1, 2, 50);
@@ -96,8 +102,8 @@ class ChunkHeatmapModelTest {
     @Test
     void mapsLoaderLowCostRangeFromGreenToCyan() {
         assertEquals(0x2440DC78, ChunkHeatmapModel.loaderColor(null));
-        assertEquals(0x283ADC9D, ChunkHeatmapModel.loaderColor(metric(0.25D, 0.0D)));
-        assertEquals(0x2C34DCC3, ChunkHeatmapModel.loaderColor(metric(0.5D, 0.0D)));
+        assertEquals(0x2A37DCB2, ChunkHeatmapModel.loaderColor(metric(0.25D, 0.25D)));
+        assertEquals(0x302DDCEB, ChunkHeatmapModel.loaderColor(metric(0.5D, 0.5D)));
     }
 
     @Test
