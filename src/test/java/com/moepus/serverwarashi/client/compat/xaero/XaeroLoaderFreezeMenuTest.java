@@ -20,7 +20,7 @@ class XaeroLoaderFreezeMenuTest {
     @Test
     void selectsSupportedHoveredLoadersWithStableIdentityOrdering() {
         BlockPos firstPos = new BlockPos(-8, 70, -24);
-        BlockPos secondPos = new BlockPos(8, 64, 8);
+        BlockPos secondPos = new BlockPos(-1, 64, -17);
         var second = loader(new Fixture("second", "test:z", secondPos,
                 false, 0, "minecraft:overworld", HOVERED_REGION));
         var first = loader(new Fixture("first", "test:a", firstPos,
@@ -45,17 +45,20 @@ class XaeroLoaderFreezeMenuTest {
     }
 
     @Test
-    void rejectsOutsideRegionsAndStaleOrZeroReports() {
+    void selectsOnlyTheLoaderPlacementChunkAndRejectsStaleReports() {
+        var loadedRegion = new PerfReportData.LoaderRegion(0, 0, 2, 1);
         var source = loader(new Fixture("source", "test:loader", BlockPos.ZERO,
-                false, 0, "minecraft:overworld", HOVERED_REGION));
+                false, 0, "minecraft:overworld", loadedRegion));
         var report = report(REPORT_ID, List.of(source));
 
         assertTrue(XaeroLoaderFreezeMenu.targets(report,
-                new XaeroLoaderFreezeMenu.Location(REPORT_ID, OVERWORLD, 0, 0)).isEmpty());
+                new XaeroLoaderFreezeMenu.Location(REPORT_ID, OVERWORLD, 1, 0)).isEmpty());
+        assertEquals(1, XaeroLoaderFreezeMenu.targets(report,
+                new XaeroLoaderFreezeMenu.Location(REPORT_ID, OVERWORLD, 0, 0)).size());
         assertTrue(XaeroLoaderFreezeMenu.targets(report,
-                new XaeroLoaderFreezeMenu.Location(REPORT_ID - 1L, OVERWORLD, -1, -2)).isEmpty());
+                new XaeroLoaderFreezeMenu.Location(REPORT_ID - 1L, OVERWORLD, 0, 0)).isEmpty());
         assertTrue(XaeroLoaderFreezeMenu.targets(report(0L, List.of(source)),
-                new XaeroLoaderFreezeMenu.Location(0L, OVERWORLD, -1, -2)).isEmpty());
+                new XaeroLoaderFreezeMenu.Location(0L, OVERWORLD, 0, 0)).isEmpty());
     }
 
     private static PerfReportData.LoaderSourceEntry loader(Fixture fixture) {

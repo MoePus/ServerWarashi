@@ -79,7 +79,7 @@ public final class XaeroLoaderFreezeMenu {
         PerfReportData.LoaderControl control = source.control();
         if (control == null || source.omittedRegions() > 0
                 || !source.dimension().equals(location.dimension().toString())
-                || source.regions().stream().noneMatch(region -> contains(region, location))) {
+                || !isOwnerChunk(control.ownerPos(), location)) {
             return;
         }
         Identity identity = new Identity(control.controllerId(), control.ownerPos());
@@ -88,11 +88,9 @@ public final class XaeroLoaderFreezeMenu {
                 source.loaderName(), control.manuallyFrozen()));
     }
 
-    private static boolean contains(PerfReportData.LoaderRegion region, Location location) {
-        long maxX = (long) region.minChunkX() + region.width();
-        long maxZ = (long) region.minChunkZ() + region.height();
-        return location.chunkX() >= region.minChunkX() && location.chunkX() < maxX
-                && location.chunkZ() >= region.minChunkZ() && location.chunkZ() < maxZ;
+    private static boolean isOwnerChunk(BlockPos ownerPos, Location location) {
+        return (ownerPos.getX() >> 4) == location.chunkX()
+                && (ownerPos.getZ() >> 4) == location.chunkZ();
     }
 
     private static void addOption(GuiMap screen,
