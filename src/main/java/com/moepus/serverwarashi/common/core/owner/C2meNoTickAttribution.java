@@ -11,6 +11,7 @@ import java.util.List;
 
 final class C2meNoTickAttribution {
     static final String TICKET_TYPE = "c2me_notickvd";
+    private static final String SOURCE_ID_MARKER = ":" + TICKET_TYPE + ":";
     private static final int VIEW_DISTANCE_PADDING = 1;
 
     private C2meNoTickAttribution() {
@@ -34,6 +35,10 @@ final class C2meNoTickAttribution {
 
     static boolean isTicketType(String typeName) {
         return TICKET_TYPE.equals(typeName);
+    }
+
+    static boolean isViewDistanceSource(PerfAttributionSnapshot.Source source) {
+        return isTicketType(source.name()) && source.id().contains(SOURCE_ID_MARKER);
     }
 
     static int radius(int serverViewDistance) {

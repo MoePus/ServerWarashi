@@ -108,6 +108,27 @@ class PerfAttributionSnapshotTest {
     }
 
     @Test
+    void doesNotTreatC2meViewDistanceAsLoader() {
+        var player = new PerfAttributionSnapshot.Owner(PerfReportData.AttributionKind.PLAYER,
+                "player", "Player", true, 0L, null);
+        var c2me = new PerfAttributionSnapshot.Bucket(player,
+                new PerfAttributionSnapshot.Source(
+                        "test:level:" + C2meNoTickAttribution.TICKET_TYPE + ":player",
+                        C2meNoTickAttribution.TICKET_TYPE, null), 0, 0);
+        var ordinaryLoader = new PerfAttributionSnapshot.Bucket(player,
+                new PerfAttributionSnapshot.Source("test:level:ftbchunks:player",
+                        "ftbchunks", null), 0, 0);
+
+        var plan = PerfAttributionSnapshot.create("test:level", Map.of(
+                        ChunkPos.asLong(0, 0), List.of(c2me),
+                        ChunkPos.asLong(1, 0), List.of(ordinaryLoader)))
+                .loaderPlan(10, 10, 4_096);
+
+        assertEquals(1, plan.sources().size());
+        assertEquals("test:level:ftbchunks:player", plan.sources().getFirst().sourceId());
+    }
+
+    @Test
     void exposesControlOnlyWhenTheSourceLayoutIsComplete() {
         ResourceLocation dimensionId = ResourceLocation.parse("test:level");
         BlockLoaderRef ref = new BlockLoaderRef(

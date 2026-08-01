@@ -205,6 +205,9 @@ public final class PerfAttributionSnapshot {
     }
 
     private static boolean isLoaderSource(Bucket bucket) {
+        if (C2meNoTickAttribution.isViewDistanceSource(bucket.source)) {
+            return false;
+        }
         return bucket.owner.kind == PerfReportData.AttributionKind.LOADER
                 || bucket.owner.kind == PerfReportData.AttributionKind.PLAYER
                 && !"self".equals(bucket.source.id);
