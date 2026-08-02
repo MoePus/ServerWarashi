@@ -6,6 +6,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "accessor.ClassInstanceMultiMapAccessor",
+    "accessor.ChunkEntitiesAccessor",
     "accessor.ChunkMapAccessor",
     "accessor.DistanceManagerAccessor",
     "accessor.EntityLevelCallbackAccessor",
@@ -18,6 +19,7 @@
     "accessor.ServerLevelAccessor",
     "accessor.TickTaskAccessor",
     "accessor.TickingTrackerAccessor",
+    "entityload.PersistentEntitySectionManagerMixin",
     "loaderfreeze.DistanceManagerForceTicksMixin",
     "loaderfreeze.DistanceManagerTicketInsertionMixin",
     "loaderfreeze.ForcedChunkManagerMixin",

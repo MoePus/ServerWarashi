@@ -62,5 +62,6 @@
   "message.serverwarashi.loader_control.stale": "The report for loader %s is stale; refresh it and try again",
   "message.serverwarashi.loader_control.missing": "Loader %s no longer has a matching ticket",
   "message.serverwarashi.loader_control.unsupported": "Loader %s cannot be controlled",
-  "message.serverwarashi.loader_control.denied": "You do not have permission to control loader %s"
+  "message.serverwarashi.loader_control.denied": "You do not have permission to control loader %s",
+  "message.serverwarashi.entity_load_guard.removed": "Warashi deleted %3$s %2$s at %1$s"
 }
