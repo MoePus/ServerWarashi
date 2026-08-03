@@ -1,5 +1,7 @@
 package com.moepus.serverwarashi.client.heatmap;
 
+import com.moepus.serverwarashi.api.client.map.MapViewport;
+
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
@@ -29,7 +31,7 @@ public final class ChunkHeatmapModel {
     private ChunkHeatmapModel() {
     }
 
-    public static Plan build(PerfReportData report, String dimension, HeatmapViewport coverage) {
+    public static Plan build(PerfReportData report, String dimension, MapViewport coverage) {
         if (report == null) {
             return Plan.EMPTY;
         }
@@ -48,7 +50,7 @@ public final class ChunkHeatmapModel {
     static Plan applyWeakChunks(Plan base,
                                 WeakChunkSnapshot weakSnapshot,
                                 String dimension,
-                                HeatmapViewport coverage) {
+                                MapViewport coverage) {
         if (weakSnapshot == null || !dimension.equals(weakSnapshot.dimension())) {
             return base;
         }
@@ -78,7 +80,7 @@ public final class ChunkHeatmapModel {
 
     private static List<WeakChunkSnapshot.ChunkEntry> visibleWeakChunks(
             List<WeakChunkSnapshot.ChunkEntry> chunks,
-            HeatmapViewport coverage) {
+            MapViewport coverage) {
         return chunks.stream()
                 .filter(entry -> coverage.intersectsChunk(entry.chunkX(), entry.chunkZ()))
                 .toList();
@@ -86,7 +88,7 @@ public final class ChunkHeatmapModel {
 
     private static List<LoaderIcon> loaderIcons(PerfReportData report,
                                                 String dimension,
-                                                HeatmapViewport coverage) {
+                                                MapViewport coverage) {
         List<LoaderIcon> result = new ArrayList<>();
         for (PerfReportData.LoaderSourceEntry source : report.loaderSources()) {
             if (!dimension.equals(source.dimension())) {
@@ -109,7 +111,7 @@ public final class ChunkHeatmapModel {
 
     private static void addRegionIcons(List<LoaderIcon> result,
                                        PerfReportData.LoaderSourceEntry source,
-                                       HeatmapViewport coverage,
+                                       MapViewport coverage,
                                        boolean working) {
         for (LoaderRegionIcons.Anchor anchor : LoaderRegionIcons.anchors(source.regions())) {
             int x = (anchor.chunkX() << 4) + 8;
@@ -166,7 +168,7 @@ public final class ChunkHeatmapModel {
 
     private static void addSampledChunks(PerfReportData report,
                                          String dimension,
-                                         HeatmapViewport coverage,
+                                         MapViewport coverage,
                                          Map<Long, Cell> cells) {
         for (PerfReportData.ChunkEntry entry : report.chunks()) {
             if (!dimension.equals(entry.dimension())

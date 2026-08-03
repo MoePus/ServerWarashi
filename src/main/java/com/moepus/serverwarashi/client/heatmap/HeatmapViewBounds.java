@@ -1,7 +1,9 @@
 package com.moepus.serverwarashi.client.heatmap;
 
+import com.moepus.serverwarashi.api.client.map.MapViewport;
+
 record HeatmapViewBounds(int minX, int minZ, int maxX, int maxZ) {
-    static HeatmapViewBounds from(HeatmapViewport viewport) {
+    static HeatmapViewBounds from(MapViewport viewport) {
         if (viewport.width() == 0 || viewport.height() == 0) {
             return new HeatmapViewBounds(0, 0, -1, -1);
         }

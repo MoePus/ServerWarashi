@@ -6,7 +6,7 @@
   "screen.serverwarashi.profiler.start": "Start Perf",
   "screen.serverwarashi.profiler.stop": "Stop Perf",
   "screen.serverwarashi.profiler.analysis_paused": "Analysis Paused",
-  "screen.serverwarashi.profiler.game_paused_tooltip": "Xaero's World Map pauses singleplayer, so performance data cannot be collected while the map is open. Close the map to start collecting.",
+  "screen.serverwarashi.profiler.game_paused_tooltip": "The current map screen pauses singleplayer, so performance data cannot be collected while it is open. Close the map to start collecting.",
   "screen.serverwarashi.profiler.page": "Page %1$s/%2$s",
   "screen.serverwarashi.profiler.summary": "Server %1$s MSPT | %2$ss | %3$s ticks | %4$sus | omitted %5$s",
   "screen.serverwarashi.profiler.no_data": "No data",

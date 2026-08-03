@@ -6,7 +6,7 @@
   "screen.serverwarashi.profiler.start": "开始分析",
   "screen.serverwarashi.profiler.stop": "停止分析",
   "screen.serverwarashi.profiler.analysis_paused": "分析已暂停",
-  "screen.serverwarashi.profiler.game_paused_tooltip": "Xaero 世界地图会暂停单人游戏，无法在地图打开时采集性能数据。你需要关闭地图才能正常采集。",
+  "screen.serverwarashi.profiler.game_paused_tooltip": "当前地图界面会暂停单人游戏，无法在地图打开时采集性能数据。你需要关闭地图才能正常采集。",
   "screen.serverwarashi.profiler.page": "第 %1$s/%2$s 页",
   "screen.serverwarashi.profiler.summary": "服务器 %1$s MSPT | %2$s 秒 | %3$s tick | %4$s 微秒 | 省略 %5$s",
   "screen.serverwarashi.profiler.no_data": "暂无数据",

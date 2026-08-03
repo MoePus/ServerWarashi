@@ -1,6 +1,8 @@
 package com.moepus.serverwarashi.client.event;
 
+import com.mojang.logging.LogUtils;
 import com.moepus.serverwarashi.ServerWarashi;
+import com.moepus.serverwarashi.client.compat.xaero.XaeroMapIntegration;
 import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.client.screen.PerfReportScreen;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
@@ -18,6 +20,8 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.loading.LoadingModList;
+import org.slf4j.Logger;
 
 /**
  * 客户端一次性装配（MOD 总线）：把 profiler 报告处理器接到分发器。
@@ -25,11 +29,20 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 @EventBusSubscriber(value = Dist.CLIENT, modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 
 public final class ClientSetup {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     private ClientSetup() {
     }
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
+        if (LoadingModList.get().getModFileById("xaeroworldmap") != null) {
+            try {
+                XaeroMapIntegration.register();
+            } catch (Throwable throwable) {
+                LOGGER.error("Could not initialize the Xaero map integration", throwable);
+            }
+        }
         ClientPayloadHandlers.setPerfReportHandler(ClientSetup::handlePerfReport);
         ClientPayloadHandlers.setWeakChunkHandler(ClientSetup::handleWeakChunks);
         ClientPayloadHandlers.setWeakChunkCorrectionHandler(ClientSetup::handleWeakChunkCorrection);

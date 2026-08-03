@@ -1,5 +1,8 @@
 package com.moepus.serverwarashi.client.heatmap;
 
+import com.moepus.serverwarashi.api.client.map.MapRenderContext;
+import com.moepus.serverwarashi.api.client.map.MapViewport;
+
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
@@ -12,10 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HeatmapOffscreenIndicatorsTest {
-    private static final HeatmapViewport VIEWPORT = new HeatmapViewport(-80, -80, 160, 160);
+    private static final MapViewport VIEWPORT = new MapViewport(
+            new MapViewport.Origin(-80, -80), new MapViewport.Size(160, 160));
     private static final HeatmapOffscreenIndicators.RenderContext CONTEXT =
-            new HeatmapOffscreenIndicators.RenderContext(
-                    "minecraft:overworld", VIEWPORT, 8.0D, 8.0D, 400, 240);
+            context(new MapRenderContext.ScreenArea(
+                    new MapRenderContext.ScreenPoint(0, 0),
+                    new MapRenderContext.ScreenSize(400, 240)));
 
     @Test
     void ignoresBelowRedAndVisibleWarnings() {
@@ -31,6 +36,19 @@ class HeatmapOffscreenIndicatorsTest {
         assertEquals(380, indicator.x());
         assertEquals(120, indicator.y());
         assertEquals(0.0F, indicator.angle(), 0.0001F);
+    }
+
+    @Test
+    void placesIndicatorsAtTheEdgeOfAMapSubArea() {
+        var subArea = new MapRenderContext.ScreenArea(
+                new MapRenderContext.ScreenPoint(40, 20),
+                new MapRenderContext.ScreenSize(200, 100));
+
+        var indicators = HeatmapOffscreenIndicators.plan(
+                null, snapshot(warning(20, 0, 500)), context(subArea));
+
+        assertEquals(220, indicators.getFirst().x());
+        assertEquals(70, indicators.getFirst().y());
     }
 
     @Test
@@ -112,6 +130,13 @@ class HeatmapOffscreenIndicatorsTest {
     private static List<HeatmapOffscreenIndicators.Indicator> planWeak(
             WeakChunkSnapshot.ChunkEntry... chunks) {
         return HeatmapOffscreenIndicators.plan(null, snapshot(chunks), CONTEXT);
+    }
+
+    private static HeatmapOffscreenIndicators.RenderContext context(
+            MapRenderContext.ScreenArea screen) {
+        var visible = new MapRenderContext.VisibleArea(VIEWPORT, screen);
+        return new HeatmapOffscreenIndicators.RenderContext(
+                "minecraft:overworld", visible, new MapRenderContext.WorldPoint(8.0D, 8.0D));
     }
 
     private static WeakChunkSnapshot snapshot(WeakChunkSnapshot.ChunkEntry... chunks) {

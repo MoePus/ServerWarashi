@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.moepus.serverwarashi.api.client.map.MapRenderContext;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
@@ -76,7 +77,7 @@ public final class HeatmapOffscreenIndicators {
         DangerousChunk[] selected = new DangerousChunk[DIRECTION_BUCKETS];
         double[] angles = new double[DIRECTION_BUCKETS];
         for (DangerousChunk chunk : chunks) {
-            if (context.viewport().intersectsChunk(chunk.chunkX(), chunk.chunkZ())) {
+            if (context.visible().world().intersectsChunk(chunk.chunkX(), chunk.chunkZ())) {
                 continue;
             }
             double angle = direction(chunk, context);
@@ -157,21 +158,22 @@ public final class HeatmapOffscreenIndicators {
     private static Indicator indicator(DangerousChunk chunk,
                                        double angle,
                                        RenderContext context) {
-        double limitX = Math.max(1.0D, context.screenWidth() * 0.5D - EDGE_INSET);
-        double limitY = Math.max(1.0D, context.screenHeight() * 0.5D - EDGE_INSET);
+        var screen = context.visible().screen();
+        double limitX = Math.max(1.0D, screen.size().width() * 0.5D - EDGE_INSET);
+        double limitY = Math.max(1.0D, screen.size().height() * 0.5D - EDGE_INSET);
         double dx = Math.cos(angle);
         double dy = Math.sin(angle);
         double edgeScale = Math.min(limitX / Math.max(Math.abs(dx), 1.0E-9D),
                 limitY / Math.max(Math.abs(dy), 1.0E-9D));
-        int x = (int) Math.round(context.screenWidth() * 0.5D + dx * edgeScale);
-        int y = (int) Math.round(context.screenHeight() * 0.5D + dy * edgeScale);
+        int x = (int) Math.round(screen.centerX() + dx * edgeScale);
+        int y = (int) Math.round(screen.centerY() + dy * edgeScale);
         return new Indicator(x, y, (float) angle, chunk.color(), chunk.entityCount());
     }
 
     private static double direction(DangerousChunk chunk, RenderContext context) {
         double worldX = (chunk.chunkX() << 4) + 8.0D;
         double worldZ = (chunk.chunkZ() << 4) + 8.0D;
-        return Math.atan2(worldZ - context.cameraZ(), worldX - context.cameraX());
+        return Math.atan2(worldZ - context.camera().z(), worldX - context.camera().x());
     }
 
     private static int directionBucket(double angle) {
@@ -255,11 +257,8 @@ public final class HeatmapOffscreenIndicators {
     }
 
     public record RenderContext(String dimension,
-                                HeatmapViewport viewport,
-                                double cameraX,
-                                double cameraZ,
-                                int screenWidth,
-                                int screenHeight) {
+                                MapRenderContext.VisibleArea visible,
+                                MapRenderContext.WorldPoint camera) {
     }
 
     record Indicator(int x, int y, float angle, float color, int entityCount) {

@@ -1,5 +1,7 @@
 package com.moepus.serverwarashi.client.heatmap;
 
+import com.moepus.serverwarashi.api.client.map.MapViewport;
+
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
@@ -66,7 +68,7 @@ class ChunkHeatmapModelTest {
         assertEquals(0x70FF9120, ChunkHeatmapModel.combinedColor(yellowPerformance, 50));
 
         WeakChunkSnapshot weak = weakSnapshot("minecraft:overworld", 1, 2, 50);
-        HeatmapViewport coverage = new HeatmapViewport(16, 32, 16, 16);
+        MapViewport coverage = MapViewport.at(16, 32).withSize(16, 16);
         var plan = ChunkHeatmapModel.applyWeakChunks(ChunkHeatmapModel.build(
                 report(List.of(chunk("minecraft:overworld", 1, 2, yellowPerformance))),
                 "minecraft:overworld", coverage), weak, "minecraft:overworld", coverage);
@@ -79,7 +81,7 @@ class ChunkHeatmapModelTest {
     void ignoresWeakSnapshotFromAnotherDimension() {
         var plan = ChunkHeatmapModel.applyWeakChunks(ChunkHeatmapModel.Plan.EMPTY,
                 weakSnapshot("minecraft:the_nether", 1, 2, 50), "minecraft:overworld",
-                new HeatmapViewport(16, 32, 16, 16));
+                MapViewport.at(16, 32).withSize(16, 16));
         assertEquals(0, plan.vertexCount());
     }
 
@@ -119,7 +121,7 @@ class ChunkHeatmapModelTest {
                 chunk("minecraft:overworld", 2, 2, metric(0.1D, 1.0D))));
 
         ChunkHeatmapModel.Plan plan = ChunkHeatmapModel.build(report, "minecraft:overworld",
-                new HeatmapViewport(16, 32, 48, 32));
+                MapViewport.at(16, 32).withSize(48, 32));
 
         assertEquals(1, plan.quads().size());
         assertEquals(4, plan.vertexCount());
@@ -137,7 +139,7 @@ class ChunkHeatmapModelTest {
                 List.of(cow), List.of(furnace), metric(1.0D, 4.0D));
 
         var hover = ChunkHeatmapModel.build(report(List.of(chunk)), "minecraft:overworld",
-                new HeatmapViewport(16, 32, 16, 16)).hoverAt(1, 2);
+                MapViewport.at(16, 32).withSize(16, 16)).hoverAt(1, 2);
 
         assertEquals(List.of(cow), hover.topEntities());
         assertEquals(List.of(furnace), hover.topBlockEntities());
@@ -146,14 +148,14 @@ class ChunkHeatmapModelTest {
     @Test
     void producesAtMostFourVerticesPerReportedChunk() {
         assertEquals(0, ChunkHeatmapModel.build(null, "minecraft:overworld",
-                new HeatmapViewport(0, 0, 16, 16)).vertexCount());
+                MapViewport.at(0, 0).withSize(16, 16)).vertexCount());
 
         List<PerfReportData.ChunkEntry> chunks = new ArrayList<>();
         for (int index = 0; index < 1_024; index++) {
             chunks.add(chunk("minecraft:overworld", index % 32, index / 32, metric(1.0D, 3.0D)));
         }
         var plan = ChunkHeatmapModel.build(report(chunks), "minecraft:overworld",
-                new HeatmapViewport(0, 0, 32 * 16, 32 * 16));
+                MapViewport.at(0, 0).withSize(32 * 16, 32 * 16));
 
         assertEquals(1_024, plan.quads().size());
         assertEquals(4_096, plan.vertexCount());
@@ -164,7 +166,7 @@ class ChunkHeatmapModelTest {
         var loader = loader("loader-1", "test:chunk_loader",
                 new PerfReportData.LoaderRegion(2, 3, 1, 1));
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(loader)), "minecraft:overworld",
-                new HeatmapViewport(0, 0, 64, 64));
+                MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(List.of(new ChunkHeatmapModel.Quad(2, 3, 0x2440DC78)), plan.quads());
         assertNull(plan.metricAt(2, 3));
@@ -185,7 +187,7 @@ class ChunkHeatmapModelTest {
                 new PerfReportData.LoaderPosition(8, 64, 8)), region);
 
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(visible, outside, nether)),
-                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+                "minecraft:overworld", MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(List.of(new ChunkHeatmapModel.LoaderIcon(
                 "loader-1", "Visible", 8, 64, 8)), plan.icons());
@@ -197,7 +199,7 @@ class ChunkHeatmapModelTest {
                 new PerfReportData.LoaderRegion(2, 3, 1, 1));
 
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(inactive)),
-                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+                "minecraft:overworld", MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(ChunkHeatmapModel.INACTIVE_LOADER_COLOR, plan.quads().getFirst().argb());
         assertFalse(plan.hoverAt(2, 3).loaderSources().getFirst().working());
@@ -216,10 +218,10 @@ class ChunkHeatmapModelTest {
 
         var controlledPlan = ChunkHeatmapModel.build(
                 report(List.of(), List.of(inactive, active)), "minecraft:overworld",
-                new HeatmapViewport(0, 0, 64, 64));
+                MapViewport.at(0, 0).withSize(64, 64));
         var unsupportedPlan = ChunkHeatmapModel.build(
                 report(List.of(), List.of(inactive, unsupported)), "minecraft:overworld",
-                new HeatmapViewport(0, 0, 64, 64));
+                MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(ChunkHeatmapModel.loaderColor(null), controlledPlan.quads().getFirst().argb());
         assertEquals(ChunkHeatmapModel.loaderColor(null), unsupportedPlan.quads().getFirst().argb());
@@ -234,7 +236,7 @@ class ChunkHeatmapModelTest {
                 new PerfReportData.LoaderRegion(5, -2, 1, 1));
 
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(ftb)),
-                "minecraft:overworld", new HeatmapViewport(-64, -64, 192, 192));
+                "minecraft:overworld", MapViewport.at(-64, -64).withSize(192, 192));
 
         assertEquals(List.of(
                 new ChunkHeatmapModel.LoaderIcon("ftb-source", "FTB Chunks", 8, null, 24),
@@ -248,7 +250,7 @@ class ChunkHeatmapModelTest {
         var loader = loader("loader-1", "test:chunk_loader",
                 new PerfReportData.LoaderRegion(2, 3, 2, 1));
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(loader)),
-                "minecraft:overworld", new HeatmapViewport(32, 48, 32, 16));
+                "minecraft:overworld", MapViewport.at(32, 48).withSize(32, 16));
 
         assertEquals(13, plan.weakEdgeMaskAt(2, 3));
         assertEquals(14, plan.weakEdgeMaskAt(3, 3));
@@ -271,7 +273,7 @@ class ChunkHeatmapModelTest {
                 new PerfReportData.LoaderRegion(2, 3, 1, 1));
         var plan = ChunkHeatmapModel.build(
                 report(List.of(chunk("minecraft:overworld", 2, 3, expensive)), List.of(loader)),
-                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+                "minecraft:overworld", MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(ChunkHeatmapModel.color(expensive), plan.quads().getFirst().argb());
         assertEquals(expensive, plan.hoverAt(2, 3).metric());
@@ -283,7 +285,7 @@ class ChunkHeatmapModelTest {
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(
                         loader("loader-1", "test:chunk_loader", region),
                         loader("loader-2", "test:chunk_loader", region))),
-                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+                "minecraft:overworld", MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(List.of("loader-1", "loader-2"), plan.hoverAt(2, 3).loaderSources().stream()
                 .map(ChunkHeatmapModel.LoaderSource::id).toList());
@@ -294,7 +296,7 @@ class ChunkHeatmapModelTest {
         var loader = loader("loader-1", "test:chunk_loader",
                 new PerfReportData.LoaderRegion(-3, -3, 7, 7));
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(loader)), "minecraft:overworld",
-                new HeatmapViewport(0, 0, 32, 32));
+                MapViewport.at(0, 0).withSize(32, 32));
 
         assertEquals(4, plan.quads().size());
         assertEquals("test:chunk_loader", plan.hoverAt(0, 0).loaderSources().getFirst().name());
@@ -310,7 +312,7 @@ class ChunkHeatmapModelTest {
         }
 
         var plan = ChunkHeatmapModel.build(report(List.of(), loaders), "minecraft:overworld",
-                new HeatmapViewport(0, 0, 100 * 16, 100 * 16));
+                MapViewport.at(0, 0).withSize(100 * 16, 100 * 16));
         var hover = plan.hoverAt(0, 0);
 
         assertEquals(10_000, plan.quads().size());
@@ -321,13 +323,13 @@ class ChunkHeatmapModelTest {
 
     @Test
     void expandsCoverageByOneViewportOnEverySide() {
-        HeatmapViewport viewport = new HeatmapViewport(100, -50, 200, 80);
-        HeatmapViewport coverage = viewport.expandedBySelf();
+        MapViewport viewport = MapViewport.at(100, -50).withSize(200, 80);
+        MapViewport coverage = viewport.expandedBySelf();
 
-        assertEquals(new HeatmapViewport(-100, -130, 600, 240), coverage);
+        assertEquals(MapViewport.at(-100, -130).withSize(600, 240), coverage);
         assertTrue(coverage.contains(viewport));
-        assertTrue(coverage.contains(new HeatmapViewport(300, -50, 100, 80)));
-        assertFalse(coverage.contains(new HeatmapViewport(450, -50, 100, 80)));
+        assertTrue(coverage.contains(MapViewport.at(300, -50).withSize(100, 80)));
+        assertFalse(coverage.contains(MapViewport.at(450, -50).withSize(100, 80)));
     }
 
     private static PerfReportData.Metric metric(double mspt, double max) {
@@ -356,7 +358,7 @@ class ChunkHeatmapModelTest {
                 new PerfReportData.LoaderRegion(2, 3, 1, 1));
         var plan = ChunkHeatmapModel.build(
                 report(List.of(chunk("minecraft:overworld", 2, 3, expensive)), List.of(loader)),
-                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+                "minecraft:overworld", MapViewport.at(0, 0).withSize(64, 64));
 
         assertEquals(ChunkHeatmapModel.color(expensive), plan.quads().getFirst().argb());
     }
@@ -368,7 +370,7 @@ class ChunkHeatmapModelTest {
         var inactive = controlledLoader("inactive", false,
                 new PerfReportData.LoaderRegion(2, 3, 1, 1));
         var plan = ChunkHeatmapModel.build(report(List.of(), List.of(active, inactive)),
-                "minecraft:overworld", new HeatmapViewport(0, 0, 64, 64));
+                "minecraft:overworld", MapViewport.at(0, 0).withSize(64, 64));
 
         assertFalse(plan.icons().getFirst().working());
         assertTrue(plan.icons().getLast().working());

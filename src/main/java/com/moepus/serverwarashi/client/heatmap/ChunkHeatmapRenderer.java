@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.client.heatmap;
 
+import com.moepus.serverwarashi.api.client.map.MapViewport;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -35,7 +36,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     private ChunkHeatmapModel.Plan basePlan = ChunkHeatmapModel.Plan.EMPTY;
     private ChunkHeatmapModel.Plan plan = ChunkHeatmapModel.Plan.EMPTY;
     private List<WeakChunkSnapshot.ChunkEntry> visibleWeakChunks = List.of();
-    private HeatmapViewport coverage;
+    private MapViewport coverage;
     private String dimension;
     private long reportRevision = Long.MIN_VALUE;
     private long weakRevision = Long.MIN_VALUE;
@@ -94,7 +95,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     private static List<WeakChunkSnapshot.ChunkEntry> visibleWeakChunks(
             ClientWeakChunkState.Snapshot snapshot,
             String dimension,
-            HeatmapViewport coverage) {
+            MapViewport coverage) {
         if (!dimension.equals(snapshot.dimension())) {
             return List.of();
         }
@@ -361,7 +362,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     public record RenderContext(String dimension, ViewTransform transform, Hover hover) {
     }
 
-    public record ViewTransform(HeatmapViewport viewport, Matrix4f pose, float mapScale) {
+    public record ViewTransform(MapViewport viewport, Matrix4f pose, float mapScale) {
     }
 
     public record Hover(double worldX, double worldZ, int chunkX, int chunkZ) {

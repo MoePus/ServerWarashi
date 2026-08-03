@@ -25,6 +25,12 @@ repositories {
     maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven/" } // ForgeConfigAPIPort
     maven { url = "https://maven.theillusivec4.top" }
     maven {
+        url = "https://chocolateminecraft.com/maven"
+        content {
+            includeGroup "xaero.lib"
+        }
+    }
+    maven {
         // location of the maven that hosts JEI files since January 2023
         name = "Jared's maven"
         url = "https://maven.blamejared.com/"
@@ -151,9 +157,10 @@ dependencies {
     runtimeOnly("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}")
     implementation("com.tterrag.registrate:Registrate:${registrate_version}")
 
-    runtimeOnly "curse.maven:xaeros-minimap-263420:6778051"
-    compileOnly "curse.maven:xaeros-world-map-317780:6778114"
-    runtimeOnly "curse.maven:xaeros-world-map-317780:6778114"
+    implementation "curse.maven:xaeros-world-map-317780:8449921"
+    implementation "curse.maven:xaeros-minimap-263420:8449819"
+    compileOnly "xaero.lib:xaerolib-neoforge-1.21.1:1.7.1"
+    testRuntimeOnly "xaero.lib:xaerolib-neoforge-1.21.1:1.7.1"
 
     testImplementation platform("org.junit:junit-bom:5.10.0")
     testImplementation "org.junit.jupiter:junit-jupiter"

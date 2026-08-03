@@ -36,7 +36,6 @@
     "watchdog.ServerWatchdogMixin"
   ],
   "client": [
-    "compat.xaero.XaeroGuiMapAccessor",
     "compat.xaero.XaeroGuiMapMixin",
     "runtime.IntegratedServerRuntimeMixin"
   ],

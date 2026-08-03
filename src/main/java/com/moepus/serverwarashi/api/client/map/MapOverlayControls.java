@@ -1,4 +1,4 @@
-package com.moepus.serverwarashi.client.compat.xaero;
+package com.moepus.serverwarashi.api.client.map;
 
 import com.moepus.serverwarashi.client.network.PerfControlClient;
 import com.moepus.serverwarashi.client.state.ClientPerfReportState;
@@ -7,9 +7,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
-import xaero.map.gui.GuiMap;
 
-public final class XaeroPerfControls {
+import java.util.Objects;
+import java.util.function.Consumer;
+
+/** Shared profiling controls that map integrations can add to their screens. */
+public final class MapOverlayControls {
     private static final int BUTTON_Y = 5;
     private static final int TOGGLE_X = 34;
     private static final int TOGGLE_WIDTH = 70;
@@ -20,12 +23,29 @@ public final class XaeroPerfControls {
     private static final int STATUS_COLOR = 0xFFFFD166;
     private static final int TOOLTIP_MAX_WIDTH = 240;
     private static final float STATUS_Z = 1_000.0F;
+    private static final HorizontalBounds TOGGLE_BOUNDS =
+            new HorizontalBounds(TOGGLE_X, TOGGLE_WIDTH);
+    private static final HorizontalBounds CLEAR_BOUNDS =
+            new HorizontalBounds(CLEAR_X, CLEAR_WIDTH);
     private static Boolean requestedProfiling;
 
-    private XaeroPerfControls() {
+    private final Button toggle;
+    private final Button clear;
+
+    private MapOverlayControls(Button toggle, Button clear) {
+        this.toggle = toggle;
+        this.clear = clear;
     }
 
-    public static Controls install(GuiMap map) {
+    /** Create both buttons and pass them to the map integration's widget sink. */
+    static MapOverlayControls create(Consumer<Button> buttonSink) {
+        return create(buttonSink, MapOverlayControls::update);
+    }
+
+    static MapOverlayControls create(Consumer<Button> buttonSink,
+                                     Consumer<MapOverlayControls> initializer) {
+        Objects.requireNonNull(buttonSink, "buttonSink");
+        Objects.requireNonNull(initializer, "initializer");
         Button toggle = Button.builder(toggleLabel(false), ignored -> toggleProfiling())
                 .bounds(TOGGLE_X, BUTTON_Y, TOGGLE_WIDTH, BUTTON_HEIGHT)
                 .build();
@@ -33,29 +53,32 @@ public final class XaeroPerfControls {
                         ignored -> PerfControlClient.send(PerfControlPayload.Action.CLEAR))
                 .bounds(CLEAR_X, BUTTON_Y, CLEAR_WIDTH, BUTTON_HEIGHT)
                 .build();
-        map.addButton(toggle);
-        map.addButton(clear);
-        Controls controls = new Controls(toggle, clear);
-        update(controls);
-        return controls;
+        MapOverlayControls controls = new MapOverlayControls(toggle, clear);
+        try {
+            initializer.accept(controls);
+            buttonSink.accept(toggle);
+            buttonSink.accept(clear);
+            return controls;
+        } catch (RuntimeException | Error throwable) {
+            controls.hide();
+            throw throwable;
+        }
     }
 
-    public static void update(Controls controls) {
-        if (controls == null) {
-            return;
-        }
+    /** Refresh labels, visibility, and enabled state from the latest profiler snapshot. */
+    public void update() {
         ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
         boolean profiling = effectiveProfiling(snapshot);
-        boolean paused = isIntegratedServerPaused();
         boolean visible = hasPerfPermission();
-        controls.toggle().visible = visible;
-        controls.clear().visible = visible;
-        controls.toggle().active = true;
-        controls.toggle().setMessage(toggleLabel(profiling));
-        controls.clear().active = !profiling && hasCompletedReport(snapshot);
+        toggle.visible = visible;
+        clear.visible = visible;
+        toggle.active = true;
+        toggle.setMessage(toggleLabel(profiling));
+        clear.active = !profiling && hasCompletedReport(snapshot);
     }
 
-    public static void renderStatus(GuiGraphics graphics, int mouseX, int mouseY) {
+    /** Draw the integrated-server pause status after the map's normal foreground UI. */
+    public void renderStatus(GuiGraphics graphics, int mouseX, int mouseY) {
         if (!hasPerfPermission() || !isAnalysisPaused()) {
             return;
         }
@@ -79,10 +102,19 @@ public final class XaeroPerfControls {
         }
     }
 
-    public static boolean isMouseOver(double mouseX, double mouseY) {
-        return hasPerfPermission() && (contains(mouseX, mouseY, TOGGLE_X, TOGGLE_WIDTH)
-                || contains(mouseX, mouseY, CLEAR_X, CLEAR_WIDTH)
+    /** Returns whether a pointer is over these controls or their pause status. */
+    public boolean isMouseOver(double mouseX, double mouseY) {
+        return hasPerfPermission() && (contains(mouseX, mouseY, TOGGLE_BOUNDS)
+                || contains(mouseX, mouseY, CLEAR_BOUNDS)
                 || isOverPausedStatus(mouseX, mouseY));
+    }
+
+    /** Hide both buttons after their owning map integration is disabled. */
+    public void hide() {
+        toggle.visible = false;
+        toggle.active = false;
+        clear.visible = false;
+        clear.active = false;
     }
 
     private static boolean hasPerfPermission() {
@@ -94,8 +126,10 @@ public final class XaeroPerfControls {
         return snapshot.report() != null && snapshot.report().tickCount() > 0L;
     }
 
-    private static boolean contains(double mouseX, double mouseY, int x, int width) {
-        return mouseX >= x && mouseX < x + width
+    private static boolean contains(double mouseX,
+                                    double mouseY,
+                                    HorizontalBounds bounds) {
+        return mouseX >= bounds.x() && mouseX < bounds.x() + bounds.width()
                 && mouseY >= BUTTON_Y && mouseY < BUTTON_Y + BUTTON_HEIGHT;
     }
 
@@ -150,6 +184,6 @@ public final class XaeroPerfControls {
         requestedProfiling = null;
     }
 
-    public record Controls(Button toggle, Button clear) {
+    private record HorizontalBounds(int x, int width) {
     }
 }
