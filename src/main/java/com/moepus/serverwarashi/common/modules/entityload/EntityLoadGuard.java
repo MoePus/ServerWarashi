@@ -23,7 +23,7 @@ public final class EntityLoadGuard {
     static final int BATCH_THRESHOLD = 5_000;
     static final int TOP_TYPE_LIMIT = 3;
     static final int RETAINED_PER_TYPE = 100;
-    static final String MESSAGE_KEY = "message.serverwarashi.entity_load_guard.removed";
+    static final String MESSAGE_PREFIX = "Warashi deleted ";
 
     private EntityLoadGuard() {
     }
@@ -69,7 +69,9 @@ public final class EntityLoadGuard {
                                      Component typeName, int removedCount) {
         String location = "%s (%d, %d)".formatted(
                 dimension, pos.getMiddleBlockX(), pos.getMiddleBlockZ());
-        return Component.translatable(MESSAGE_KEY, location, typeName, removedCount);
+        return Component.literal(MESSAGE_PREFIX + removedCount + " ")
+                .append(typeName)
+                .append(Component.literal(" at " + location));
     }
 
     private static <T extends EntityAccess> ServerLevel serverLevel(List<T> loaded) {

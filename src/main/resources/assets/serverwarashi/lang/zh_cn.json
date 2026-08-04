@@ -62,6 +62,5 @@
   "message.serverwarashi.loader_control.stale": "加载器 %s 的报告已过期，请刷新后重试",
   "message.serverwarashi.loader_control.missing": "加载器 %s 已没有匹配的 ticket",
   "message.serverwarashi.loader_control.unsupported": "加载器 %s 不支持控制",
-  "message.serverwarashi.loader_control.denied": "你没有控制加载器 %s 的权限",
-  "message.serverwarashi.entity_load_guard.removed": "Warashi删除了位于%1$s的%2$s共%3$s个"
+  "message.serverwarashi.loader_control.denied": "你没有控制加载器 %s 的权限"
 }
