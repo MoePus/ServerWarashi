@@ -14,10 +14,12 @@ final class PerfReportStyle {
     static final int SCROLLBAR_WIDTH = 4;
     static final int TAB_WIDTH = 72;
     static final int PAGE_BUTTON_WIDTH = 20;
-    static final int SESSION_BUTTON_WIDTH = 48;
+    static final int SESSION_BUTTON_WIDTH = 64;
     static final int CONTROL_HEIGHT = 16;
     static final int GAP = 3;
     static final int INDENT = 12;
+    static final int TOOLTIP_MAX_WIDTH = 320;
+    static final int TOOLTIP_MARGIN = 24;
 
     static final int BACKDROP = 0xC0101012;
     static final int PANEL = 0xFF161719;

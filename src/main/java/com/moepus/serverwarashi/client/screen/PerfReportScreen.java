@@ -52,8 +52,9 @@ public final class PerfReportScreen extends Screen {
         renderControls(graphics, geometry, mouseX, mouseY);
         renderSummary(graphics, geometry);
         renderTableHeader(graphics, geometry, mouseX, mouseY);
-        renderRows(graphics, geometry, rows, mouseX, mouseY);
+        String tooltip = renderRows(graphics, geometry, rows, mouseX, mouseY);
         renderScrollbar(graphics, geometry);
+        renderTooltip(graphics, tooltip, mouseX, mouseY);
     }
 
     @Override
@@ -193,20 +194,24 @@ public final class PerfReportScreen extends Screen {
     }
 
     private void renderSummary(GuiGraphics graphics, PerfReportGeometry geometry) {
-        String text = PerfDisplayText.translated("screen.serverwarashi.profiler.summary",
+        String key = selectedTab == Tab.TICKABLES
+                ? "screen.serverwarashi.profiler.summary.tickables"
+                : "screen.serverwarashi.profiler.summary";
+        String text = PerfDisplayText.translated(key,
                 String.format(Locale.ROOT, "%.2f", report.serverMspt()),
                 String.format(Locale.ROOT, "%.1f", report.elapsedMillis() / 1000.0),
                 String.format(Locale.ROOT, "%,d", report.tickCount()), report.intervalMicros(),
-                String.format(Locale.ROOT, "%,d", omittedForTab()));
+                String.format(Locale.ROOT, "%,d", omittedForTab()), report.lastTickGcMillis());
         int y = geometry.panelY() + TITLE_HEIGHT + CONTROLS_HEIGHT + 3;
         graphics.drawString(font, fit(font, text, geometry.contentWidth()), geometry.contentX(), y, MUTED, true);
     }
 
-    private void renderRows(GuiGraphics graphics,
-                            PerfReportGeometry geometry,
-                            List<PerfReportRows.Row> rows,
-                            int mouseX,
-                            int mouseY) {
+    private String renderRows(GuiGraphics graphics,
+                              PerfReportGeometry geometry,
+                              List<PerfReportRows.Row> rows,
+                              int mouseX,
+                              int mouseY) {
+        String tooltip = null;
         graphics.enableScissor(geometry.contentX(), geometry.rowsY(), geometry.contentRight(), geometry.rowsBottom());
         int y = geometry.rowsY() - state().scroll;
         if (rows.isEmpty()) {
@@ -214,31 +219,46 @@ public final class PerfReportScreen extends Screen {
                     geometry.contentX() + 2, y + 3, MUTED, true);
         }
         for (int index = 0; index < rows.size(); index++) {
-            renderRow(graphics, geometry, rows.get(index), index, y, mouseX, mouseY);
+            String rowTooltip = renderRow(graphics, geometry, rows.get(index), index, y, mouseX, mouseY);
+            if (rowTooltip != null) {
+                tooltip = rowTooltip;
+            }
             y += ROW_HEIGHT;
         }
         graphics.disableScissor();
+        return tooltip;
     }
 
-    private void renderRow(GuiGraphics graphics,
-                           PerfReportGeometry geometry,
-                           PerfReportRows.Row row,
-                           int index,
-                           int y,
-                           int mouseX,
-                           int mouseY) {
+    private String renderRow(GuiGraphics graphics,
+                             PerfReportGeometry geometry,
+                             PerfReportRows.Row row,
+                             int index,
+                             int y,
+                             int mouseX,
+                             int mouseY) {
         if (y + ROW_HEIGHT <= geometry.rowsY() || y >= geometry.rowsBottom()) {
-            return;
+            return null;
         }
+        var context = new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y);
         List<Hit> rowHits = rowHits(row, geometry, y);
-        boolean hovered = rowHits.stream().anyMatch(hit -> hit.contains(mouseX, mouseY));
+        boolean tooltipHovered = row.tooltip() != null
+                && PerfReportTableRenderer.labelBounds(font, context).contains(mouseX, mouseY);
+        boolean hovered = tooltipHovered || rowHits.stream().anyMatch(hit -> hit.contains(mouseX, mouseY));
         if (hovered || index % 2 == 0) {
             graphics.fill(geometry.contentX(), y, geometry.contentRight(), y + ROW_HEIGHT,
                     hovered ? HOVER : ROW_ALT);
         }
-        PerfReportTableRenderer.renderRow(graphics, font,
-                new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y));
+        PerfReportTableRenderer.renderRow(graphics, font, context);
         hits.addAll(rowHits);
+        return tooltipHovered ? row.tooltip() : null;
+    }
+
+    private void renderTooltip(GuiGraphics graphics, String tooltip, int mouseX, int mouseY) {
+        if (tooltip == null) {
+            return;
+        }
+        int tooltipWidth = Math.max(1, Math.min(TOOLTIP_MAX_WIDTH, width - TOOLTIP_MARGIN));
+        graphics.renderTooltip(font, font.split(Component.literal(tooltip), tooltipWidth), mouseX, mouseY);
     }
 
     private List<Hit> rowHits(PerfReportRows.Row row, PerfReportGeometry geometry, int y) {

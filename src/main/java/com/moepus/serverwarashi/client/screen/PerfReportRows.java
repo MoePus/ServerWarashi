@@ -108,8 +108,9 @@ final class PerfReportRows {
         String label = tickableLabel(entry);
         String coordinate = tickablePosition(entry);
         String prefix = coordinate.isEmpty() ? label : label.substring(0, label.length() - coordinate.length());
+        String tooltip = entry.type() == TickType.HANDLER ? entry.eventLoop() : null;
         return Row.leaf(tickableKey(entry), prefix, coordinate, typeLabel(entry.type()),
-                0, 0, 0, entry.metric(), 0, teleportCommand(entry));
+                0, 0, 0, entry.metric(), 0, teleportCommand(entry), tooltip);
     }
 
     private static Row ownerSourceRow(String ownerKey, PerfReportData.OwnerSourceEntry entry) {
@@ -119,12 +120,18 @@ final class PerfReportRows {
     }
 
     private static String tickableLabel(PerfReportData.TickableEntry entry) {
+        if (entry.type() == TickType.HANDLER) {
+            return entry.className();
+        }
         String name = PerfDisplayText.objectName(
                 entry.detailKind(), entry.className(), entry.detailId());
         if (entry.type() == TickType.ENTITY) {
             name += "#" + entry.entityId();
         }
         if (entry.type() == TickType.TASK) {
+            if (entry.eventLoop().isEmpty()) {
+                return PerfDisplayText.translated("screen.serverwarashi.profiler.tickable.unknown");
+            }
             return name + " @ " + entry.eventLoop();
         }
         if (!entry.positioned()) {
@@ -148,6 +155,7 @@ final class PerfReportRows {
             case ENTITY -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.entity");
             case BLOCK_ENTITY -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.block_entity");
             case TASK -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.task");
+            case HANDLER -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.handler");
         };
     }
 
@@ -208,6 +216,7 @@ final class PerfReportRows {
                     + entry.z() + ":" + entry.className();
             case CHUNK -> chunkKey(entry.dimension(), entry.x(), entry.z());
             case TASK -> "task:" + entry.eventLoop() + ":" + entry.className();
+            case HANDLER -> "handler:" + entry.eventLoop();
         };
     }
 
@@ -266,25 +275,33 @@ final class PerfReportRows {
                boolean expanded,
                String expansionKey,
                String teleportCommand,
-               boolean summary) {
+               boolean summary,
+               String tooltip) {
         static Row leaf(String key, String labelPrefix, String coordinate, String type,
                         int entityCount, int blockEntityCount, int chunkCount,
                         PerfReportData.Metric metric, int depth, String teleportCommand) {
+            return leaf(key, labelPrefix, coordinate, type, entityCount, blockEntityCount,
+                    chunkCount, metric, depth, teleportCommand, null);
+        }
+
+        static Row leaf(String key, String labelPrefix, String coordinate, String type,
+                        int entityCount, int blockEntityCount, int chunkCount,
+                        PerfReportData.Metric metric, int depth, String teleportCommand, String tooltip) {
             return new Row(key, labelPrefix, coordinate, type, entityCount, blockEntityCount, chunkCount,
-                    false, false, 0L, metric, depth, false, false, null, teleportCommand, false);
+                    false, false, 0L, metric, depth, false, false, null, teleportCommand, false, tooltip);
         }
 
         static Row chunk(String key, String labelPrefix, String coordinate,
                          int entityCount, int blockEntityCount, PerfReportData.Metric metric,
                          String teleportCommand, boolean expandable, boolean expanded) {
             return new Row(key, labelPrefix, coordinate, "", entityCount, blockEntityCount,
-                    0, false, false, 0L, metric, 0, expandable, expanded, key, teleportCommand, false);
+                    0, false, false, 0L, metric, 0, expandable, expanded, key, teleportCommand, false, null);
         }
 
         static Row summary(String key, String label, int entityCount, int blockEntityCount,
                            String coordinate, String teleportCommand) {
             return new Row(key, label, coordinate, "", entityCount, blockEntityCount,
-                    0, false, false, 0L, EMPTY_METRIC, 1, false, false, null, teleportCommand, true);
+                    0, false, false, 0L, EMPTY_METRIC, 1, false, false, null, teleportCommand, true, null);
         }
 
         static Row owner(String key, String label, PerfReportData.OwnerEntry owner,
@@ -292,7 +309,7 @@ final class PerfReportRows {
             boolean player = owner.kind() == PerfReportData.AttributionKind.PLAYER;
             return new Row(key, label, positionText(owner.position()), "", 0, 0, owner.chunkCount(),
                     player, owner.online(), owner.lastLoginEpochMillis(), owner.metric(), 0,
-                    expandable, expanded, key, PerfReportRows.teleportCommand(owner.position()), false);
+                    expandable, expanded, key, PerfReportRows.teleportCommand(owner.position()), false, null);
         }
 
         String label() {
