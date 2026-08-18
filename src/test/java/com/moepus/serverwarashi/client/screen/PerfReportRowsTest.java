@@ -12,6 +12,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfReportRowsTest {
@@ -55,6 +56,38 @@ class PerfReportRowsTest {
 
         assertEquals("Paper#7 @ test (1, 2, 3)", labels(
                 PerfReportRows.tickables(report, PerfReportRows.SortKey.MSPT, Map.of())) .getFirst());
+    }
+
+    @Test
+    void handlerUsesShortLabelAndRetainsFullNameForTooltip() {
+        String fullName = "com.example.ServerEvents#onTick("
+                + "net.neoforged.neoforge.event.tick.ServerTickEvent.Pre)";
+        var handler = new PerfReportData.TickableEntry(
+                TickType.HANDLER, "", "ServerEvents#onTick(ServerTickEvent.Pre)", "",
+                TickDetailKind.NONE, -1, false, 0, 0, 0, false, fullName, metric(2.0, 3.0));
+
+        PerfReportRows.Row row = PerfReportRows.tickables(
+                report(List.of(), List.of(handler), List.of()), PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
+
+        assertEquals("ServerEvents#onTick(ServerTickEvent.Pre)", row.label());
+        assertEquals("screen.serverwarashi.profiler.type.handler", row.type());
+        assertEquals(fullName, row.tooltip());
+        assertEquals("", row.coordinate());
+    }
+
+    @Test
+    void unknownFallbackUsesOneLocalizedTaskRow() {
+        var unknown = new PerfReportData.TickableEntry(
+                TickType.TASK, "", "Unknown", "", TickDetailKind.NONE,
+                -1, false, 0, 0, 0, false, "", metric(2.0, 3.0));
+
+        PerfReportRows.Row row = PerfReportRows.tickables(
+                report(List.of(), List.of(unknown), List.of()),
+                PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
+
+        assertEquals("screen.serverwarashi.profiler.tickable.unknown", row.label());
+        assertEquals("screen.serverwarashi.profiler.type.task", row.type());
+        assertNull(row.tooltip());
     }
 
     @Test

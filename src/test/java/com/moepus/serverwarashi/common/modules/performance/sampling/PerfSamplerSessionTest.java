@@ -25,6 +25,29 @@ class PerfSamplerSessionTest {
     private static final double MAX_ATTEMPTS_PER_SECOND = 1_300.0D;
 
     @Test
+    void attachesActiveBetweenTickFallbackSamplesToTheNextTick() throws InterruptedException {
+        PerfSamplerSession session = unlimitedSession(12L, null);
+        boolean stopped = false;
+        PerfWorkTracker.activate(Thread.currentThread());
+        session.start();
+        try {
+            Thread.sleep(50L);
+            session.beginTick(null);
+            session.endTick(1_000_000L);
+
+            PerfReportData report = session.stop();
+            stopped = true;
+            assertTrue(report.tickables().stream().anyMatch(entry ->
+                    entry.type() == TickType.TASK && "Unknown".equals(entry.className())));
+        } finally {
+            PerfWorkTracker.deactivate();
+            if (!stopped) {
+                session.stop();
+            }
+        }
+    }
+
+    @Test
     void samplesOffTickWallTimeAndStopsCompletelyWhilePaused() throws Exception {
         PerfSamplerSession session = unlimitedSession(9L, null);
         boolean stopped = false;

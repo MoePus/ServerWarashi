@@ -87,7 +87,7 @@ neoForge {
             type = "gameTestServer"
             sourceSet = sourceSets.test
             systemProperty 'neoforge.gameTestServer', 'true'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', "${project.mod_id},minecraft"
         }
 
         data {

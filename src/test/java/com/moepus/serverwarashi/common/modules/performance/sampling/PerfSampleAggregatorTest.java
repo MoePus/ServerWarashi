@@ -17,16 +17,54 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfSampleAggregatorTest {
     @Test
+    void reportsHandlerAsAnUnpositionedIndependentTickable() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(12L);
+        TickSamples sampled = new TickSamples(null);
+        String fullName = "com.example.ServerEvents#onTick("
+                + "net.neoforged.neoforge.event.tick.ServerTickEvent.Pre)";
+        sampled.sample(new PerfWorkTracker.Snapshot(TickType.HANDLER, null, Handler.class, null,
+                TickDetailKind.NONE, -1, false, 0, 0, 0, false, fullName,
+                "ServerEvents#onTick(ServerTickEvent.Pre)"));
+        aggregator.accept(sampled);
+
+        PerfReportData report = aggregator.build(milliseconds(1L), 1L, 1_000);
+
+        PerfReportData.TickableEntry handler = report.tickables().getFirst();
+        assertEquals(TickType.HANDLER, handler.type());
+        assertEquals("ServerEvents#onTick(ServerTickEvent.Pre)", handler.className());
+        assertEquals(fullName, handler.eventLoop());
+        assertTrue(report.chunks().isEmpty());
+        assertTrue(report.owners().isEmpty());
+    }
+
+    @Test
+    void reportsGcTimeFromTheMostRecentlyCompletedTick() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(11L);
+        TickSamples previous = new TickSamples(null);
+        previous.gcTimeMillis = 3L;
+        aggregator.accept(previous);
+        TickSamples latest = new TickSamples(null);
+        latest.gcTimeMillis = 8L;
+        aggregator.accept(latest);
+
+        PerfReportData report = aggregator.build(milliseconds(2L), 0L, 1_000);
+
+        assertEquals(8L, report.lastTickGcMillis());
+    }
+
+    @Test
     void usesObservedSampleDensityForEntityCost() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(10L);
         TickSamples sampled = new TickSamples(null);
         sampled.sample(new PerfWorkTracker.Snapshot(TickType.TASK, null, Runnable.class, null,
                 TickDetailKind.NONE, -1, false, 0, 0, 0, false, "server"));
         sampled.durationNanos = 30_000_000_000L;
+        sampled.gcTimeMillis = 7L;
         aggregator.accept(sampled);
 
         PerfReportData report = aggregator.build(milliseconds(6_000L), 1L, 1_000);
         assertEquals(30_000.0D, report.serverMspt(), 0.000_001D);
+        assertEquals(7L, report.lastTickGcMillis());
         assertEquals(observedMillis(6_000L, 1), report.tickables().getFirst().metric().mspt(), 0.000_001D);
     }
 
@@ -338,6 +376,9 @@ class PerfSampleAggregatorTest {
     }
 
     private static final class Furnace {
+    }
+
+    private static final class Handler {
     }
 
     private static final class Pig {
