@@ -5,5 +5,6 @@ public enum TickType {
     ENTITY,
     BLOCK_ENTITY,
     TASK,
-    HANDLER
+    HANDLER,
+    GC
 }

@@ -21,8 +21,6 @@ public final class PerfReportCodec {
         EntryBudget budget = new EntryBudget();
         buffer.writeVarLong(report.reportId());
         buffer.writeDouble(report.serverMspt());
-        buffer.writeDouble(report.recentGcMspt());
-        buffer.writeVarLong(report.recentGcMaxMillis());
         buffer.writeVarLong(report.elapsedMillis());
         buffer.writeVarLong(report.generatedAtEpochMillis());
         buffer.writeVarLong(report.tickCount());
@@ -42,8 +40,6 @@ public final class PerfReportCodec {
         EntryBudget budget = new EntryBudget();
         long reportId = buffer.readVarLong();
         double serverMspt = buffer.readDouble();
-        double recentGcMspt = buffer.readDouble();
-        long recentGcMaxMillis = buffer.readVarLong();
         long elapsedMillis = buffer.readVarLong();
         long generatedAtEpochMillis = buffer.readVarLong();
         long tickCount = buffer.readVarLong();
@@ -57,8 +53,7 @@ public final class PerfReportCodec {
         List<PerfReportData.TickableEntry> tickables = readList(buffer, PerfReportCodec::readTickable, budget);
         List<PerfReportData.OwnerEntry> owners = readList(buffer, PerfReportCodec::readOwner, budget);
         List<PerfReportData.LoaderSourceEntry> loaders = PerfLoaderReportCodec.read(buffer, budget);
-        return new PerfReportData(reportId, serverMspt, recentGcMspt, recentGcMaxMillis,
-                elapsedMillis, generatedAtEpochMillis,
+        return new PerfReportData(reportId, serverMspt, elapsedMillis, generatedAtEpochMillis,
                 tickCount, totalSamples, intervalMicros, omittedChunks, omittedTickables,
                 omittedOwnerSources, omittedLoaderSources, chunks, tickables, owners, loaders);
     }

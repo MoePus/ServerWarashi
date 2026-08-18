@@ -50,4 +50,17 @@ class PerfReportTextRendererTest {
         assertTrue(text.contains("TASK Unknown "));
         assertFalse(text.contains("Unknown @"));
     }
+
+    @Test
+    void printsRollingGcWithoutAnEmptyDimensionSuffix() {
+        var gc = new PerfReportData.TickableEntry(TickType.GC, "", "Rolling 1s",
+                "", TickDetailKind.NONE, -1, false, 0, 0, 0, false, "",
+                new PerfReportData.Metric(2.5D, 20.0D, 20L));
+        PerfReportData report = new PerfReportData(20.0D, 1_000L, 123_000L, 20L, 100L, 1_000,
+                0, 0, 0, List.of(), List.of(gc), List.of());
+
+        String text = PerfReportTextRenderer.render(report).getString();
+        assertTrue(text.contains("GC Rolling 1s"));
+        assertFalse(text.contains("Rolling 1s @"));
+    }
 }

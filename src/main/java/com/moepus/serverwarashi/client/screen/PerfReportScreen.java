@@ -194,15 +194,11 @@ public final class PerfReportScreen extends Screen {
     }
 
     private void renderSummary(GuiGraphics graphics, PerfReportGeometry geometry) {
-        String key = selectedTab == Tab.TICKABLES
-                ? "screen.serverwarashi.profiler.summary.tickables"
-                : "screen.serverwarashi.profiler.summary";
-        String text = PerfDisplayText.translated(key,
+        String text = PerfDisplayText.translated("screen.serverwarashi.profiler.summary",
                 String.format(Locale.ROOT, "%.2f", report.serverMspt()),
                 String.format(Locale.ROOT, "%.1f", report.elapsedMillis() / 1000.0),
                 String.format(Locale.ROOT, "%,d", report.tickCount()), report.intervalMicros(),
-                String.format(Locale.ROOT, "%,d", omittedForTab()),
-                String.format(Locale.ROOT, "%.2f", report.recentGcMspt()), report.recentGcMaxMillis());
+                String.format(Locale.ROOT, "%,d", omittedForTab()));
         int y = geometry.panelY() + TITLE_HEIGHT + CONTROLS_HEIGHT + 3;
         graphics.drawString(font, fit(font, text, geometry.contentWidth()), geometry.contentX(), y, MUTED, true);
     }

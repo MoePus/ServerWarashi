@@ -71,6 +71,9 @@ public final class PerfReportTextRenderer {
         if (entry.type() == TickType.HANDLER) {
             return entry.type() + " " + entry.eventLoop();
         }
+        if (entry.type() == TickType.GC) {
+            return entry.type() + " " + entry.className();
+        }
         if (!entry.positioned()) {
             return id + " @ " + entry.dimension();
         }

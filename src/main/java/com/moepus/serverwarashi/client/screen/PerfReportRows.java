@@ -33,7 +33,14 @@ final class PerfReportRows {
     }
 
     static List<Row> tickables(PerfReportData report, SortKey sort, Map<String, Integer> stableOrder) {
-        return sortRows(report.tickables().stream().map(PerfReportRows::tickableRow).toList(), sort, stableOrder);
+        List<Row> rows = report.tickables().stream()
+                .filter(entry -> entry.type() != TickType.GC)
+                .map(PerfReportRows::tickableRow).toList();
+        List<Row> result = new ArrayList<>(rows.size() + 1);
+        report.tickables().stream().filter(entry -> entry.type() == TickType.GC)
+                .map(PerfReportRows::tickableRow).findFirst().ifPresent(result::add);
+        result.addAll(sortRows(rows, sort, stableOrder));
+        return List.copyOf(result);
     }
 
     static List<Row> players(PerfReportData report,
@@ -123,6 +130,9 @@ final class PerfReportRows {
         if (entry.type() == TickType.HANDLER) {
             return entry.className();
         }
+        if (entry.type() == TickType.GC) {
+            return PerfDisplayText.translated("screen.serverwarashi.profiler.tickable.gc");
+        }
         String name = PerfDisplayText.objectName(
                 entry.detailKind(), entry.className(), entry.detailId());
         if (entry.type() == TickType.ENTITY) {
@@ -156,6 +166,7 @@ final class PerfReportRows {
             case BLOCK_ENTITY -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.block_entity");
             case TASK -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.task");
             case HANDLER -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.handler");
+            case GC -> PerfDisplayText.translated("screen.serverwarashi.profiler.type.gc");
         };
     }
 
@@ -217,6 +228,7 @@ final class PerfReportRows {
             case CHUNK -> chunkKey(entry.dimension(), entry.x(), entry.z());
             case TASK -> "task:" + entry.eventLoop() + ":" + entry.className();
             case HANDLER -> "handler:" + entry.eventLoop();
+            case GC -> "gc:rolling-1s";
         };
     }
 

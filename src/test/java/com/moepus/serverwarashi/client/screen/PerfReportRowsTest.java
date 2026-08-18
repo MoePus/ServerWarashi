@@ -91,6 +91,22 @@ class PerfReportRowsTest {
     }
 
     @Test
+    void gcAppearsAsARollingTickableMetric() {
+        var gc = new PerfReportData.TickableEntry(
+                TickType.GC, "", "Rolling 1s", "", TickDetailKind.NONE,
+                -1, false, 0, 0, 0, false, "", metric(5.0D, 100.0D, 20L));
+
+        PerfReportRows.Row row = PerfReportRows.tickables(
+                report(List.of(), List.of(tickable("HotTick", metric(50.0D, 200.0D)), gc), List.of()),
+                PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
+
+        assertEquals("screen.serverwarashi.profiler.tickable.gc", row.label());
+        assertEquals("screen.serverwarashi.profiler.type.gc", row.type());
+        assertEquals(new PerfReportData.Metric(5.0D, 100.0D, 20L), row.metric());
+        assertNull(row.tooltip());
+    }
+
+    @Test
     void objectTranslationOnlyUsesPrefixesAllowedByDetailKind() {
         assertEquals("Paper", PerfDisplayText.objectName(
                 TickDetailKind.ITEM, "ItemEntity", "minecraft:paper"));

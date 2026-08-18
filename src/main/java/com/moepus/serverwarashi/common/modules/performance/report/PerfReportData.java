@@ -10,8 +10,6 @@ import java.util.Objects;
 
 public record PerfReportData(long reportId,
                              double serverMspt,
-                             double recentGcMspt,
-                             long recentGcMaxMillis,
                              long elapsedMillis,
                              long generatedAtEpochMillis,
                              long tickCount,
@@ -28,12 +26,6 @@ public record PerfReportData(long reportId,
     public PerfReportData {
         if (reportId < 0L) {
             throw new IllegalArgumentException("Report ID must be non-negative");
-        }
-        if (!Double.isFinite(recentGcMspt) || recentGcMspt < 0.0D) {
-            throw new IllegalArgumentException("Recent GC MSPT must be finite and non-negative");
-        }
-        if (recentGcMaxMillis < 0L) {
-            throw new IllegalArgumentException("Recent maximum GC time must be non-negative");
         }
         if (omittedChunks < 0 || omittedTickables < 0
                 || omittedOwnerSources < 0 || omittedLoaderSources < 0) {
@@ -59,27 +51,7 @@ public record PerfReportData(long reportId,
                           List<TickableEntry> tickables,
                           List<OwnerEntry> owners,
                           List<LoaderSourceEntry> loaderSources) {
-        this(0L, serverMspt, 0.0D, 0L, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
-                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
-                omittedLoaderSources, chunks, tickables, owners, loaderSources);
-    }
-
-    public PerfReportData(long reportId,
-                          double serverMspt,
-                          long elapsedMillis,
-                          long generatedAtEpochMillis,
-                          long tickCount,
-                          long totalSamples,
-                          int intervalMicros,
-                          int omittedChunks,
-                          int omittedTickables,
-                          int omittedOwnerSources,
-                          int omittedLoaderSources,
-                          List<ChunkEntry> chunks,
-                          List<TickableEntry> tickables,
-                          List<OwnerEntry> owners,
-                          List<LoaderSourceEntry> loaderSources) {
-        this(reportId, serverMspt, 0.0D, 0L, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
+        this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
                 intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
                 omittedLoaderSources, chunks, tickables, owners, loaderSources);
     }
@@ -96,20 +68,19 @@ public record PerfReportData(long reportId,
                           List<ChunkEntry> chunks,
                           List<TickableEntry> tickables,
                           List<OwnerEntry> owners) {
-        this(0L, serverMspt, 0.0D, 0L, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples, intervalMicros,
+        this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples, intervalMicros,
                 omittedChunks, omittedTickables, omittedOwnerSources, 0,
                 chunks, tickables, owners, List.of());
     }
 
     public static PerfReportData empty(int intervalMicros) {
-        return new PerfReportData(0L, 0.0D, 0.0D, 0L, 0L, 0L, 0L, 0L, intervalMicros,
+        return new PerfReportData(0L, 0.0D, 0L, 0L, 0L, 0L, intervalMicros,
                 0, 0, 0, 0, List.of(), List.of(), List.of(), List.of());
     }
 
     public PerfReportData withLoaderSources(List<LoaderSourceEntry> nextLoaderSources) {
         return loaderSources.equals(nextLoaderSources) ? this : new PerfReportData(
-                reportId, serverMspt, recentGcMspt, recentGcMaxMillis, elapsedMillis, generatedAtEpochMillis,
-                tickCount, totalSamples,
+                reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
                 intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
                 omittedLoaderSources, chunks, tickables, owners, nextLoaderSources);
     }

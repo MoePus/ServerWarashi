@@ -69,7 +69,7 @@ final class TickSamples {
             long position = switch (snapshot.type()) {
                 case CHUNK -> ChunkPos.asLong(snapshot.x(), snapshot.z());
                 case BLOCK_ENTITY -> BlockPos.asLong(snapshot.x(), snapshot.y(), snapshot.z());
-                case ENTITY, TASK, HANDLER -> 0L;
+                case ENTITY, TASK, HANDLER, GC -> 0L;
             };
             return new TickableKey(snapshot.type(), dimension, snapshot.workClass(), snapshot.detailId(),
                     snapshot.detailKind(),

@@ -77,14 +77,14 @@ final class PerfSampleAggregator {
                 PerfReportData.TickableEntry::metric);
         PerfOwnerAggregator.Build ownerBuild = ownerAggregator.build(tickCount, nanosPerSample);
         GcMetric gc = gcMetric();
+        List<PerfReportData.TickableEntry> reportTickables = withGcTickable(limitedTickables.entries(), gc);
         double serverMspt = tickCount == 0 ? 0.0D : totalTickNanos / 1_000_000.0D / tickCount;
-        return new PerfReportData(reportId, serverMspt, gc.averageMillis(), gc.maxMillis(),
-                elapsedNanos / 1_000_000L, System.currentTimeMillis(),
+        return new PerfReportData(reportId, serverMspt, elapsedNanos / 1_000_000L, System.currentTimeMillis(),
                 tickCount, totalSamples, intervalMicros,
                 omitted(limitedChunks.omitted(), droppedChunkHashes),
                 omitted((long) sampledTickables.omitted() + limitedTickables.omitted(), droppedTickableHashes),
                 ownerBuild.omitted(), ownerBuild.omittedLoaderSources(),
-                limitedChunks.entries(), limitedTickables.entries(), ownerBuild.entries(), ownerBuild.loaderSources());
+                limitedChunks.entries(), reportTickables, ownerBuild.entries(), ownerBuild.loaderSources());
     }
 
     private void recordGc(TickSamples tick) {
@@ -98,13 +98,26 @@ final class PerfSampleAggregator {
 
     private GcMetric gcMetric() {
         if (recentGcTicks.isEmpty()) {
-            return new GcMetric(0.0D, 0L);
+            return new GcMetric(0.0D, 0L, 0L);
         }
         long maximum = 0L;
         for (GcTick tick : recentGcTicks) {
             maximum = Math.max(maximum, tick.gcMillis());
         }
-        return new GcMetric((double) recentGcTotalMillis / recentGcTicks.size(), maximum);
+        return new GcMetric((double) recentGcTotalMillis / recentGcTicks.size(), maximum, recentGcTicks.size());
+    }
+
+    private static List<PerfReportData.TickableEntry> withGcTickable(
+            List<PerfReportData.TickableEntry> entries, GcMetric gc) {
+        if (gc.ticks() == 0L) {
+            return entries;
+        }
+        List<PerfReportData.TickableEntry> result = new ArrayList<>(entries.size() + 1);
+        result.addAll(entries);
+        result.add(new PerfReportData.TickableEntry(TickType.GC, "", "Rolling 1s", "",
+                TickDetailKind.NONE, -1, false, 0, 0, 0, false, "",
+                new PerfReportData.Metric(gc.averageMillis(), gc.maxMillis(), gc.ticks())));
+        return List.copyOf(result);
     }
 
     private void recordTickables(TickSamples tick) {
@@ -327,7 +340,7 @@ final class PerfSampleAggregator {
     private record GcTick(long completedAtNanos, long gcMillis) {
     }
 
-    private record GcMetric(double averageMillis, long maxMillis) {
+    private record GcMetric(double averageMillis, long maxMillis, long ticks) {
     }
 
     private static final class ObjectCounts {

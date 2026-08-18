@@ -50,18 +50,22 @@ class PerfSampleAggregatorTest {
         aggregator.accept(latest);
 
         PerfReportData report = aggregator.build(milliseconds(2L), 0L, 1_000);
+        PerfReportData.Metric gc = gcMetric(report);
 
-        assertEquals(6.0D, report.recentGcMspt());
-        assertEquals(9L, report.recentGcMaxMillis());
+        assertEquals(6.0D, gc.mspt());
+        assertEquals(9.0D, gc.max());
+        assertEquals(2L, gc.samples());
 
         TickSamples nextWindow = new TickSamples(null);
         nextWindow.gcTimeMillis = 1L;
         nextWindow.completedAtNanos = 1_100_000_000L;
         aggregator.accept(nextWindow);
         PerfReportData shifted = aggregator.build(milliseconds(3L), 0L, 1_000);
+        PerfReportData.Metric shiftedGc = gcMetric(shifted);
 
-        assertEquals(5.0D, shifted.recentGcMspt());
-        assertEquals(9L, shifted.recentGcMaxMillis());
+        assertEquals(5.0D, shiftedGc.mspt());
+        assertEquals(9.0D, shiftedGc.max());
+        assertEquals(2L, shiftedGc.samples());
     }
 
     @Test
@@ -76,8 +80,7 @@ class PerfSampleAggregatorTest {
 
         PerfReportData report = aggregator.build(milliseconds(6_000L), 1L, 1_000);
         assertEquals(30_000.0D, report.serverMspt(), 0.000_001D);
-        assertEquals(7.0D, report.recentGcMspt());
-        assertEquals(7L, report.recentGcMaxMillis());
+        assertEquals(new PerfReportData.Metric(7.0D, 7.0D, 1L), gcMetric(report));
         assertEquals(observedMillis(6_000L, 1), report.tickables().getFirst().metric().mspt(), 0.000_001D);
     }
 
@@ -357,6 +360,12 @@ class PerfSampleAggregatorTest {
 
     private static long milliseconds(long value) {
         return value * 1_000_000L;
+    }
+
+    private static PerfReportData.Metric gcMetric(PerfReportData report) {
+        return report.tickables().stream()
+                .filter(entry -> entry.type() == TickType.GC)
+                .findFirst().orElseThrow().metric();
     }
 
     private static void sampleEntities(TickSamples samples, Class<?> type, int firstId, int count) {
