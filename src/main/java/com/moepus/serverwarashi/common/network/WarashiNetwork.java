@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 @EventBusSubscriber(modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class WarashiNetwork {
-    static final String NETWORK_VERSION = "4";
+    static final String NETWORK_VERSION = "5";
 
     private WarashiNetwork() {
     }

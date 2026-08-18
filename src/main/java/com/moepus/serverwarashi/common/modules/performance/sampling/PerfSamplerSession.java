@@ -24,6 +24,7 @@ public final class PerfSamplerSession {
     private final long durationNanos;
     private final SplittableRandom intervalRandom;
     private final AnalysisClock analysisClock;
+    private final LongSupplier nanoTime;
     private final TickGcTimeTracker gcTimeTracker = new TickGcTimeTracker();
     private final Thread samplerThread;
     private final WindowsTimerResolution timerResolution = new WindowsTimerResolution();
@@ -50,11 +51,12 @@ public final class PerfSamplerSession {
         this.intervalMicros = intervalMicros;
         durationNanos = options.durationNanos();
         aggregator = new PerfSampleAggregator(sessionId);
-        analysisClock = new AnalysisClock(options.nanoTime());
+        nanoTime = options.nanoTime();
+        analysisClock = new AnalysisClock(nanoTime);
         latestReport = options.initialAttribution() == null
                 ? PerfReportData.empty(intervalMicros)
                 : aggregator.buildLoaderLayoutOnly(options.initialAttribution(), intervalMicros);
-        intervalRandom = new SplittableRandom(sessionId ^ options.nanoTime().getAsLong());
+        intervalRandom = new SplittableRandom(sessionId ^ nanoTime.getAsLong());
         samplerThread = new Thread(this::runSampler, "ServerWarashi-PerfSampler");
         samplerThread.setDaemon(true);
     }
@@ -153,6 +155,7 @@ public final class PerfSamplerSession {
             }
             tick.durationNanos = durationNanos;
             tick.gcTimeMillis = gcTimeTracker.elapsedSince(tick.gcStartMillis);
+            tick.completedAtNanos = nanoTime.getAsLong();
             currentTick = null;
             closedTicks.add(tick);
         }

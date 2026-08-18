@@ -23,7 +23,7 @@ class PerfReportCodecTest {
     void roundTripsTypedReport() {
         PerfReportData.Metric metric = new PerfReportData.Metric(1.25D, 3.5D, 42L);
         PerfReportData expected = new PerfReportData(
-                17L, 48.75D, 6L, 10_000L, 123_456_789L, 200L, 9_999L, 1_000, 2, 3, 4, 5,
+                17L, 48.75D, 2.5D, 12L, 10_000L, 123_456_789L, 200L, 9_999L, 1_000, 2, 3, 4, 5,
                 List.of(new PerfReportData.ChunkEntry("minecraft:overworld", 2, -3, 7, 4,
                         List.of(new PerfReportData.ObjectCount("ItemEntity", "minecraft:stone",
                                 TickDetailKind.ITEM, 3, 33, 64, -40)),
@@ -209,7 +209,10 @@ class PerfReportCodecTest {
                 () -> new PerfReportData(0.0D, 0L, 0L, 0L, 0L, 1_000,
                         -1, 0, 0, 0, List.of(), List.of(), List.of(), List.of()));
         assertThrows(IllegalArgumentException.class,
-                () -> new PerfReportData(0L, 0.0D, -1L, 0L, 0L, 0L, 0L, 1_000,
+                () -> new PerfReportData(0L, 0.0D, -1.0D, 0L, 0L, 0L, 0L, 0L, 1_000,
+                        0, 0, 0, 0, List.of(), List.of(), List.of(), List.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PerfReportData(0L, 0.0D, 0.0D, -1L, 0L, 0L, 0L, 0L, 1_000,
                         0, 0, 0, 0, List.of(), List.of(), List.of(), List.of()));
         assertThrows(IllegalArgumentException.class,
                 () -> new PerfReportData.LoaderSourceEntry(
@@ -256,6 +259,7 @@ class PerfReportCodecTest {
 
     private static void writeEmptyReportHeader(RegistryFriendlyByteBuf buffer) {
         buffer.writeVarLong(0L);
+        buffer.writeDouble(0.0D);
         buffer.writeDouble(0.0D);
         buffer.writeVarLong(0L);
         buffer.writeVarLong(0L);

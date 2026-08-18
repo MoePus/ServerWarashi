@@ -13,6 +13,7 @@ final class TickSamples {
     final Map<ChunkKey, Integer> chunks = new HashMap<>();
     PerfAttributionSnapshot attribution;
     long durationNanos;
+    long completedAtNanos;
     long gcStartMillis;
     long gcTimeMillis;
     int totalSamples;

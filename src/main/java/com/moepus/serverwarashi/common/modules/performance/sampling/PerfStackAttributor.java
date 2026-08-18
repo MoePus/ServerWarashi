@@ -99,14 +99,28 @@ final class PerfStackAttributor {
     }
 
     private static boolean isNormalTickIdle(StackTraceElement[] stack) {
-        boolean waiting = false;
-        boolean betweenTicks = false;
-        for (StackTraceElement frame : stack) {
-            waiting |= "waitForTasks".equals(frame.getMethodName());
-            betweenTicks |= MINECRAFT_SERVER_CLASS.equals(frame.getClassName())
-                    && "waitUntilNextTick".equals(frame.getMethodName());
+        int waitIndex = -1;
+        int tickWaitIndex = -1;
+        for (int index = 0; index < stack.length; index++) {
+            StackTraceElement frame = stack[index];
+            if (waitIndex < 0 && "waitForTasks".equals(frame.getMethodName())) {
+                waitIndex = index;
+            }
+            if (MINECRAFT_SERVER_CLASS.equals(frame.getClassName())
+                    && "waitUntilNextTick".equals(frame.getMethodName())) {
+                tickWaitIndex = index;
+                break;
+            }
         }
-        return waiting && betweenTicks;
+        if (waitIndex < 0 || tickWaitIndex <= waitIndex) {
+            return false;
+        }
+        for (int index = waitIndex + 1; index < tickWaitIndex; index++) {
+            if ("doRunTask".equals(stack[index].getMethodName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static PerfWorkTracker.Snapshot handler(StackTraceElement frame, TickEvent event) {

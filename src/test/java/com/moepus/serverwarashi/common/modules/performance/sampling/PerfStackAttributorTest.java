@@ -68,6 +68,24 @@ class PerfStackAttributorTest {
     }
 
     @Test
+    void treatsTaskBlockingInsideWaitUntilNextTickAsUnknown() {
+        PerfWorkTracker.Snapshot sample = PerfStackAttributor.classify(stack(
+                frame("java.util.concurrent.locks.LockSupport", "parkNanos"),
+                frame("net.minecraft.util.thread.BlockableEventLoop", "waitForTasks"),
+                frame("net.minecraft.util.thread.BlockableEventLoop", "managedBlock"),
+                frame("net.minecraft.server.level.ServerChunkCache", "getChunk"),
+                frame("com.example.LongTask", "run"),
+                frame("net.minecraft.util.thread.BlockableEventLoop", "doRunTask"),
+                frame("net.minecraft.util.thread.BlockableEventLoop", "pollTask"),
+                frame("net.minecraft.util.thread.BlockableEventLoop", "managedBlock"),
+                frame("net.minecraft.server.MinecraftServer", "waitUntilNextTick")
+        ));
+
+        assertEquals(TickType.TASK, sample.type());
+        assertEquals("Unknown", sample.displayName());
+    }
+
+    @Test
     void collapsesTasksBlockingWaitsAndOtherActiveWorkIntoUnknown() {
         List<StackTraceElement[]> stacks = List.of(
                 stack(

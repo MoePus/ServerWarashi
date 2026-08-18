@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ import java.util.SplittableRandom;
 import java.util.function.ToDoubleFunction;
 
 final class PerfSampleAggregator {
+    private static final long GC_WINDOW_NANOS = 1_000_000_000L;
     private static final int CHUNK_VIEW_LIMIT_PER_METRIC = 256;
     private static final int TICKABLE_VIEW_LIMIT_PER_METRIC = 256;
     private static final int MAX_COORDINATES_PER_GROUP = 16;
@@ -28,13 +30,14 @@ final class PerfSampleAggregator {
     private final Map<TickSamples.TickableKey, TickableAggregate> tickables = new HashMap<>();
     private final Map<CoordinateGroup, CoordinateReservoir> coordinateGroups = new HashMap<>();
     private final Map<TickSamples.ChunkKey, SampleStatistics> chunks = new HashMap<>();
+    private final ArrayDeque<GcTick> recentGcTicks = new ArrayDeque<>();
     private final IntOpenHashSet droppedTickableHashes = new IntOpenHashSet();
     private final IntOpenHashSet droppedChunkHashes = new IntOpenHashSet();
     private int tickableDropsUntilReplacement = REPLACEMENT_INTERVAL;
     private int chunkDropsUntilReplacement = REPLACEMENT_INTERVAL;
     private long tickCount;
     private long totalTickNanos;
-    private long lastTickGcMillis;
+    private long recentGcTotalMillis;
 
     PerfSampleAggregator(long seed) {
         reportId = seed;
@@ -51,7 +54,7 @@ final class PerfSampleAggregator {
     void accept(TickSamples tick) {
         tickCount++;
         totalTickNanos += tick.durationNanos;
-        lastTickGcMillis = tick.gcTimeMillis;
+        recordGc(tick);
         if (tick.totalSamples == 0) {
             ownerAggregator.updateMetadata(tick.attribution);
         } else {
@@ -73,14 +76,35 @@ final class PerfSampleAggregator {
                 sampledTickables.entries(), TICKABLE_VIEW_LIMIT_PER_METRIC,
                 PerfReportData.TickableEntry::metric);
         PerfOwnerAggregator.Build ownerBuild = ownerAggregator.build(tickCount, nanosPerSample);
+        GcMetric gc = gcMetric();
         double serverMspt = tickCount == 0 ? 0.0D : totalTickNanos / 1_000_000.0D / tickCount;
-        return new PerfReportData(reportId, serverMspt, lastTickGcMillis,
+        return new PerfReportData(reportId, serverMspt, gc.averageMillis(), gc.maxMillis(),
                 elapsedNanos / 1_000_000L, System.currentTimeMillis(),
                 tickCount, totalSamples, intervalMicros,
                 omitted(limitedChunks.omitted(), droppedChunkHashes),
                 omitted((long) sampledTickables.omitted() + limitedTickables.omitted(), droppedTickableHashes),
                 ownerBuild.omitted(), ownerBuild.omittedLoaderSources(),
                 limitedChunks.entries(), limitedTickables.entries(), ownerBuild.entries(), ownerBuild.loaderSources());
+    }
+
+    private void recordGc(TickSamples tick) {
+        long cutoff = tick.completedAtNanos - GC_WINDOW_NANOS;
+        while (!recentGcTicks.isEmpty() && recentGcTicks.getFirst().completedAtNanos() < cutoff) {
+            recentGcTotalMillis -= recentGcTicks.removeFirst().gcMillis();
+        }
+        recentGcTicks.addLast(new GcTick(tick.completedAtNanos, tick.gcTimeMillis));
+        recentGcTotalMillis += tick.gcTimeMillis;
+    }
+
+    private GcMetric gcMetric() {
+        if (recentGcTicks.isEmpty()) {
+            return new GcMetric(0.0D, 0L);
+        }
+        long maximum = 0L;
+        for (GcTick tick : recentGcTicks) {
+            maximum = Math.max(maximum, tick.gcMillis());
+        }
+        return new GcMetric((double) recentGcTotalMillis / recentGcTicks.size(), maximum);
     }
 
     private void recordTickables(TickSamples tick) {
@@ -298,6 +322,12 @@ final class PerfSampleAggregator {
     private record ObjectBuild(
             Map<TickSamples.ChunkKey, ObjectCounts> chunkCounts,
             PerfReportLimits.Limited<PerfReportData.TickableEntry> tickables) {
+    }
+
+    private record GcTick(long completedAtNanos, long gcMillis) {
+    }
+
+    private record GcMetric(double averageMillis, long maxMillis) {
     }
 
     private static final class ObjectCounts {

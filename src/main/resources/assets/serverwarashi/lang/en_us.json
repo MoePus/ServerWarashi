@@ -9,7 +9,7 @@
   "screen.serverwarashi.profiler.game_paused_tooltip": "The current map screen pauses singleplayer, so performance data cannot be collected while it is open. Close the map to start collecting.",
   "screen.serverwarashi.profiler.page": "Page %1$s/%2$s",
   "screen.serverwarashi.profiler.summary": "Server %1$s MSPT | %2$ss | %3$s ticks | %4$sus | omitted %5$s",
-  "screen.serverwarashi.profiler.summary.tickables": "Server %1$s MSPT | Previous tick GC %6$s ms | %2$ss | %3$s ticks | %4$sus | omitted %5$s",
+  "screen.serverwarashi.profiler.summary.tickables": "Server %1$s MSPT | GC 1s avg %6$s ms/tick, max %7$s ms | %2$ss | %3$s ticks | %4$sus | omitted %5$s",
   "screen.serverwarashi.profiler.no_data": "No data",
   "screen.serverwarashi.profiler.tab.chunks": "Chunks",
   "screen.serverwarashi.profiler.tab.tickables": "Tickables",

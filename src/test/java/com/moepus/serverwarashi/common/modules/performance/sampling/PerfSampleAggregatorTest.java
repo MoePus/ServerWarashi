@@ -38,18 +38,30 @@ class PerfSampleAggregatorTest {
     }
 
     @Test
-    void reportsGcTimeFromTheMostRecentlyCompletedTick() {
+    void reportsAverageAndMaximumGcFromTheLastSecond() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(11L);
         TickSamples previous = new TickSamples(null);
         previous.gcTimeMillis = 3L;
+        previous.completedAtNanos = 0L;
         aggregator.accept(previous);
         TickSamples latest = new TickSamples(null);
-        latest.gcTimeMillis = 8L;
+        latest.gcTimeMillis = 9L;
+        latest.completedAtNanos = 500_000_000L;
         aggregator.accept(latest);
 
         PerfReportData report = aggregator.build(milliseconds(2L), 0L, 1_000);
 
-        assertEquals(8L, report.lastTickGcMillis());
+        assertEquals(6.0D, report.recentGcMspt());
+        assertEquals(9L, report.recentGcMaxMillis());
+
+        TickSamples nextWindow = new TickSamples(null);
+        nextWindow.gcTimeMillis = 1L;
+        nextWindow.completedAtNanos = 1_100_000_000L;
+        aggregator.accept(nextWindow);
+        PerfReportData shifted = aggregator.build(milliseconds(3L), 0L, 1_000);
+
+        assertEquals(5.0D, shifted.recentGcMspt());
+        assertEquals(9L, shifted.recentGcMaxMillis());
     }
 
     @Test
@@ -64,7 +76,8 @@ class PerfSampleAggregatorTest {
 
         PerfReportData report = aggregator.build(milliseconds(6_000L), 1L, 1_000);
         assertEquals(30_000.0D, report.serverMspt(), 0.000_001D);
-        assertEquals(7L, report.lastTickGcMillis());
+        assertEquals(7.0D, report.recentGcMspt());
+        assertEquals(7L, report.recentGcMaxMillis());
         assertEquals(observedMillis(6_000L, 1), report.tickables().getFirst().metric().mspt(), 0.000_001D);
     }
 
