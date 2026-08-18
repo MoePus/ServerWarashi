@@ -85,6 +85,13 @@ public record PerfReportData(long reportId,
                 omittedLoaderSources, chunks, tickables, owners, nextLoaderSources);
     }
 
+    public PerfReportData withChunks(List<ChunkEntry> nextChunks) {
+        return chunks.equals(nextChunks) ? this : new PerfReportData(
+                reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
+                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
+                omittedLoaderSources, nextChunks, tickables, owners, loaderSources);
+    }
+
     public record Metric(double mspt, double max, long samples) {
     }
 
@@ -155,6 +162,12 @@ public record PerfReportData(long reportId,
         public ChunkEntry {
             topEntities = List.copyOf(topEntities);
             topBlockEntities = List.copyOf(topBlockEntities);
+        }
+
+        public ChunkEntry withEntities(int nextEntityCount, List<ObjectCount> nextTopEntities) {
+            return entityCount == nextEntityCount && topEntities.equals(nextTopEntities)
+                    ? this : new ChunkEntry(dimension, chunkX, chunkZ,
+                    nextEntityCount, blockEntityCount, nextTopEntities, topBlockEntities, metric);
         }
     }
 

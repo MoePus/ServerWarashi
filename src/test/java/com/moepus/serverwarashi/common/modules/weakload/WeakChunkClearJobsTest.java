@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.modules.weakload;
 
+import net.minecraft.world.level.entity.Visibility;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -17,22 +18,27 @@ class WeakChunkClearJobsTest {
     private static final WeakEntityType FOURTH = entity("test:fourth");
 
     @Test
-    void acceptsCurrentTopThreeButNotFourth() {
+    void acceptsAnyRequestedTypeAtTheServerThreshold() {
         var warning = new WeakChunkSnapshot.ChunkEntry(0, 0, 1_000,
-                Map.of(FIRST, 400, SECOND, 300, THIRD, 200, FOURTH, 100));
+                Map.of(FIRST, 701, SECOND, 100, THIRD, 100, FOURTH, 99));
 
         assertTrue(WeakChunkClearJobs.isEstimatedTarget(warning, FIRST));
+        assertTrue(WeakChunkClearJobs.isEstimatedTarget(warning, SECOND));
         assertTrue(WeakChunkClearJobs.isEstimatedTarget(warning, THIRD));
         assertFalse(WeakChunkClearJobs.isEstimatedTarget(warning, FOURTH));
     }
 
     @Test
-    void rejectsWarningBelowDangerThreshold() {
-        int belowDanger = WeakChunkSnapshot.ENTITY_RED_THRESHOLD - 1;
+    void acceptsServerThresholdAndRejectsOneBelowIt() {
+        int belowThreshold = WeakChunkClearJobs.SERVER_CLEAR_THRESHOLD - 1;
         var warning = new WeakChunkSnapshot.ChunkEntry(
-                0, 0, belowDanger, Map.of(FIRST, belowDanger));
+                0, 0, belowThreshold, Map.of(FIRST, belowThreshold));
+        var clearable = new WeakChunkSnapshot.ChunkEntry(
+                0, 0, WeakChunkClearJobs.SERVER_CLEAR_THRESHOLD,
+                Map.of(FIRST, WeakChunkClearJobs.SERVER_CLEAR_THRESHOLD));
 
         assertFalse(WeakChunkClearJobs.isEstimatedTarget(warning, FIRST));
+        assertTrue(WeakChunkClearJobs.isEstimatedTarget(clearable, FIRST));
     }
 
     @Test
@@ -43,6 +49,16 @@ class WeakChunkClearJobsTest {
     @Test
     void attemptBudgetUsesLongArithmetic() {
         assertEquals(4_294_968_294L, WeakChunkClearJobs.attemptBudget(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void allowsTrackedAndTickingSectionsButNotHiddenSections() {
+        assertFalse(WeakChunkClearJobs.isClearableVisibility(Visibility.HIDDEN));
+        assertTrue(WeakChunkClearJobs.isClearableVisibility(Visibility.TRACKED));
+        assertTrue(WeakChunkClearJobs.isClearableVisibility(Visibility.TICKING));
+        assertTrue(WeakChunkClearJobs.usesBatchRemoval(Visibility.TRACKED));
+        assertFalse(WeakChunkClearJobs.usesBatchRemoval(Visibility.TICKING));
+        assertFalse(WeakChunkClearJobs.usesBatchRemoval(Visibility.HIDDEN));
     }
 
     @Test

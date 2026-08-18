@@ -1,7 +1,7 @@
 package com.moepus.serverwarashi.common.network;
 
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkClearJobs;
-import com.moepus.serverwarashi.common.modules.weakload.WeakChunkCollector;
+import com.moepus.serverwarashi.common.modules.weakload.ChunkEntityCollector;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -19,9 +19,11 @@ import java.util.UUID;
 
 public final class WeakChunkDelivery {
     static final int IDLE_SWEEP_COOLDOWN_TICKS = 200;
+    static final int BASE_CHUNK_SCAN_BUDGET = 64;
     private static final Map<ServerLevel, ScanState> SCANNERS = new LinkedHashMap<>();
     private static final Map<UUID, ServerLevel> VIEWER_LEVELS = new HashMap<>();
     private static final Set<UUID> INITIAL_SYNC_PENDING = new HashSet<>();
+    private static int nextScannerIndex;
 
     private WeakChunkDelivery() {
     }
@@ -40,14 +42,17 @@ public final class WeakChunkDelivery {
         updateLevels(server);
         updateViewers(server);
         publishInitialSnapshots();
-        publishCorrections(server, completed);
-        SCANNERS.forEach(WeakChunkDelivery::scanAndPublish);
+        PerfChunkEntityScanQueue.ScanBatch priority =
+                PerfReportDelivery.scanEntityCounts(server, completed);
+        publishCorrections(server, priority.trackedCorrections());
+        scanWeakChunks(remainingWeakBudget(priority.scannedChunks()));
     }
 
     public static void clearRuntimeState() {
         SCANNERS.clear();
         VIEWER_LEVELS.clear();
         INITIAL_SYNC_PENDING.clear();
+        nextScannerIndex = 0;
     }
 
     private static void updateLevels(MinecraftServer server) {
@@ -112,12 +117,33 @@ public final class WeakChunkDelivery {
                 state.cursor.sweepId(), false, state.cache.currentEntries());
     }
 
-    private static void scanAndPublish(ServerLevel level, ScanState state) {
-        if (!state.throttle.shouldScan(!state.viewers.isEmpty())) {
+    static int remainingWeakBudget(int priorityScans) {
+        return Math.max(0, BASE_CHUNK_SCAN_BUDGET - priorityScans);
+    }
+
+    private static void scanWeakChunks(int budget) {
+        if (budget == 0 || SCANNERS.isEmpty()) {
             return;
         }
-        WeakChunkCollector.ScanResult result = WeakChunkCollector.scan(
-                level, state.cursor, WeakChunkCollector.CHUNKS_PER_TICK);
+        List<Map.Entry<ServerLevel, ScanState>> scanners = List.copyOf(SCANNERS.entrySet());
+        int start = Math.floorMod(nextScannerIndex, scanners.size());
+        int remaining = budget;
+        for (int offset = 0; offset < scanners.size() && remaining > 0; offset++) {
+            Map.Entry<ServerLevel, ScanState> scanner =
+                    scanners.get((start + offset) % scanners.size());
+            int scannersLeft = scanners.size() - offset;
+            int allocation = Math.max(1, remaining / scannersLeft);
+            remaining -= scanAndPublish(scanner.getKey(), scanner.getValue(), allocation);
+        }
+        nextScannerIndex = (start + 1) % scanners.size();
+    }
+
+    private static int scanAndPublish(ServerLevel level, ScanState state, int budget) {
+        if (!state.throttle.shouldScan(!state.viewers.isEmpty())) {
+            return 0;
+        }
+        ChunkEntityCollector.ScanResult result = ChunkEntityCollector.scanWeak(
+                level, state.cursor, budget);
         if (result.emptyStorage()) {
             state.cache.clearCurrent();
         }
@@ -132,19 +158,22 @@ public final class WeakChunkDelivery {
         } else if (result.emptyStorage()) {
             state.throttle.onEmptyStorage(state.viewers.isEmpty());
         }
+        return result.scannedChunks();
     }
 
     private static void publishCorrections(
-            MinecraftServer server, List<WeakChunkClearJobs.CompletedChunk> completed) {
-        for (WeakChunkClearJobs.CompletedChunk chunk : completed) {
-            ServerLevel level = server.getLevel(chunk.dimension());
+            MinecraftServer server,
+            List<PerfChunkEntityScanQueue.TrackedCorrection> corrections) {
+        for (PerfChunkEntityScanQueue.TrackedCorrection correction : corrections) {
+            ServerLevel level = server.getLevel(correction.key().dimension());
             ScanState state = level == null ? null : SCANNERS.get(level);
             if (state == null) {
                 continue;
             }
-            WeakChunkSnapshot.ChunkEntry entry = WeakChunkCollector.inspect(level, chunk.chunkPos());
-            state.cache.correct(chunk.chunkPos(), entry);
-            sendCorrection(level, state.viewers, chunk.chunkPos(), entry);
+            long chunkPos = correction.key().chunkPos();
+            if (state.cache.correct(chunkPos, correction.entry())) {
+                sendCorrection(level, state.viewers, chunkPos, correction.entry());
+            }
         }
     }
 
@@ -212,14 +241,14 @@ public final class WeakChunkDelivery {
         return snapshotDimension.equals(playerDimension) && subscribed && permitted;
     }
 
-    private static void applyCorrection(Map<Long, WeakChunkSnapshot.ChunkEntry> cache,
-                                        long chunkPos,
-                                        WeakChunkSnapshot.ChunkEntry entry) {
+    private static boolean applyCorrection(Map<Long, WeakChunkSnapshot.ChunkEntry> cache,
+                                           long chunkPos,
+                                           WeakChunkSnapshot.ChunkEntry entry) {
         if (entry == null) {
-            cache.remove(chunkPos);
-        } else {
-            cache.put(chunkPos, entry);
+            return cache.remove(chunkPos) != null;
         }
+        WeakChunkSnapshot.ChunkEntry previous = cache.put(chunkPos, entry);
+        return !entry.equals(previous);
     }
 
     private static void merge(Map<Long, WeakChunkSnapshot.ChunkEntry> target,
@@ -234,7 +263,7 @@ public final class WeakChunkDelivery {
     }
 
     private static final class ScanState {
-        private final WeakChunkCollector.ScanCursor cursor = new WeakChunkCollector.ScanCursor();
+        private final ChunkEntityCollector.ScanCursor cursor = new ChunkEntityCollector.ScanCursor();
         private final SweepCache cache = new SweepCache();
         private final ScanThrottle throttle = new ScanThrottle();
         private final List<ServerPlayer> viewers = new ArrayList<>();
@@ -293,9 +322,10 @@ public final class WeakChunkDelivery {
             current.clear();
         }
 
-        void correct(long chunkPos, WeakChunkSnapshot.ChunkEntry entry) {
-            applyCorrection(completed, chunkPos, entry);
-            applyCorrection(current, chunkPos, entry);
+        boolean correct(long chunkPos, WeakChunkSnapshot.ChunkEntry entry) {
+            boolean completedChanged = applyCorrection(completed, chunkPos, entry);
+            boolean currentChanged = applyCorrection(current, chunkPos, entry);
+            return completedChanged || currentChanged;
         }
 
         List<WeakChunkSnapshot.ChunkEntry> currentEntries() {

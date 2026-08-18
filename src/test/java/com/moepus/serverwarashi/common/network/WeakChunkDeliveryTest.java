@@ -14,6 +14,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WeakChunkDeliveryTest {
     @Test
+    void priorityScansConsumeOnlyTheWeakBudgetAndMayExceedTheBase() {
+        assertEquals(64, WeakChunkDelivery.remainingWeakBudget(0));
+        assertEquals(1, WeakChunkDelivery.remainingWeakBudget(63));
+        assertEquals(0, WeakChunkDelivery.remainingWeakBudget(64));
+        assertEquals(0, WeakChunkDelivery.remainingWeakBudget(100));
+    }
+
+    @Test
     void sendsOnlyToSubscribedPermittedPlayersStillInSnapshotDimension() {
         assertTrue(WeakChunkDelivery.shouldSend(
                 "minecraft:overworld", "minecraft:overworld", true, true));
@@ -46,13 +54,27 @@ class WeakChunkDeliveryTest {
         cache.complete(0L, 10L);
         cache.mergeCurrent(List.of(chunk(1, 2, 60)));
 
-        cache.correct(ChunkPos.asLong(1, 2), chunk(1, 2, 80));
+        assertTrue(cache.correct(ChunkPos.asLong(1, 2), chunk(1, 2, 80)));
         assertEquals(List.of(chunk(1, 2, 80)), cache.completedEntries());
         assertEquals(List.of(chunk(1, 2, 80)), cache.currentEntries());
 
-        cache.correct(ChunkPos.asLong(1, 2), null);
+        assertTrue(cache.correct(ChunkPos.asLong(1, 2), null));
         assertTrue(cache.completedEntries().isEmpty());
         assertTrue(cache.currentEntries().isEmpty());
+    }
+
+    @Test
+    void correctionReportsOnlyActualCacheChanges() {
+        var cache = new WeakChunkDelivery.SweepCache();
+        long position = ChunkPos.asLong(1, 2);
+        WeakChunkSnapshot.ChunkEntry entry = chunk(1, 2, 50);
+
+        assertFalse(cache.correct(position, null));
+        assertTrue(cache.correct(position, entry));
+        assertFalse(cache.correct(position, entry));
+        assertTrue(cache.correct(position, chunk(1, 2, 60)));
+        assertTrue(cache.correct(position, null));
+        assertFalse(cache.correct(position, null));
     }
 
     @Test

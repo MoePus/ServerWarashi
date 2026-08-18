@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.client.heatmap;
 import com.moepus.serverwarashi.api.client.map.MapViewport;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.ChunkPerformanceRisk;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import net.minecraft.world.level.ChunkPos;
@@ -17,16 +18,14 @@ import java.util.Map;
 import java.util.Set;
 
 public final class ChunkHeatmapModel {
-    static final double MSPT_THRESHOLD = 0.5D;
-    static final double MAX_THRESHOLD = 3.0D;
-    private static final double LOG_TWO = Math.log(2.0D);
+    static final double MSPT_THRESHOLD = ChunkPerformanceRisk.MSPT_THRESHOLD;
+    static final double MAX_THRESHOLD = ChunkPerformanceRisk.MAX_THRESHOLD;
     private static final int MAX_LOADER_QUADS = 16_384;
     private static final int MAX_LOADER_ASSOCIATIONS = 65_536;
     private static final int MAX_SOURCES_PER_CHUNK = 4;
     private static final HeatmapColorStop LOADER_GREEN = HeatmapRiskScale.GREEN.withAlpha(36);
     private static final HeatmapColorStop LOADER_CYAN = new HeatmapColorStop(48, 45, 220, 235);
     static final int INACTIVE_LOADER_COLOR = 0x385C6268;
-    private static final double MAX_BURST_CONTRIBUTION = HeatmapRiskScale.RED_CONTRIBUTION - 0.25D;
 
     private ChunkHeatmapModel() {
     }
@@ -212,11 +211,7 @@ public final class ChunkHeatmapModel {
     }
 
     static double severity(PerfReportData.Metric metric) {
-        double normalizedMspt = metric.mspt() / MSPT_THRESHOLD;
-        double burst = Math.max(0.0D, metric.max() - metric.mspt()) / MAX_THRESHOLD;
-        double burstContribution = Math.min(
-                MAX_BURST_CONTRIBUTION, Math.log1p(burst) / LOG_TWO);
-        return normalizedMspt + burstContribution;
+        return ChunkPerformanceRisk.severity(metric);
     }
 
     static int color(PerfReportData.Metric metric) {

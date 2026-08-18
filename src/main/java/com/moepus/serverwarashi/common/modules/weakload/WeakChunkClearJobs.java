@@ -21,8 +21,8 @@ import java.util.Set;
 
 public final class WeakChunkClearJobs {
     public static final int ENTITIES_PER_TICK = 1_000;
+    static final int SERVER_CLEAR_THRESHOLD = 100;
     private static final int REMOVAL_BATCH_SIZE = 128;
-    private static final int VALIDATION_TOP_TYPES = 3;
     private static final int ATTEMPT_PASSES = 2;
     private static final ArrayDeque<Job> JOBS = new ArrayDeque<>();
     private static final Set<JobKey> ACTIVE = new HashSet<>();
@@ -83,19 +83,25 @@ public final class WeakChunkClearJobs {
     private static WeakChunkSnapshot.ChunkEntry validatedTarget(ServerLevel level,
                                                                 long chunkPos,
                                                                 WeakEntityType target) {
-        WeakChunkSnapshot.ChunkEntry warning = WeakChunkCollector.inspect(level, chunkPos);
+        WeakChunkSnapshot.ChunkEntry warning = ChunkEntityCollector.inspectAccessible(level, chunkPos);
         return isEstimatedTarget(warning, target) ? warning : null;
     }
 
     static boolean isEstimatedTarget(WeakChunkSnapshot.ChunkEntry warning, WeakEntityType target) {
         return warning != null
-                && warning.entityCount() >= WeakChunkSnapshot.ENTITY_RED_THRESHOLD
-                && warning.topTypes(VALIDATION_TOP_TYPES).stream()
-                .anyMatch(entry -> entry.getKey().equals(target));
+                && warning.entityTypeCounts().getOrDefault(target, 0) >= SERVER_CLEAR_THRESHOLD;
     }
 
     static long attemptBudget(int initialEntityCount) {
         return (long) initialEntityCount * ATTEMPT_PASSES + ENTITIES_PER_TICK;
+    }
+
+    static boolean isClearableVisibility(Visibility visibility) {
+        return visibility.isAccessible();
+    }
+
+    static boolean usesBatchRemoval(Visibility visibility) {
+        return visibility == Visibility.TRACKED;
     }
 
     private static BatchResult process(MinecraftServer server, Job job, int tickLimit) {
@@ -124,19 +130,37 @@ public final class WeakChunkClearJobs {
                                              int limit) {
         long sectionId = job.currentSectionId();
         EntitySection<Entity> section = storage.getSection(sectionId);
-        if (section == null || section.getStatus() != Visibility.TRACKED) {
+        if (section == null || !isClearableVisibility(section.getStatus())) {
             job.cursor().finishSection();
             return 0;
         }
         SelectionSource source = new SelectionSource(section, job.target(), job.cursor());
         Selection selection = select(source, Math.min(REMOVAL_BATCH_SIZE, limit));
-        WeakChunkBatchRemoval.Result result = selection.targets().isEmpty()
-                ? WeakChunkBatchRemoval.Result.EMPTY
-                : WeakChunkBatchRemoval.clear(
-                new WeakChunkBatchRemoval.SectionRef(storage, sectionId, section), selection.targets());
+        var sectionRef = new WeakChunkBatchRemoval.SectionRef(storage, sectionId, section);
+        WeakChunkBatchRemoval.Result result = removeSelected(sectionRef, selection.targets());
         job.cursor().recordRemovals(result.removed());
         advanceCursor(job.cursor(), selection, currentEntities(storage, sectionId));
         return result.attempted();
+    }
+
+    private static WeakChunkBatchRemoval.Result removeSelected(
+            WeakChunkBatchRemoval.SectionRef sectionRef,
+            List<WeakChunkBatchRemoval.Target> targets) {
+        if (targets.isEmpty()) {
+            return WeakChunkBatchRemoval.Result.EMPTY;
+        }
+        if (usesBatchRemoval(sectionRef.section().getStatus())) {
+            return WeakChunkBatchRemoval.clear(sectionRef, targets);
+        }
+        int removed = 0;
+        for (WeakChunkBatchRemoval.Target target : targets) {
+            Entity entity = target.entity();
+            if (!entity.isRemoved()) {
+                entity.discard();
+                removed += entity.isRemoved() ? 1 : 0;
+            }
+        }
+        return new WeakChunkBatchRemoval.Result(targets.size(), removed);
     }
 
     private static Selection select(SelectionSource source, int limit) {

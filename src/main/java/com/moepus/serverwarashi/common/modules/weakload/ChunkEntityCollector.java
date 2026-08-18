@@ -14,14 +14,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
-public final class WeakChunkCollector {
-    public static final int CHUNKS_PER_TICK = 64;
-
-    private WeakChunkCollector() {
+public final class ChunkEntityCollector {
+    private ChunkEntityCollector() {
     }
 
-    public static ScanResult scan(ServerLevel level, ScanCursor cursor, int chunkBudget) {
+    public static ScanResult scanWeak(ServerLevel level, ScanCursor cursor, int chunkBudget) {
         if (chunkBudget <= 0) {
             throw new IllegalArgumentException("Chunk budget must be positive");
         }
@@ -56,7 +55,7 @@ public final class WeakChunkCollector {
                 }
                 continue;
             }
-            WeakChunkSnapshot.ChunkEntry entry = collectChunk(storage, dimension, chunkPos);
+            WeakChunkSnapshot.ChunkEntry entry = collectTrackedChunk(storage, dimension, chunkPos);
             if (entry != null) {
                 warnings.add(entry);
             }
@@ -70,48 +69,177 @@ public final class WeakChunkCollector {
         return new ScanResult(List.copyOf(warnings), cursor.sweepId(), false, scanned, false);
     }
 
-    public static WeakChunkSnapshot.ChunkEntry inspect(ServerLevel level, long chunkPos) {
-        return collectChunk(WeakChunkEntityAccess.storage(level),
+    public static WeakChunkSnapshot.ChunkEntry inspectTracked(ServerLevel level, long chunkPos) {
+        return collectTrackedChunk(WeakChunkEntityAccess.storage(level),
                 level.dimension().location().toString(), chunkPos);
     }
 
-    private static WeakChunkSnapshot.ChunkEntry collectChunk(EntitySectionStorage<Entity> storage,
-                                                               String dimension,
-                                                               long chunkPos) {
-        int entityCount = trackedEntityCount(storage, chunkPos);
+    static WeakChunkSnapshot.ChunkEntry inspectAccessible(ServerLevel level, long chunkPos) {
+        return inspect(level, chunkPos, Visibility::isAccessible).toWeakEntry();
+    }
+
+    public static ChunkEntitySummary inspectTicking(ServerLevel level, long chunkPos) {
+        return inspect(level, chunkPos, Visibility::isTicking);
+    }
+
+    public static VisibilitySummaries inspectByVisibility(ServerLevel level, long chunkPos) {
+        EntitySectionStorage<Entity> storage = WeakChunkEntityAccess.storage(level);
+        String dimension = level.dimension().location().toString();
+        List<EntitySection<Entity>> tracked = new ArrayList<>();
+        List<EntitySection<Entity>> ticking = new ArrayList<>();
+        storage.getExistingSectionsInChunk(chunkPos).forEach(section -> {
+            if (section.getStatus() == Visibility.TRACKED) {
+                tracked.add(section);
+            } else if (section.getStatus().isTicking()) {
+                ticking.add(section);
+            }
+        });
+        return new VisibilitySummaries(
+                summarize(tracked, dimension, chunkPos),
+                summarize(ticking, dimension, chunkPos));
+    }
+
+    private static WeakChunkSnapshot.ChunkEntry collectTrackedChunk(
+            EntitySectionStorage<Entity> storage, String dimension, long chunkPos) {
+        List<EntitySection<Entity>> sections = sections(
+                storage, chunkPos, visibility -> visibility == Visibility.TRACKED);
+        int entityCount = entityCount(sections);
         if (entityCount < WeakChunkSnapshot.ENTITY_WARNING_THRESHOLD) {
             return null;
         }
-        List<EntitySection<Entity>> sections = storage.getExistingSectionsInChunk(chunkPos)
-                .filter(section -> section.getStatus() == Visibility.TRACKED)
-                .toList();
-        Map<WeakEntityType, Integer> typeCounts = sampleTypes(
-                sections, dimension, chunkPos, entityCount);
+        return summarize(sections, dimension, chunkPos, entityCount).toWeakEntry();
+    }
+
+    private static ChunkEntitySummary inspect(ServerLevel level,
+                                              long chunkPos,
+                                              Predicate<Visibility> visibility) {
+        EntitySectionStorage<Entity> storage = WeakChunkEntityAccess.storage(level);
+        return summarize(sections(storage, chunkPos, visibility),
+                level.dimension().location().toString(), chunkPos);
+    }
+
+    private static ChunkEntitySummary summarize(List<EntitySection<Entity>> sections,
+                                                String dimension,
+                                                long chunkPos) {
+        return summarize(sections, dimension, chunkPos, entityCount(sections));
+    }
+
+    private static ChunkEntitySummary summarize(List<EntitySection<Entity>> sections,
+                                                String dimension,
+                                                long chunkPos,
+                                                int entityCount) {
         ChunkPos position = new ChunkPos(chunkPos);
-        return new WeakChunkSnapshot.ChunkEntry(position.x, position.z, entityCount, typeCounts);
+        if (entityCount == 0) {
+            return new ChunkEntitySummary(position.x, position.z, 0, Map.of());
+        }
+        Map<WeakEntityType, TypeEstimate> typeCounts = sampleTypes(
+                sections, dimension, chunkPos, entityCount);
+        return new ChunkEntitySummary(position.x, position.z, entityCount, typeCounts);
     }
 
-    private static int trackedEntityCount(EntitySectionStorage<Entity> storage, long chunkPos) {
+    private static int entityCount(List<EntitySection<Entity>> sections) {
+        return sections.stream().mapToInt(EntitySection::size).sum();
+    }
+
+    private static List<EntitySection<Entity>> sections(
+            EntitySectionStorage<Entity> storage,
+            long chunkPos,
+            Predicate<Visibility> visibility) {
         return storage.getExistingSectionsInChunk(chunkPos)
-                .filter(section -> section.getStatus() == Visibility.TRACKED)
-                .mapToInt(EntitySection::size)
-                .sum();
+                .filter(section -> visibility.test(section.getStatus()))
+                .toList();
     }
 
-    private static Map<WeakEntityType, Integer> sampleTypes(List<EntitySection<Entity>> sections,
-                                                             String dimension,
-                                                             long chunkPos,
-                                                             int entityCount) {
+    private static Map<WeakEntityType, TypeEstimate> sampleTypes(
+            List<EntitySection<Entity>> sections,
+            String dimension,
+            long chunkPos,
+            int entityCount) {
         int[] indices = StableEntitySampler.sampleIndices(entityCount, StableEntitySampler.SAMPLE_LIMIT,
                 StableEntitySampler.seed(dimension, chunkPos, entityCount));
-        Map<WeakEntityType, Integer> samples = new HashMap<>();
+        Map<WeakEntityType, MutableTypeSample> samples = new HashMap<>();
         List<List<Entity>> entitySections = sections.stream()
                 .map(WeakChunkEntityAccess::entities)
                 .toList();
         for (Entity entity : StableEntitySampler.sampleValues(entitySections, indices)) {
-            samples.merge(WeakEntityClassifier.typeOf(entity), 1, Integer::sum);
+            samples.computeIfAbsent(WeakEntityClassifier.typeOf(entity),
+                    ignored -> new MutableTypeSample(entity)).count++;
         }
-        return StableEntitySampler.estimateCounts(samples, indices.length, entityCount);
+        Map<WeakEntityType, Integer> sampleCounts = new HashMap<>();
+        samples.forEach((type, sample) -> sampleCounts.put(type, sample.count));
+        Map<WeakEntityType, Integer> estimates = StableEntitySampler.estimateCounts(
+                sampleCounts, indices.length, entityCount);
+        Map<WeakEntityType, TypeEstimate> result = new HashMap<>();
+        estimates.forEach((type, count) -> {
+            MutableTypeSample sample = samples.get(type);
+            result.put(type, new TypeEstimate(count, sample.x, sample.y, sample.z));
+        });
+        return Map.copyOf(result);
+    }
+
+    public record ChunkEntitySummary(int chunkX,
+                                     int chunkZ,
+                                     int entityCount,
+                                     Map<WeakEntityType, TypeEstimate> typeEstimates) {
+        public ChunkEntitySummary {
+            if (entityCount < 0) {
+                throw new IllegalArgumentException("Entity count must be non-negative");
+            }
+            typeEstimates = Map.copyOf(typeEstimates);
+            long estimatedTotal = typeEstimates.values().stream()
+                    .mapToLong(TypeEstimate::count)
+                    .sum();
+            if (estimatedTotal != entityCount) {
+                throw new IllegalArgumentException("Type estimates must sum to the entity count");
+            }
+        }
+
+        public List<Map.Entry<WeakEntityType, TypeEstimate>> topTypes(int limit) {
+            if (limit < 0) {
+                throw new IllegalArgumentException("Top type limit must be non-negative");
+            }
+            return typeEstimates.entrySet().stream()
+                    .sorted(Map.Entry.<WeakEntityType, TypeEstimate>comparingByValue(
+                                    java.util.Comparator.comparingInt(TypeEstimate::count))
+                            .reversed()
+                            .thenComparing(Map.Entry.comparingByKey()))
+                    .limit(limit)
+                    .toList();
+        }
+
+        public WeakChunkSnapshot.ChunkEntry toWeakEntry() {
+            if (entityCount < WeakChunkSnapshot.ENTITY_WARNING_THRESHOLD) {
+                return null;
+            }
+            Map<WeakEntityType, Integer> counts = new HashMap<>();
+            typeEstimates.forEach((type, estimate) -> counts.put(type, estimate.count()));
+            return new WeakChunkSnapshot.ChunkEntry(chunkX, chunkZ, entityCount, counts);
+        }
+    }
+
+    public record TypeEstimate(int count, int x, int y, int z) {
+        public TypeEstimate {
+            if (count <= 0) {
+                throw new IllegalArgumentException("Estimated type count must be positive");
+            }
+        }
+    }
+
+    public record VisibilitySummaries(ChunkEntitySummary tracked,
+                                      ChunkEntitySummary ticking) {
+    }
+
+    private static final class MutableTypeSample {
+        private int count;
+        private final int x;
+        private final int y;
+        private final int z;
+
+        private MutableTypeSample(Entity entity) {
+            x = entity.getBlockX();
+            y = entity.getBlockY();
+            z = entity.getBlockZ();
+        }
     }
 
     public static final class ScanCursor {

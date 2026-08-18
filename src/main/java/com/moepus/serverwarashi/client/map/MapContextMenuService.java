@@ -60,20 +60,18 @@ public final class MapContextMenuService {
         Objects.requireNonNull(clients, "clients");
         List<MapMenuItem> items = new ArrayList<>();
         MenuContext context = new MenuContext(target, state, clients);
-        addWeakClearItem(items, context);
+        addEntityClearItem(items, context);
         addLoaderItems(items, context);
         return List.copyOf(items);
     }
 
-    private static void addWeakClearItem(List<MapMenuItem> items,
-                                         MenuContext context) {
-        WeakChunkSnapshot.ChunkEntry chunk = context.state().weakChunk();
+    private static void addEntityClearItem(List<MapMenuItem> items,
+                                           MenuContext context) {
         ClientActions clients = context.clients();
-        if (!clients.canClearWeakChunk() || chunk == null
-                || chunk.entityCount() < WeakChunkSnapshot.ENTITY_RED_THRESHOLD) {
+        WeakEntityType type = clearTarget(context);
+        if (!clients.canClearWeakChunk() || type == null) {
             return;
         }
-        WeakEntityType type = chunk.topTypes(1).getFirst().getKey();
         PendingClear selection = new PendingClear(context.target(), type);
         boolean confirming = selection.equals(pendingClear);
         String key = confirming
@@ -82,6 +80,43 @@ public final class MapContextMenuService {
         Component label = Component.translatable(key, PerfDisplayText.sampledEntityName(type));
         items.add(new MapMenuItem(label, true,
                 () -> selectWeakClear(selection, confirming, clients)));
+    }
+
+    private static WeakEntityType clearTarget(MenuContext context) {
+        WeakChunkSnapshot.ChunkEntry weak = context.state().weakChunk();
+        if (weak != null) {
+            return weak.topTypes(1).stream()
+                    .filter(entry -> entry.getValue() >= WeakChunkSnapshot.ENTITY_CLEAR_THRESHOLD)
+                    .map(Map.Entry::getKey)
+                    .findFirst().orElse(null);
+        }
+        PerfReportData report = context.state().report();
+        if (report == null) {
+            return null;
+        }
+        return report.chunks().stream()
+                .filter(chunk -> matchesStrongChunk(chunk, context.target()))
+                .flatMap(chunk -> chunk.topEntities().stream())
+                .filter(object -> object.count() >= WeakChunkSnapshot.ENTITY_CLEAR_THRESHOLD)
+                .map(MapContextMenuService::clearType)
+                .filter(Objects::nonNull)
+                .findFirst().orElse(null);
+    }
+
+    private static boolean matchesStrongChunk(PerfReportData.ChunkEntry chunk, MapTarget target) {
+        return chunk.dimension().equals(target.dimension().toString())
+                && chunk.chunkX() == target.chunkX()
+                && chunk.chunkZ() == target.chunkZ();
+    }
+
+    private static WeakEntityType clearType(PerfReportData.ObjectCount object) {
+        WeakEntityType.Kind kind = switch (object.detailKind()) {
+            case ITEM -> WeakEntityType.Kind.ITEM;
+            case ENTITY -> WeakEntityType.Kind.ENTITY;
+            case BLOCK, NONE -> null;
+        };
+        return kind == null || ResourceLocation.tryParse(object.detailId()) == null
+                ? null : new WeakEntityType(kind, object.detailId());
     }
 
     private static void selectWeakClear(PendingClear selection,

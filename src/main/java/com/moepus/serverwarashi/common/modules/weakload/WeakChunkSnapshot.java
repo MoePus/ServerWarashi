@@ -13,6 +13,7 @@ public record WeakChunkSnapshot(String dimension,
     public static final int MAX_CHUNKS = 8;
     public static final int MAX_SAMPLED_TYPES = 16;
     public static final int ENTITY_WARNING_THRESHOLD = 50;
+    public static final int ENTITY_CLEAR_THRESHOLD = 200;
     public static final int ENTITY_RED_THRESHOLD = 350;
     public static final int ENTITY_PURPLE_THRESHOLD = 500;
 

@@ -69,6 +69,22 @@ class PerfReportDeliveryTest {
         assertEquals(Set.of(screen, both), subscriptions.recipients());
     }
 
+    @Test
+    void revokedMapPermissionDropsOnlyTheMapSubscription() {
+        UUID mapOnly = UUID.randomUUID();
+        UUID screenAndMap = UUID.randomUUID();
+        var subscriptions = new PerfReportDelivery.ViewerSubscriptions();
+        subscriptions.setMap(mapOnly, true);
+        subscriptions.openScreen(screenAndMap);
+        subscriptions.setMap(screenAndMap, true);
+
+        assertFalse(subscriptions.retainPermittedLiveViewer(mapOnly, false));
+        assertFalse(subscriptions.isMapViewer(mapOnly));
+        assertTrue(subscriptions.retainPermittedLiveViewer(screenAndMap, false));
+        assertFalse(subscriptions.isMapViewer(screenAndMap));
+        assertTrue(subscriptions.isScreenViewer(screenAndMap));
+    }
+
     private static PerfReportData reportAtTick(long tickCount) {
         return new PerfReportData(10.0D, 1_000L, 123_000L, tickCount, 10L, 1_000,
                 0, 0, 0, java.util.List.of(), java.util.List.of(), java.util.List.of());
