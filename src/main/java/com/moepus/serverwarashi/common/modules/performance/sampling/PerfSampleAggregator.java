@@ -34,6 +34,7 @@ final class PerfSampleAggregator {
     private int chunkDropsUntilReplacement = REPLACEMENT_INTERVAL;
     private long tickCount;
     private long totalTickNanos;
+    private long lastTickGcMillis;
 
     PerfSampleAggregator(long seed) {
         reportId = seed;
@@ -50,6 +51,7 @@ final class PerfSampleAggregator {
     void accept(TickSamples tick) {
         tickCount++;
         totalTickNanos += tick.durationNanos;
+        lastTickGcMillis = tick.gcTimeMillis;
         if (tick.totalSamples == 0) {
             ownerAggregator.updateMetadata(tick.attribution);
         } else {
@@ -72,7 +74,8 @@ final class PerfSampleAggregator {
                 PerfReportData.TickableEntry::metric);
         PerfOwnerAggregator.Build ownerBuild = ownerAggregator.build(tickCount, nanosPerSample);
         double serverMspt = tickCount == 0 ? 0.0D : totalTickNanos / 1_000_000.0D / tickCount;
-        return new PerfReportData(reportId, serverMspt, elapsedNanos / 1_000_000L, System.currentTimeMillis(),
+        return new PerfReportData(reportId, serverMspt, lastTickGcMillis,
+                elapsedNanos / 1_000_000L, System.currentTimeMillis(),
                 tickCount, totalSamples, intervalMicros,
                 omitted(limitedChunks.omitted(), droppedChunkHashes),
                 omitted((long) sampledTickables.omitted() + limitedTickables.omitted(), droppedTickableHashes),
@@ -261,7 +264,8 @@ final class PerfSampleAggregator {
                 TickSamples.TickableKey key,
                 long ticks,
                 double nanosPerSample) {
-            return new PerfReportData.TickableEntry(key.type(), key.dimension(), className(key.workClass()),
+            String displayName = key.displayName().isEmpty() ? className(key.workClass()) : key.displayName();
+            return new PerfReportData.TickableEntry(key.type(), key.dimension(), displayName,
                     nullableId(key.detailId()), key.detailKind(), key.entityId(), positioned,
                     x, y, z, chunkPosition, key.eventLoop(),
                     stats.metric(ticks, nanosPerSample));

@@ -24,10 +24,12 @@ public final class PerfSamplerSession {
     private final long durationNanos;
     private final SplittableRandom intervalRandom;
     private final AnalysisClock analysisClock;
+    private final TickGcTimeTracker gcTimeTracker = new TickGcTimeTracker();
     private final Thread samplerThread;
     private final WindowsTimerResolution timerResolution = new WindowsTimerResolution();
     private volatile PerfReportData latestReport;
     private volatile TickSamples currentTick;
+    private TickSamples betweenTicks = new TickSamples(null);
     private long sampleAttempts;
     private long acceptedTicks;
     private int publishedEntryKinds;
@@ -125,7 +127,11 @@ public final class PerfSamplerSession {
             if (analysisClock.state() != AnalysisClock.State.RUNNING) {
                 throw new IllegalStateException("Cannot begin a tick while sampling is not running");
             }
-            currentTick = new TickSamples(attribution);
+            TickSamples tick = new TickSamples(attribution);
+            tick.mergeSamples(betweenTicks);
+            betweenTicks = new TickSamples(null);
+            tick.gcStartMillis = gcTimeTracker.snapshot();
+            currentTick = tick;
         }
     }
 
@@ -146,6 +152,7 @@ public final class PerfSamplerSession {
                 return;
             }
             tick.durationNanos = durationNanos;
+            tick.gcTimeMillis = gcTimeTracker.elapsedSince(tick.gcStartMillis);
             currentTick = null;
             closedTicks.add(tick);
         }
@@ -159,6 +166,7 @@ public final class PerfSamplerSession {
         Measurement measurement;
         synchronized (stateLock) {
             currentTick = null;
+            betweenTicks = new TickSamples(null);
             analysisClock.stop();
             measurement = measurementLocked();
         }
@@ -216,6 +224,15 @@ public final class PerfSamplerSession {
         }
         TickSamples expected = currentTick;
         PerfWorkTracker.Snapshot snapshot = PerfWorkTracker.snapshot();
+        if (snapshot == null) {
+            snapshot = PerfStackAttributor.capture(PerfWorkTracker.profiledThread());
+        } else if (snapshot.type() == TickType.ENTITY) {
+            PerfWorkTracker.Snapshot handler =
+                    PerfStackAttributor.captureTickHandler(PerfWorkTracker.profiledThread());
+            if (handler != null) {
+                snapshot = handler;
+            }
+        }
         synchronized (stateLock) {
             SamplerStatus status = samplerStatusLocked();
             if (status != SamplerStatus.RUNNING) {
@@ -224,6 +241,8 @@ public final class PerfSamplerSession {
             sampleAttempts++;
             if (expected != null && currentTick == expected) {
                 expected.sample(snapshot);
+            } else if (expected == null && currentTick == null && snapshot != null) {
+                betweenTicks.sample(snapshot);
             }
             return SamplerStatus.RUNNING;
         }

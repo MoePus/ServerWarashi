@@ -13,6 +13,8 @@ final class TickSamples {
     final Map<ChunkKey, Integer> chunks = new HashMap<>();
     PerfAttributionSnapshot attribution;
     long durationNanos;
+    long gcStartMillis;
+    long gcTimeMillis;
     int totalSamples;
     boolean refreshReport;
 
@@ -31,6 +33,13 @@ final class TickSamples {
         if (chunk != null) {
             chunks.merge(chunk, 1, Integer::sum);
         }
+    }
+
+    void mergeSamples(TickSamples source) {
+        totalSamples += source.totalSamples;
+        source.tickables.forEach((key, count) ->
+                tickables.computeIfAbsent(key, ignored -> new TickCount()).merge(count));
+        source.chunks.forEach((key, count) -> chunks.merge(key, count, Integer::sum));
     }
 
     record ChunkKey(String dimension, long position) {
@@ -52,17 +61,18 @@ final class TickSamples {
                        TickDetailKind detailKind,
                        int entityId,
                        long fixedPosition,
-                       String eventLoop) {
+                       String eventLoop,
+                       String displayName) {
         static TickableKey from(PerfWorkTracker.Snapshot snapshot) {
             String dimension = snapshot.dimension() == null ? "" : snapshot.dimension().toString();
             long position = switch (snapshot.type()) {
                 case CHUNK -> ChunkPos.asLong(snapshot.x(), snapshot.z());
                 case BLOCK_ENTITY -> BlockPos.asLong(snapshot.x(), snapshot.y(), snapshot.z());
-                case ENTITY, TASK -> 0L;
+                case ENTITY, TASK, HANDLER -> 0L;
             };
             return new TickableKey(snapshot.type(), dimension, snapshot.workClass(), snapshot.detailId(),
                     snapshot.detailKind(),
-                    snapshot.entityId(), position, snapshot.eventLoop());
+                    snapshot.entityId(), position, snapshot.eventLoop(), snapshot.displayName());
         }
     }
 
@@ -81,6 +91,15 @@ final class TickSamples {
             x = snapshot.x();
             y = snapshot.y();
             z = snapshot.z();
+        }
+
+        void merge(TickCount source) {
+            count += source.count;
+            positioned = source.positioned;
+            chunkPosition = source.chunkPosition;
+            x = source.x;
+            y = source.y;
+            z = source.z;
         }
     }
 }

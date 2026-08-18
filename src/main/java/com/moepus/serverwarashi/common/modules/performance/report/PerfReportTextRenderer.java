@@ -66,7 +66,10 @@ public final class PerfReportTextRenderer {
             id += "#" + entry.entityId();
         }
         if (entry.type() == TickType.TASK) {
-            return id + " @ " + entry.eventLoop();
+            return entry.eventLoop().isEmpty() ? id : id + " @ " + entry.eventLoop();
+        }
+        if (entry.type() == TickType.HANDLER) {
+            return entry.type() + " " + entry.eventLoop();
         }
         if (!entry.positioned()) {
             return id + " @ " + entry.dimension();

@@ -17,7 +17,7 @@ public final class PerfWorkTracker {
 
     public static volatile boolean isProfiling;
     private static volatile Slot current;
-    private static Thread serverThread;
+    private static volatile Thread serverThread;
     private static int depth;
     private static int overflowDepth;
 
@@ -123,6 +123,10 @@ public final class PerfWorkTracker {
         return null;
     }
 
+    static Thread profiledThread() {
+        return isProfiling ? serverThread : null;
+    }
+
     private static boolean canPublish() {
         return isProfiling && Thread.currentThread() == serverThread;
     }
@@ -169,7 +173,23 @@ public final class PerfWorkTracker {
                            int y,
                            int z,
                            boolean chunkPosition,
-                           String eventLoop) {
+                           String eventLoop,
+                           String displayName) {
+        public Snapshot(TickType type,
+                        ResourceLocation dimension,
+                        Class<?> workClass,
+                        ResourceLocation detailId,
+                        TickDetailKind detailKind,
+                        int entityId,
+                        boolean positioned,
+                        int x,
+                        int y,
+                        int z,
+                        boolean chunkPosition,
+                        String eventLoop) {
+            this(type, dimension, workClass, detailId, detailKind, entityId,
+                    positioned, x, y, z, chunkPosition, eventLoop, "");
+        }
     }
 
     private static final class Slot {
@@ -187,6 +207,7 @@ public final class PerfWorkTracker {
         private int z;
         private boolean chunkPosition;
         private String eventLoop;
+        private String displayName;
 
         void publishChunk(ResourceLocation dimension, LevelChunk chunk) {
             var pos = chunk.getPos();
@@ -259,6 +280,7 @@ public final class PerfWorkTracker {
             version++;
             this.type = type;
             this.workClass = workClass;
+            displayName = "";
         }
 
         private void finishPublish() {
@@ -279,7 +301,7 @@ public final class PerfWorkTracker {
             }
             Snapshot result = new Snapshot(type, dimension, workClass, detailId, detailKind,
                     entityId, positioned,
-                    x, y, z, chunkPosition, eventLoop);
+                    x, y, z, chunkPosition, eventLoop, displayName);
             return before == version ? result : null;
         }
     }

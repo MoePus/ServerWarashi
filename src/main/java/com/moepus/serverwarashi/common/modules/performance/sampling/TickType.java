@@ -4,5 +4,6 @@ public enum TickType {
     CHUNK,
     ENTITY,
     BLOCK_ENTITY,
-    TASK
+    TASK,
+    HANDLER
 }
