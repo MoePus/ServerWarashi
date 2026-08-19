@@ -11,6 +11,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -41,8 +42,8 @@ public final class PerfAttributionSnapshot {
                                     Map<ChunkKey, List<Bucket>> loaderByChunk,
                                     Map<BlockLoaderRef, List<LoaderTicketTarget>> loaderTargets,
                                     Map<BlockLoaderRef, LoaderControl> loaderControls) {
-        this.byChunk = Map.copyOf(byChunk);
-        this.loaderByChunk = Map.copyOf(loaderByChunk);
+        this.byChunk = Collections.unmodifiableMap(byChunk);
+        this.loaderByChunk = Collections.unmodifiableMap(loaderByChunk);
         this.loaderTargets = copyTargets(loaderTargets);
         this.loaderControls = new ConcurrentHashMap<>(loaderControls);
         Map<SourceIdentity, Bucket> unique = new HashMap<>();
@@ -52,7 +53,11 @@ public final class PerfAttributionSnapshot {
     }
 
     public static PerfAttributionSnapshot capture(MinecraftServer server) {
-        return captureWithFingerprint(server).snapshot();
+        CaptureMaps maps = new CaptureMaps();
+        for (ServerLevel level : server.getAllLevels()) {
+            captureLevel(level, maps, null, true);
+        }
+        return fromCapture(maps);
     }
 
     public static Capture captureWithFingerprint(MinecraftServer server) {
@@ -124,9 +129,9 @@ public final class PerfAttributionSnapshot {
             for (Bucket bucket : entry.getValue()) {
                 if (isLoaderSource(bucket)) {
                     var key = new LoaderRegionPlanner.SourceKey(
-                            entry.getKey().dimension, bucket.source.id,
+                            entry.getKey().dimension(), bucket.source.id,
                             bucket.source.name, bucket.source.position, bucket.source.loaderRef);
-                    grouped.computeIfAbsent(key, ignored -> new HashSet<>()).add(entry.getKey().chunkPos);
+                    grouped.computeIfAbsent(key, ignored -> new HashSet<>()).add(entry.getKey().chunkPos());
                 }
             }
         }
@@ -374,9 +379,6 @@ public final class PerfAttributionSnapshot {
             controls.put(ref, new LoaderControl(ref, frozen,
                     ticketWorking || previous != null && previous.working));
         }
-    }
-
-    private record ChunkKey(String dimension, long chunkPos) {
     }
 
     private record OwnerIdentity(PerfReportData.AttributionKind kind, String id) {

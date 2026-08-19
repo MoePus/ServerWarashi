@@ -13,7 +13,6 @@ import java.util.function.IntSupplier;
 final class PerfSessionController {
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
     private static final int TOPOLOGY_CHECK_TICKS = 5;
-    private static final int ATTRIBUTION_REFRESH_TICKS = 20;
 
     private final IntSupplier sampleIntervalMicros;
     private ActiveSession active;
@@ -189,8 +188,7 @@ final class PerfSessionController {
                 && session.completedTicks % TOPOLOGY_CHECK_TICKS == 0) {
             long topologyFingerprint = PerfAttributionSnapshot.ticketFingerprint(server);
             boolean topologyChanged = topologyFingerprint != session.ticketFingerprint;
-            boolean periodicRefresh = session.completedTicks % ATTRIBUTION_REFRESH_TICKS == 0;
-            if (!topologyChanged && !periodicRefresh && session.attribution != null) {
+            if (!topologyChanged && session.attribution != null) {
                 return;
             }
             PerfAttributionSnapshot next = PerfAttributionSnapshot.capture(server);

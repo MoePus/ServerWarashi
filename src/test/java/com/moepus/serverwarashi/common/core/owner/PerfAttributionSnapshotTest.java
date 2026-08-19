@@ -6,8 +6,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.Level;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -21,6 +22,29 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfAttributionSnapshotTest {
+    @Test
+    void distributesPackedChunkCoordinatesAcrossHashSpace() {
+        Set<Integer> hashes = new HashSet<>();
+        int positions = 0;
+        for (int z = -32; z <= 32; z++) {
+            for (int x = -32; x <= 32; x++) {
+                hashes.add(new ChunkKey("test:level", ChunkPos.asLong(x, z)).hashCode());
+                positions++;
+            }
+        }
+
+        assertTrue(hashes.size() >= positions * 99 / 100,
+                "Expected well-distributed hashes, got " + hashes.size() + " for " + positions + " keys");
+    }
+
+    @Test
+    void fingerprintsEveryTicketTypeThatProducesAttribution() {
+        assertTrue(TicketTopologyFingerprint.isAttributableTicketType(TicketType.PLAYER));
+        assertTrue(TicketTopologyFingerprint.isAttributableTicketType(TicketType.START));
+        assertTrue(TicketTopologyFingerprint.isAttributableTicketType(TicketType.FORCED));
+        assertFalse(TicketTopologyFingerprint.isAttributableTicketType(TicketType.UNKNOWN));
+    }
+
     @Test
     void expandsLevel31TargetsByOneBlockTickingChunk() {
         assertEquals(1, LoaderTicketInfluence.blockTickingRadius(31));

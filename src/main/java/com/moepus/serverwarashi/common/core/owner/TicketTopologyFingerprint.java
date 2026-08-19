@@ -27,7 +27,7 @@ final class TicketTopologyFingerprint {
     void addTickets(long chunkPos, Iterable<? extends Ticket<?>> tickets) {
         boolean chunkAdded = false;
         for (Ticket<?> ticket : tickets) {
-            if (!isPotentialLoaderTicket(ticket)) {
+            if (!isAttributableTicketType(ticket.getType())) {
                 continue;
             }
             if (!chunkAdded) {
@@ -48,12 +48,7 @@ final class TicketTopologyFingerprint {
         value *= FNV_PRIME;
     }
 
-    private static boolean isPotentialLoaderTicket(Ticket<?> ticket) {
-        return ticket.getType() != TicketType.PLAYER
-                && ticket.getType() != TicketType.START
-                && ticket.getType() != TicketType.PORTAL
-                && ticket.getType() != TicketType.POST_TELEPORT
-                && ticket.getType() != TicketType.DRAGON
-                && ticket.getType() != TicketType.UNKNOWN;
+    static boolean isAttributableTicketType(TicketType<?> type) {
+        return type != TicketType.UNKNOWN;
     }
 }
