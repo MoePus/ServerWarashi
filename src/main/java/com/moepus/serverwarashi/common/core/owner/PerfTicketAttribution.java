@@ -28,10 +28,6 @@ final class PerfTicketAttribution {
     }
 
     static Resolved resolve(ServerLevel level, long chunkPos, Ticket<?> ticket, boolean collectAttribution) {
-        List<PerfAttributionSnapshot.Bucket> c2me = C2meNoTickAttribution.resolve(level, chunkPos, ticket);
-        if (c2me != null) {
-            return new Resolved(c2me, null);
-        }
         var forced = TicketOwnerResolver.readForcedOwner(
                 TicketUtils.asPauseable(ticket).serverWarashi$getKey());
         if (forced.isPresent()) {

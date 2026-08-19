@@ -223,12 +223,17 @@ public final class PerfAttributionSnapshot {
                                      TicketTopologyFingerprint fingerprint,
                                      boolean collectAttribution) {
         String dimension = level.dimension().location().toString();
+        C2meNoTickAttribution.CaptureContext c2me = collectAttribution
+                ? C2meNoTickAttribution.captureContext(level,
+                    new C2meNoTickAttribution.CaptureTarget(dimension, maps.active)) : null;
         TicketScanService.visitTicketChunks(level, (chunkPos, tickets) -> {
             if (fingerprint != null) {
                 fingerprint.addTickets(chunkPos, tickets);
             }
             for (Ticket<?> ticket : tickets) {
-                captureTicket(level, dimension, chunkPos, ticket, maps, collectAttribution);
+                if (!C2meNoTickAttribution.capture(c2me, chunkPos, ticket)) {
+                    captureTicket(level, dimension, chunkPos, ticket, maps, collectAttribution);
+                }
             }
         });
     }

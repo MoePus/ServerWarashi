@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.core.owner;
 
+import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.mixin.accessor.ChunkMapAccessor;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -7,7 +8,10 @@ import net.minecraft.server.level.Ticket;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 final class C2meNoTickAttribution {
     static final String TICKET_TYPE = "c2me_notickvd";
@@ -17,20 +21,28 @@ final class C2meNoTickAttribution {
     private C2meNoTickAttribution() {
     }
 
-    static List<PerfAttributionSnapshot.Bucket> resolve(
-            ServerLevel level, long chunkPos, Ticket<?> ticket) {
-        if (!isTicketType(ticket.getType().toString())) {
-            return null;
-        }
-        ChunkPos target = new ChunkPos(chunkPos);
+    static CaptureContext captureContext(ServerLevel level, CaptureTarget target) {
         int radius = radius(serverViewDistance(level));
-        List<PerfAttributionSnapshot.Bucket> buckets = new ArrayList<>();
+        List<PlayerRange> players = new ArrayList<>();
         for (ServerPlayer player : level.players()) {
-            if (covers(player.chunkPosition(), target, radius)) {
-                buckets.add(bucket(level, player));
-            }
+            ChunkPos chunk = player.chunkPosition();
+            players.add(new PlayerRange(chunk.x, chunk.z, bucket(level, player)));
         }
-        return buckets.isEmpty() ? List.of(PerfAttributionSnapshot.UNKNOWN) : buckets;
+        return new CaptureContext(radius, players, target);
+    }
+
+    static boolean isTicket(Ticket<?> ticket) {
+        return isTicketType(ticket.getType().toString());
+    }
+
+    static boolean capture(CaptureContext context, long chunkPos, Ticket<?> ticket) {
+        if (!isTicket(ticket)) {
+            return false;
+        }
+        if (context != null && !TicketUtils.asPauseable(ticket).serverWarashi$isPaused()) {
+            context.capture(chunkPos);
+        }
+        return true;
     }
 
     static boolean isTicketType(String typeName) {
@@ -49,6 +61,47 @@ final class C2meNoTickAttribution {
         long deltaX = Math.abs((long) source.x - target.x);
         long deltaZ = Math.abs((long) source.z - target.z);
         return deltaX <= radius && deltaZ <= radius;
+    }
+
+    record CaptureTarget(String dimension, Map<ChunkKey, Set<PerfAttributionSnapshot.Bucket>> chunks) {
+    }
+
+    record PlayerRange(int chunkX, int chunkZ, PerfAttributionSnapshot.Bucket bucket) {
+        boolean covers(long chunkPos, int radius) {
+            long deltaX = Math.abs((long) chunkX - ChunkPos.getX(chunkPos));
+            long deltaZ = Math.abs((long) chunkZ - ChunkPos.getZ(chunkPos));
+            return deltaX <= radius && deltaZ <= radius;
+        }
+    }
+
+    static final class CaptureContext {
+        private final int radius;
+        private final List<PlayerRange> players;
+        private final CaptureTarget target;
+
+        CaptureContext(int radius, List<PlayerRange> players, CaptureTarget target) {
+            this.radius = radius;
+            this.players = List.copyOf(players);
+            this.target = target;
+        }
+
+        void capture(long chunkPos) {
+            boolean matched = false;
+            for (PlayerRange player : players) {
+                if (player.covers(chunkPos, radius)) {
+                    add(chunkPos, player.bucket);
+                    matched = true;
+                }
+            }
+            if (!matched) {
+                add(chunkPos, PerfAttributionSnapshot.UNKNOWN);
+            }
+        }
+
+        private void add(long chunkPos, PerfAttributionSnapshot.Bucket bucket) {
+            target.chunks.computeIfAbsent(new ChunkKey(target.dimension, chunkPos),
+                    ignored -> new LinkedHashSet<>()).add(bucket);
+        }
     }
 
     private static PerfAttributionSnapshot.Bucket bucket(ServerLevel level, ServerPlayer player) {
