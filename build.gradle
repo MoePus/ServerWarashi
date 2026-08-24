@@ -136,7 +136,7 @@ sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath
 dependencies {
     implementation "org.mixinlite:mixinlite:0.2.0"
     annotationProcessor "org.mixinlite:mixinlite:0.2.0"
-    jarJar "org.mixinlite:mixinlite:0.2.0"
+    jarJar "org.mixinlite:mixinlite:[0.2.0,)"
 
     runtimeOnly "curse.maven:architectury-api-419699:8492726"
 
