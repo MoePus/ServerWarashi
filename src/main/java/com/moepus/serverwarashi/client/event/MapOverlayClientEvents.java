@@ -6,8 +6,10 @@ import com.moepus.serverwarashi.api.client.map.MapOverlayControls;
 import com.moepus.serverwarashi.client.map.MapContextMenuService;
 import com.moepus.serverwarashi.client.map.MapOverlayRenderer;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
+import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
+import com.moepus.serverwarashi.client.world.WorldPerfOverlayRenderer;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -47,12 +49,17 @@ public final class MapOverlayClientEvents {
         mapOpen = false;
         PerfMapSubscriptionClient.clear();
         ClientPerfStateCoordinator.clearAll();
+        ClientWeakChunkState.clear();
+        WorldPerfOverlayRenderer.close();
         MapOverlayControls.clear();
         closeSession();
     }
 
     private static void closeSession() {
-        ClientWeakChunkState.clear();
+        var report = ClientPerfMapState.snapshot().report();
+        if (report == null || report.tickCount() == 0L) {
+            ClientWeakChunkState.clear();
+        }
         MapContextMenuService.clear();
         MapOverlayRenderer.close();
     }
