@@ -1,10 +1,9 @@
 package com.moepus.serverwarashi.client.heatmap;
 
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.world.level.ChunkPos;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 final class WeakEdgeMask {
     private static final int EDGE_WEST = 1;
@@ -15,8 +14,8 @@ final class WeakEdgeMask {
     private WeakEdgeMask() {
     }
 
-    static Map<Long, Integer> find(Set<Long> loaderChunks) {
-        Map<Long, Integer> result = new HashMap<>();
+    static Long2IntMap find(LongSet loaderChunks) {
+        Long2IntMap result = new Long2IntOpenHashMap();
         for (long chunk : loaderChunks) {
             int x = ChunkPos.getX(chunk);
             int z = ChunkPos.getZ(chunk);
@@ -37,6 +36,6 @@ final class WeakEdgeMask {
                 result.put(chunk, mask);
             }
         }
-        return Map.copyOf(result);
+        return result;
     }
 }

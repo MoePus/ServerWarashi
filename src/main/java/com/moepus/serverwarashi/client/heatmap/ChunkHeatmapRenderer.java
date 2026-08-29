@@ -8,7 +8,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import net.minecraft.client.renderer.RenderType;
@@ -44,7 +44,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     private boolean meshValid;
 
     public HoverResult render(RenderContext context) {
-        ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
+        ClientPerfMapState.Snapshot snapshot = ClientPerfMapState.snapshot();
         ClientWeakChunkState.Snapshot weakSnapshot = ClientWeakChunkState.snapshot();
         if (needsBaseRebuild(context, snapshot.revision())) {
             rebuild(context, snapshot, weakSnapshot);
@@ -65,7 +65,7 @@ public final class ChunkHeatmapRenderer implements AutoCloseable {
     }
 
     private void rebuild(RenderContext context,
-                         ClientPerfReportState.Snapshot snapshot,
+                         ClientPerfMapState.Snapshot snapshot,
                          ClientWeakChunkState.Snapshot weakSnapshot) {
         coverage = context.transform().viewport().expandedBySelf();
         dimension = context.dimension();

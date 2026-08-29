@@ -8,22 +8,18 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.moepus.serverwarashi.api.client.map.MapRenderContext;
-import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.world.level.ChunkPos;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL14;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 public final class HeatmapOffscreenIndicators {
     static final int DANGER_ENTITY_COUNT = WeakChunkSnapshot.ENTITY_PURPLE_THRESHOLD;
@@ -32,22 +28,13 @@ public final class HeatmapOffscreenIndicators {
     private static final int EDGE_INSET = 20;
     private static final float HALF_TANGENT = 17.0F;
     private static final float HALF_RADIAL = 10.0F;
-    private static final double LOWEST_COLOR_CONTRIBUTION = 0.25D;
-    private static final HeatmapColorStop[] INDICATOR_COLORS = {
-            new HeatmapColorStop(200, 64, 245, 255),
-            HeatmapRiskScale.GREEN.withAlpha(204),
-            HeatmapRiskScale.YELLOW.withAlpha(208),
-            HeatmapRiskScale.ORANGE.withAlpha(212),
-            HeatmapRiskScale.RED.withAlpha(216),
-            new HeatmapColorStop(224, 204, 70, 255)
-    };
     private static final Matrix4f MODEL_VIEW = new Matrix4f();
     private static long cachedReportRevision = Long.MIN_VALUE;
     private static long cachedWeakRevision = Long.MIN_VALUE;
     private static long candidateRevision;
     private static long bufferedRevision = Long.MIN_VALUE;
     private static String cachedDimension;
-    private static List<DangerousChunk> dangerousChunks = List.of();
+    private static List<DangerousChunkModel.Chunk> dangerousChunks = List.of();
     private static RenderContext bufferedContext;
     private static VertexBuffer indicatorBuffer;
 
@@ -67,16 +54,14 @@ public final class HeatmapOffscreenIndicators {
     static List<Indicator> plan(PerfReportData report,
                                 WeakChunkSnapshot weakSnapshot,
                                 RenderContext context) {
-        String weakDimension = weakSnapshot == null ? null : weakSnapshot.dimension();
-        List<WeakChunkSnapshot.ChunkEntry> weakChunks = weakSnapshot == null
-                ? List.of() : weakSnapshot.chunks();
-        return plan(dangerousChunks(report, weakDimension, weakChunks, context.dimension()), context);
+        return plan(DangerousChunkModel.build(report,
+                DangerousChunkModel.WeakChunks.from(weakSnapshot), context.dimension()), context);
     }
 
-    private static List<Indicator> plan(List<DangerousChunk> chunks, RenderContext context) {
-        DangerousChunk[] selected = new DangerousChunk[DIRECTION_BUCKETS];
+    private static List<Indicator> plan(List<DangerousChunkModel.Chunk> chunks, RenderContext context) {
+        DangerousChunkModel.Chunk[] selected = new DangerousChunkModel.Chunk[DIRECTION_BUCKETS];
         double[] angles = new double[DIRECTION_BUCKETS];
-        for (DangerousChunk chunk : chunks) {
+        for (DangerousChunkModel.Chunk chunk : chunks) {
             if (context.visible().world().intersectsChunk(chunk.chunkX(), chunk.chunkZ())) {
                 continue;
             }
@@ -102,7 +87,7 @@ public final class HeatmapOffscreenIndicators {
     }
 
     private static void refreshDangerousChunks(String dimension) {
-        ClientPerfReportState.Snapshot reportSnapshot = ClientPerfReportState.snapshot();
+        ClientPerfMapState.Snapshot reportSnapshot = ClientPerfMapState.snapshot();
         ClientWeakChunkState.Snapshot weakSnapshot = ClientWeakChunkState.snapshot();
         if (reportSnapshot.revision() == cachedReportRevision
                 && weakSnapshot.revision() == cachedWeakRevision
@@ -112,42 +97,23 @@ public final class HeatmapOffscreenIndicators {
         cachedReportRevision = reportSnapshot.revision();
         cachedWeakRevision = weakSnapshot.revision();
         cachedDimension = dimension;
-        dangerousChunks = dangerousChunks(reportSnapshot.report(), weakSnapshot.dimension(),
-                weakSnapshot.chunks(), dimension);
-        candidateRevision++;
+        DangerousChunkModel.WeakChunks weak = weakSnapshot.dimension() == null ? null
+                : new DangerousChunkModel.WeakChunks(
+                weakSnapshot.dimension(), weakSnapshot.chunks());
+        List<DangerousChunkModel.Chunk> next = DangerousChunkModel.build(
+                reportSnapshot.report(), weak, dimension);
+        if (!next.equals(dangerousChunks)) {
+            dangerousChunks = next;
+            candidateRevision++;
+        }
     }
 
-    private static List<DangerousChunk> dangerousChunks(PerfReportData report,
-                                                        String weakDimension,
-                                                        List<WeakChunkSnapshot.ChunkEntry> weakChunks,
-                                                        String dimension) {
-        Map<Long, ChunkRisk> risks = new LinkedHashMap<>();
-        if (report != null) {
-            for (PerfReportData.ChunkEntry chunk : report.chunks()) {
-                if (dimension.equals(chunk.dimension())) {
-                    risks.computeIfAbsent(ChunkPos.asLong(chunk.chunkX(), chunk.chunkZ()),
-                            ignored -> new ChunkRisk(chunk.chunkX(), chunk.chunkZ())).metric = chunk.metric();
-                }
-            }
-        }
-        if (dimension.equals(weakDimension)) {
-            for (WeakChunkSnapshot.ChunkEntry chunk : weakChunks) {
-                risks.computeIfAbsent(ChunkPos.asLong(chunk.chunkX(), chunk.chunkZ()),
-                        ignored -> new ChunkRisk(chunk.chunkX(), chunk.chunkZ())).entityCount = chunk.entityCount();
-            }
-        }
-        return risks.values().stream()
-                .map(ChunkRisk::dangerousChunk)
-                .filter(Objects::nonNull)
-                .toList();
-    }
-
-    private static List<Indicator> indicators(DangerousChunk[] selected,
+    private static List<Indicator> indicators(DangerousChunkModel.Chunk[] selected,
                                                double[] angles,
                                                RenderContext context) {
         List<Indicator> result = new ArrayList<>(DIRECTION_BUCKETS);
         for (int bucket = 0; bucket < selected.length; bucket++) {
-            DangerousChunk chunk = selected[bucket];
+            DangerousChunkModel.Chunk chunk = selected[bucket];
             if (chunk != null) {
                 result.add(indicator(chunk, angles[bucket], context));
             }
@@ -155,7 +121,7 @@ public final class HeatmapOffscreenIndicators {
         return List.copyOf(result);
     }
 
-    private static Indicator indicator(DangerousChunk chunk,
+    private static Indicator indicator(DangerousChunkModel.Chunk chunk,
                                        double angle,
                                        RenderContext context) {
         var screen = context.visible().screen();
@@ -170,7 +136,7 @@ public final class HeatmapOffscreenIndicators {
         return new Indicator(x, y, (float) angle, chunk.color(), chunk.entityCount());
     }
 
-    private static double direction(DangerousChunk chunk, RenderContext context) {
+    private static double direction(DangerousChunkModel.Chunk chunk, RenderContext context) {
         double worldX = (chunk.chunkX() << 4) + 8.0D;
         double worldZ = (chunk.chunkZ() << 4) + 8.0D;
         return Math.atan2(worldZ - context.camera().z(), worldX - context.camera().x());
@@ -183,14 +149,7 @@ public final class HeatmapOffscreenIndicators {
     }
 
     static int indicatorArgb(float color) {
-        double position = Math.clamp(color, 0.0F, 1.0F) * (INDICATOR_COLORS.length - 1);
-        return HeatmapColorStop.interpolate(INDICATOR_COLORS, position);
-    }
-
-    private static float colorLevel(double contribution) {
-        double level = Math.log(contribution / LOWEST_COLOR_CONTRIBUTION)
-                / Math.log(HeatmapRiskScale.PURPLE_CONTRIBUTION / LOWEST_COLOR_CONTRIBUTION);
-        return (float) Math.clamp(level, 0.0D, 1.0D);
+        return DangerousChunkModel.argb(color);
     }
 
     private static void replaceBuffer(List<Indicator> indicators) {
@@ -262,33 +221,6 @@ public final class HeatmapOffscreenIndicators {
     }
 
     record Indicator(int x, int y, float angle, float color, int entityCount) {
-    }
-
-    private record DangerousChunk(int chunkX, int chunkZ, int entityCount,
-                                  float color, double priority) {
-    }
-
-    private static final class ChunkRisk {
-        private final int chunkX;
-        private final int chunkZ;
-        private PerfReportData.Metric metric;
-        private int entityCount;
-
-        private ChunkRisk(int chunkX, int chunkZ) {
-            this.chunkX = chunkX;
-            this.chunkZ = chunkZ;
-        }
-
-        private DangerousChunk dangerousChunk() {
-            double combined = ChunkHeatmapModel.combinedContribution(metric, entityCount);
-            if (combined < HeatmapRiskScale.RED_CONTRIBUTION) {
-                return null;
-            }
-            double weakScale = entityCount / (double) DANGER_ENTITY_COUNT
-                    * HeatmapRiskScale.PURPLE_CONTRIBUTION;
-            return new DangerousChunk(chunkX, chunkZ, entityCount,
-                    colorLevel(combined), Math.max(combined, weakScale));
-        }
     }
 
     private static final class IndicatorQuad {

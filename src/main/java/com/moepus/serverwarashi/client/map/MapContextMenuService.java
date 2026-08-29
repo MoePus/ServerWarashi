@@ -5,13 +5,14 @@ import com.moepus.serverwarashi.api.client.map.MapTarget;
 import com.moepus.serverwarashi.client.network.LoaderFreezeClient;
 import com.moepus.serverwarashi.client.network.WeakChunkClearClient;
 import com.moepus.serverwarashi.client.screen.PerfDisplayText;
-import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
 import com.moepus.serverwarashi.common.network.LoaderFreezeActionPayload;
 import com.moepus.serverwarashi.common.network.WeakChunkClearPayload;
+import com.moepus.serverwarashi.common.util.PackedPositionHash;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -43,7 +44,7 @@ public final class MapContextMenuService {
 
     public static List<MapMenuItem> items(MapTarget target) {
         Objects.requireNonNull(target, "target");
-        PerfReportData report = ClientPerfReportState.snapshot().report();
+        PerfReportData report = ClientPerfMapState.snapshot().report();
         WeakChunkSnapshot.ChunkEntry weakChunk = ClientWeakChunkState.chunk(
                 target.dimension().toString(), target.chunkX(), target.chunkZ());
         long reportId = report == null ? 0L : report.reportId();
@@ -266,6 +267,11 @@ public final class MapContextMenuService {
     }
 
     private record LoaderIdentity(ResourceLocation controllerId, BlockPos ownerPos) {
+        @Override
+        public int hashCode() {
+            return 31 * controllerId.hashCode()
+                    + PackedPositionHash.hash(ownerPos.asLong());
+        }
     }
 
     private static final class LiveClientActions implements ClientActions {

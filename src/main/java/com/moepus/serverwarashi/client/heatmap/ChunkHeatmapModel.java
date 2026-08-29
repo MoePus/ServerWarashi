@@ -6,16 +6,21 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData
 import com.moepus.serverwarashi.common.modules.performance.report.ChunkPerformanceRisk;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntMaps;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public final class ChunkHeatmapModel {
     static final double MSPT_THRESHOLD = ChunkPerformanceRisk.MSPT_THRESHOLD;
@@ -34,8 +39,8 @@ public final class ChunkHeatmapModel {
         if (report == null) {
             return Plan.EMPTY;
         }
-        Map<Long, Cell> cells = new HashMap<>();
-        Set<Long> loaderChunks = new HashSet<>();
+        Long2ObjectMap<Cell> cells = new Long2ObjectOpenHashMap<>();
+        LongSet loaderChunks = new LongOpenHashSet();
         BuildBudget budget = new BuildBudget();
         addLoaderSources(report, dimension,
                 new RegionBuildContext(HeatmapViewBounds.from(coverage), cells, budget, loaderChunks));
@@ -64,8 +69,8 @@ public final class ChunkHeatmapModel {
         return WeakHeatmapPlan.apply(base, weakDimension, weakChunks, dimension);
     }
 
-    private static void addWeakEdges(Map<Long, Cell> cells,
-                                     Set<Long> loaderChunks,
+    private static void addWeakEdges(Long2ObjectMap<Cell> cells,
+                                     LongSet loaderChunks,
                                      boolean incomplete) {
         if (!incomplete) {
             WeakEdgeMask.find(loaderChunks).forEach((chunk, mask) -> {
@@ -168,7 +173,7 @@ public final class ChunkHeatmapModel {
     private static void addSampledChunks(PerfReportData report,
                                          String dimension,
                                          MapViewport coverage,
-                                         Map<Long, Cell> cells) {
+                                         Long2ObjectMap<Cell> cells) {
         for (PerfReportData.ChunkEntry entry : report.chunks()) {
             if (!dimension.equals(entry.dimension())
                     || !coverage.intersectsChunk(entry.chunkX(), entry.chunkZ())) {
@@ -190,14 +195,15 @@ public final class ChunkHeatmapModel {
         }
     }
 
-    private static Plan toPlan(Map<Long, Cell> cells, List<LoaderIcon> icons, boolean incomplete) {
+    private static Plan toPlan(
+            Long2ObjectMap<Cell> cells, List<LoaderIcon> icons, boolean incomplete) {
         List<Quad> quads = new ArrayList<>(cells.size());
-        Map<Long, HoverInfo> hover = new HashMap<>(cells.size());
-        Map<Long, Integer> weakEdgeMasks = new HashMap<>();
+        Long2ObjectMap<HoverInfo> hover = new Long2ObjectOpenHashMap<>(cells.size());
+        Long2IntMap weakEdgeMasks = new Long2IntOpenHashMap();
         cells.forEach((key, cell) -> {
             quads.add(new Quad(cell.chunkX, cell.chunkZ, cell.color()));
             if (cell.weakEdgeMask != 0) {
-                weakEdgeMasks.put(key, cell.weakEdgeMask);
+                weakEdgeMasks.put(key.longValue(), cell.weakEdgeMask);
             }
             hover.put(key, new HoverInfo(cell.metric, cell.topEntities, cell.topBlockEntities,
                     0, Map.of(), cell.weakEdgeMask != 0,
@@ -286,20 +292,21 @@ public final class ChunkHeatmapModel {
     }
 
     public record Plan(List<Quad> quads,
-                       Map<Long, HoverInfo> hover,
+                       Long2ObjectMap<HoverInfo> hover,
                        List<LoaderIcon> icons,
-                       Map<Long, Integer> weakEdgeMasks) {
-        static final Plan EMPTY = new Plan(List.of(), Map.of(), List.of(), Map.of());
+                       Long2IntMap weakEdgeMasks) {
+        static final Plan EMPTY = new Plan(List.of(), Long2ObjectMaps.emptyMap(),
+                List.of(), Long2IntMaps.EMPTY_MAP);
 
-        public Plan(List<Quad> quads, Map<Long, HoverInfo> hover, List<LoaderIcon> icons) {
-            this(quads, hover, icons, Map.of());
+        public Plan(List<Quad> quads, Long2ObjectMap<HoverInfo> hover, List<LoaderIcon> icons) {
+            this(quads, hover, icons, Long2IntMaps.EMPTY_MAP);
         }
 
         public Plan {
             quads = List.copyOf(quads);
-            hover = Map.copyOf(hover);
+            hover = Long2ObjectMaps.unmodifiable(new Long2ObjectOpenHashMap<>(hover));
             icons = List.copyOf(icons);
-            weakEdgeMasks = Map.copyOf(weakEdgeMasks);
+            weakEdgeMasks = Long2IntMaps.unmodifiable(new Long2IntOpenHashMap(weakEdgeMasks));
         }
 
         public int vertexCount() {
@@ -362,9 +369,9 @@ public final class ChunkHeatmapModel {
     }
 
     private record RegionBuildContext(HeatmapViewBounds view,
-                                      Map<Long, Cell> cells,
+                                      Long2ObjectMap<Cell> cells,
                                       BuildBudget budget,
-                                      Set<Long> loaderChunks) {
+                                      LongSet loaderChunks) {
         boolean add(int chunkX, int chunkZ, LoaderSource loader) {
             if (!budget.claimAssociation()) {
                 return false;

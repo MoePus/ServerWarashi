@@ -1,12 +1,12 @@
 package com.moepus.serverwarashi.client.heatmap;
 
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 final class WeakHeatmapPlan {
     private WeakHeatmapPlan() {
@@ -19,9 +19,10 @@ final class WeakHeatmapPlan {
         if (weakChunks == null || weakChunks.isEmpty() || !dimension.equals(weakDimension)) {
             return base;
         }
-        Map<Long, WeakChunkSnapshot.ChunkEntry> weakByChunk = indexChunks(weakChunks);
+        Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> weakByChunk = indexChunks(weakChunks);
         List<ChunkHeatmapModel.Quad> quads = new ArrayList<>(base.quads().size() + weakByChunk.size());
-        Map<Long, ChunkHeatmapModel.HoverInfo> hover = new HashMap<>(base.hover());
+        Long2ObjectMap<ChunkHeatmapModel.HoverInfo> hover =
+                new Long2ObjectOpenHashMap<>(base.hover());
         boolean incomplete = base.hover().values().stream()
                 .anyMatch(ChunkHeatmapModel.HoverInfo::incomplete);
         for (ChunkHeatmapModel.Quad quad : base.quads()) {
@@ -41,18 +42,19 @@ final class WeakHeatmapPlan {
         return new ChunkHeatmapModel.Plan(quads, hover, base.icons(), base.weakEdgeMasks());
     }
 
-    private static Map<Long, WeakChunkSnapshot.ChunkEntry> indexChunks(
+    private static Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> indexChunks(
             List<WeakChunkSnapshot.ChunkEntry> weakChunks) {
-        Map<Long, WeakChunkSnapshot.ChunkEntry> result = new HashMap<>();
+        Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> result = new Long2ObjectOpenHashMap<>();
         for (WeakChunkSnapshot.ChunkEntry entry : weakChunks) {
             result.put(ChunkPos.asLong(entry.chunkX(), entry.chunkZ()), entry);
         }
         return result;
     }
 
-    private static void addUnrepresented(Map<Long, WeakChunkSnapshot.ChunkEntry> weakByChunk,
+    private static void addUnrepresented(
+                                         Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> weakByChunk,
                                          List<ChunkHeatmapModel.Quad> quads,
-                                         Map<Long, ChunkHeatmapModel.HoverInfo> hover,
+                                         Long2ObjectMap<ChunkHeatmapModel.HoverInfo> hover,
                                          boolean incomplete) {
         weakByChunk.forEach((key, weak) -> {
             hover.put(key, new ChunkHeatmapModel.HoverInfo(null, List.of(), List.of(),

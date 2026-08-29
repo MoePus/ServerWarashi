@@ -127,6 +127,19 @@ class HeatmapOffscreenIndicatorsTest {
         assertTrue(indicators.isEmpty());
     }
 
+    @Test
+    void dangerousModelAcceptsAggregatedWeakChunksBeyondWireBatchLimit() {
+        List<WeakChunkSnapshot.ChunkEntry> chunks = java.util.stream.IntStream.range(0, 9)
+                .mapToObj(index -> warning(index, 0, 500))
+                .toList();
+
+        var result = DangerousChunkModel.build(null,
+                new DangerousChunkModel.WeakChunks("minecraft:overworld", chunks),
+                "minecraft:overworld");
+
+        assertEquals(9, result.size());
+    }
+
     private static List<HeatmapOffscreenIndicators.Indicator> planWeak(
             WeakChunkSnapshot.ChunkEntry... chunks) {
         return HeatmapOffscreenIndicators.plan(null, snapshot(chunks), CONTEXT);

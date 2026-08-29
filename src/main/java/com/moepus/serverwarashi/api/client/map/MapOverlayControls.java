@@ -1,7 +1,9 @@
 package com.moepus.serverwarashi.api.client.map;
 
 import com.moepus.serverwarashi.client.network.PerfControlClient;
-import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
+import com.moepus.serverwarashi.client.state.ClientPerfMapState;
+import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
 import com.moepus.serverwarashi.common.network.PerfControlPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -50,7 +52,7 @@ public final class MapOverlayControls {
                 .bounds(TOGGLE_X, BUTTON_Y, TOGGLE_WIDTH, BUTTON_HEIGHT)
                 .build();
         Button clear = Button.builder(Component.translatable("screen.serverwarashi.heatmap.clear"),
-                        ignored -> PerfControlClient.send(PerfControlPayload.Action.CLEAR))
+                        ignored -> clearReport())
                 .bounds(CLEAR_X, BUTTON_Y, CLEAR_WIDTH, BUTTON_HEIGHT)
                 .build();
         MapOverlayControls controls = new MapOverlayControls(toggle, clear);
@@ -67,7 +69,7 @@ public final class MapOverlayControls {
 
     /** Refresh labels, visibility, and enabled state from the latest profiler snapshot. */
     public void update() {
-        ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
+        ClientPerfMapState.Snapshot snapshot = ClientPerfMapState.snapshot();
         boolean profiling = effectiveProfiling(snapshot);
         boolean visible = hasPerfPermission();
         toggle.visible = visible;
@@ -122,7 +124,7 @@ public final class MapOverlayControls {
         return connection != null && connection.getCommands().getRoot().getChild("warashi") != null;
     }
 
-    private static boolean hasCompletedReport(ClientPerfReportState.Snapshot snapshot) {
+    private static boolean hasCompletedReport(ClientPerfMapState.Snapshot snapshot) {
         return snapshot.report() != null && snapshot.report().tickCount() > 0L;
     }
 
@@ -141,7 +143,7 @@ public final class MapOverlayControls {
 
     private static boolean isAnalysisPaused() {
         return isIntegratedServerPaused()
-                && effectiveProfiling(ClientPerfReportState.snapshot());
+                && effectiveProfiling(ClientPerfMapState.snapshot());
     }
 
     private static boolean isOverPausedStatus(double mouseX, double mouseY) {
@@ -156,7 +158,7 @@ public final class MapOverlayControls {
                 && mouseY >= STATUS_Y && mouseY < STATUS_Y + font.lineHeight;
     }
 
-    private static boolean effectiveProfiling(ClientPerfReportState.Snapshot snapshot) {
+    private static boolean effectiveProfiling(ClientPerfMapState.Snapshot snapshot) {
         if (requestedProfiling == null) {
             return snapshot.profiling();
         }
@@ -173,10 +175,19 @@ public final class MapOverlayControls {
     }
 
     private static void toggleProfiling() {
-        ClientPerfReportState.Snapshot snapshot = ClientPerfReportState.snapshot();
+        ClientPerfMapState.Snapshot snapshot = ClientPerfMapState.snapshot();
         boolean nextProfiling = !effectiveProfiling(snapshot);
         if (PerfControlClient.send(PerfControlPayload.Action.TOGGLE)) {
             requestedProfiling = nextProfiling;
+            PerfMapSubscriptionClient.setAnalysisLive(nextProfiling);
+        }
+    }
+
+    private static void clearReport() {
+        if (PerfControlClient.send(PerfControlPayload.Action.CLEAR)) {
+            requestedProfiling = null;
+            PerfMapSubscriptionClient.setAnalysisLive(false);
+            ClientPerfStateCoordinator.clearAll();
         }
     }
 
