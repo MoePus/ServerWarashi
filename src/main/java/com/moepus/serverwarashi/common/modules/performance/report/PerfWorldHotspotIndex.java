@@ -20,6 +20,9 @@ public record PerfWorldHotspotIndex(long streamEpoch,
             throw new IllegalArgumentException("Hotspot index scalars must be non-negative");
         }
         entries = List.copyOf(entries);
+        if (entries.stream().anyMatch(entry -> entry.measurementStartTick() > tickCount)) {
+            throw new IllegalArgumentException("Hotspot measurement starts after the snapshot");
+        }
     }
 
     public static PerfWorldHotspotIndex empty(long streamEpoch, long revision, long tickCount) {
@@ -52,6 +55,7 @@ public record PerfWorldHotspotIndex(long streamEpoch,
                         int z,
                         TickDetailKind detailKind,
                         ResourceLocation detailId,
+                        long measurementStartTick,
                         long samples,
                         int maxSamplesQ8) {
         public Entry {
@@ -59,14 +63,19 @@ public record PerfWorldHotspotIndex(long streamEpoch,
             Objects.requireNonNull(dimension, "dimension");
             Objects.requireNonNull(detailKind, "detailKind");
             Objects.requireNonNull(detailId, "detailId");
-            if (samples < 0L || maxSamplesQ8 < 0) {
-                throw new IllegalArgumentException("Hotspot samples must be non-negative");
+            if (measurementStartTick <= 0L || samples < 0L || maxSamplesQ8 < 0) {
+                throw new IllegalArgumentException("Invalid hotspot measurement data");
             }
             key.validateDetailKind(detailKind);
             if (key.kind() == Kind.BLOCK_ENTITY
                     && key.blockPosition() != BlockPos.asLong(x, y, z)) {
                 throw new IllegalArgumentException("Block-entity hotspot position mismatch");
             }
+        }
+
+        public long measurementTicks(long totalTicks) {
+            return totalTicks <= 0L ? 0L
+                    : Math.max(1L, totalTicks - measurementStartTick + 1L);
         }
 
     }

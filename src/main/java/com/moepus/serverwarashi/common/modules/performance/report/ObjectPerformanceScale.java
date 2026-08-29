@@ -26,7 +26,13 @@ public final class ObjectPerformanceScale {
 
     public static double effectiveSamples(PerfReportData.Metric metric, long tickCount) {
         double average = averageSamples(metric, tickCount);
-        double burst = Math.max(0.0D, estimatedMaxSamples(metric, tickCount) - average);
+        return effectiveSamples(average, estimatedMaxSamples(metric, tickCount));
+    }
+
+    public static double effectiveSamples(double averageSamples, double estimatedMaxSamples) {
+        double average = bounded(averageSamples);
+        double maximum = bounded(estimatedMaxSamples);
+        double burst = Math.max(0.0D, maximum - average);
         return Math.min(MAX_SAMPLE_VALUE, average + Math.log1p(burst) / LOG_TWO);
     }
 
@@ -36,7 +42,11 @@ public final class ObjectPerformanceScale {
         }
         double averageSamples = samples / (double) tickCount;
         double estimatedMaxSamples = maxSamplesQ8 / (double) PerfWorldHotspotIndex.MAX_SAMPLES_SCALE;
-        double excess = Math.max(0.0D, estimatedMaxSamples - averageSamples);
-        return averageSamples + Math.log1p(excess) / Math.log(2.0D);
+        return effectiveSamples(averageSamples, estimatedMaxSamples);
+    }
+
+    private static double bounded(double value) {
+        return Double.isFinite(value) && value > 0.0D
+                ? Math.min(MAX_SAMPLE_VALUE, value) : 0.0D;
     }
 }

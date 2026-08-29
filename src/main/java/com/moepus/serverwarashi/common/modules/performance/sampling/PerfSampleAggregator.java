@@ -251,6 +251,7 @@ final class PerfSampleAggregator {
         boolean chunkPosition;
         int x, y, z;
         long lastSeenTick;
+        long measurementStartTick = 1L;
 
         void record(TickSamples.TickCount count, long tick) {
             positioned = count.positioned;
@@ -259,6 +260,10 @@ final class PerfSampleAggregator {
             y = count.y;
             z = count.z;
             lastSeenTick = tick;
+            if (count.entityAgeTicks >= 0) {
+                long age = Math.max(1L, count.entityAgeTicks);
+                measurementStartTick = Math.max(1L, tick - age + 1L);
+            }
             stats.record(count.count, tick);
         }
 
@@ -283,7 +288,11 @@ final class PerfSampleAggregator {
         }
 
         PerfReportData.Metric metric(long ticks, double nanosPerSample) {
-            return stats.metric(ticks, nanosPerSample);
+            return stats.metric(ticks, measurementTicks(ticks), nanosPerSample);
+        }
+
+        long measurementTicks(long ticks) {
+            return ticks <= 0L ? 0L : Math.max(1L, ticks - measurementStartTick + 1L);
         }
 
         TickSamples.ChunkKey chunkKey(TickSamples.TickableKey key) {

@@ -122,6 +122,6 @@ class PerfWorldHotspotStreamTest {
             int x, int y, int z, long samples, ResourceLocation detailId) {
         return new PerfWorldHotspotIndex.Entry(
                 PerfWorldHotspotIndex.Key.blockEntity(x, y, z), DIMENSION.toString(), x, y, z,
-                TickDetailKind.BLOCK, detailId, samples, (int) samples * 256);
+                TickDetailKind.BLOCK, detailId, 1L, samples, (int) samples * 256);
     }
 }

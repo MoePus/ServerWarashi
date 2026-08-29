@@ -44,7 +44,8 @@ final class WorldEntityFlameClusters {
                 mspt, Math.max(mspt, maximum), samples);
         var anchor = new Anchor(centerX(input.bounds()), input.bounds().maxY,
                 centerZ(input.bounds()));
-        var visual = new Visual(ObjectPerformanceScale.effectiveSamples(metric, tickCount),
+        var visual = new Visual(ObjectPerformanceScale.effectiveSamples(
+                metric, measurementTicks(input, tickCount)),
                 updatePhase(0x811C9DC5, input.stableId()) & 0x7FFF, 1);
         return new Marker(anchor, metric, visual);
     }
@@ -54,6 +55,8 @@ final class WorldEntityFlameClusters {
         double totalMspt = 0.0D;
         double totalMax = 0.0D;
         long totalSamples = 0L;
+        double averageSamples = 0.0D;
+        double maximumSamples = 0.0D;
         double totalWeight = 0.0D;
         double x = 0.0D;
         double z = 0.0D;
@@ -66,6 +69,9 @@ final class WorldEntityFlameClusters {
             totalMspt += mspt;
             totalMax += maximum;
             totalSamples = saturatedAdd(totalSamples, Math.max(0L, input.metric().samples()));
+            long inputTicks = measurementTicks(input, tickCount);
+            averageSamples += ObjectPerformanceScale.averageSamples(input.metric(), inputTicks);
+            maximumSamples += ObjectPerformanceScale.estimatedMaxSamples(input.metric(), inputTicks);
             totalWeight += weight;
             x += centerX(input.bounds()) * weight;
             z += centerZ(input.bounds()) * weight;
@@ -75,8 +81,12 @@ final class WorldEntityFlameClusters {
         PerfReportData.Metric metric = new PerfReportData.Metric(
                 totalMspt, Math.max(totalMspt, totalMax), totalSamples);
         return new Marker(new Anchor(x / totalWeight, y, z / totalWeight), metric,
-                new Visual(ObjectPerformanceScale.effectiveSamples(metric, tickCount),
+                new Visual(ObjectPerformanceScale.effectiveSamples(averageSamples, maximumSamples),
                         phase & 0x7FFF, group.size()));
+    }
+
+    private static long measurementTicks(Input input, long fallback) {
+        return input.measurementTicks() > 0L ? input.measurementTicks() : fallback;
     }
 
     private static double positiveFinite(double value) {
@@ -103,7 +113,11 @@ final class WorldEntityFlameClusters {
         return (int) Math.floor(coordinate / CELL_SIZE);
     }
 
-    record Input(AABB bounds, PerfReportData.Metric metric, int stableId) {
+    record Input(AABB bounds, PerfReportData.Metric metric,
+                 long measurementTicks, int stableId) {
+        Input(AABB bounds, PerfReportData.Metric metric, int stableId) {
+            this(bounds, metric, 0L, stableId);
+        }
     }
 
     record Anchor(double x, double y, double z) {

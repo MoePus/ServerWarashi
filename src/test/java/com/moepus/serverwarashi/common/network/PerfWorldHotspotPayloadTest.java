@@ -18,10 +18,11 @@ class PerfWorldHotspotPayloadTest {
     @Test
     void roundTripsCompactEntriesWithoutUuidIdentity() {
         var entity = new PerfWorldHotspotPayload.Entry(
-                PerfWorldHotspotIndex.Key.entity(42), TickDetailKind.ENTITY, 7, 123L, 640);
+                PerfWorldHotspotIndex.Key.entity(42), TickDetailKind.ENTITY,
+                7, 17L, 123L, 640);
         var blockEntity = new PerfWorldHotspotPayload.Entry(
                 PerfWorldHotspotIndex.Key.blockEntity(3, 64, -2),
-                TickDetailKind.BLOCK, 11, 9L, 384);
+                TickDetailKind.BLOCK, 11, 1L, 9L, 384);
         var expected = new PerfWorldHotspotPayload(5L, 0L, 20L, 20L, 1_250_000L,
                 ResourceLocation.parse("minecraft:overworld"), true,
                 List.of(entity, blockEntity), List.of());
@@ -65,16 +66,16 @@ class PerfWorldHotspotPayloadTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 new PerfWorldHotspotIndex.Entry(blockKey, "minecraft:overworld",
-                        4, 64, -2, TickDetailKind.BLOCK, stone, 1L, 256));
+                        4, 64, -2, TickDetailKind.BLOCK, stone, 1L, 1L, 256));
         assertThrows(IllegalArgumentException.class, () ->
                 new PerfWorldHotspotIndex.Entry(blockKey, "minecraft:overworld",
-                        3, 64, -2, TickDetailKind.ENTITY, stone, 1L, 256));
+                        3, 64, -2, TickDetailKind.ENTITY, stone, 1L, 1L, 256));
         assertThrows(IllegalArgumentException.class, () ->
                 new PerfWorldHotspotPayload.Entry(
-                        blockKey, TickDetailKind.ENTITY, 1, 1L, 256));
+                        blockKey, TickDetailKind.ENTITY, 1, 1L, 1L, 256));
         assertThrows(IllegalArgumentException.class, () ->
                 new PerfWorldHotspotPayload.Entry(
                         PerfWorldHotspotIndex.Key.entity(4),
-                        TickDetailKind.BLOCK, 1, 1L, 256));
+                        TickDetailKind.BLOCK, 1, 1L, 1L, 256));
     }
 }

@@ -174,7 +174,25 @@ public final class PerfWorkTracker {
                            int z,
                            boolean chunkPosition,
                            String eventLoop,
-                           String displayName) {
+                           String displayName,
+                           int entityAgeTicks) {
+        public Snapshot(TickType type,
+                        ResourceLocation dimension,
+                        Class<?> workClass,
+                        ResourceLocation detailId,
+                        TickDetailKind detailKind,
+                        int entityId,
+                        boolean positioned,
+                        int x,
+                        int y,
+                        int z,
+                        boolean chunkPosition,
+                        String eventLoop,
+                        String displayName) {
+            this(type, dimension, workClass, detailId, detailKind, entityId,
+                    positioned, x, y, z, chunkPosition, eventLoop, displayName, -1);
+        }
+
         public Snapshot(TickType type,
                         ResourceLocation dimension,
                         Class<?> workClass,
@@ -188,7 +206,7 @@ public final class PerfWorkTracker {
                         boolean chunkPosition,
                         String eventLoop) {
             this(type, dimension, workClass, detailId, detailKind, entityId,
-                    positioned, x, y, z, chunkPosition, eventLoop, "");
+                    positioned, x, y, z, chunkPosition, eventLoop, "", -1);
         }
     }
 
@@ -208,6 +226,7 @@ public final class PerfWorkTracker {
         private boolean chunkPosition;
         private String eventLoop;
         private String displayName;
+        private int entityAgeTicks;
 
         void publishChunk(ResourceLocation dimension, LevelChunk chunk) {
             var pos = chunk.getPos();
@@ -222,6 +241,7 @@ public final class PerfWorkTracker {
             z = pos.z;
             chunkPosition = true;
             eventLoop = null;
+            entityAgeTicks = -1;
             finishPublish();
         }
 
@@ -242,6 +262,7 @@ public final class PerfWorkTracker {
             z = entity.getBlockZ();
             chunkPosition = false;
             eventLoop = null;
+            entityAgeTicks = Math.max(1, entity.tickCount + 1);
             finishPublish();
         }
 
@@ -258,6 +279,7 @@ public final class PerfWorkTracker {
             z = pos.getZ();
             chunkPosition = false;
             eventLoop = null;
+            entityAgeTicks = -1;
             finishPublish();
         }
 
@@ -273,6 +295,7 @@ public final class PerfWorkTracker {
             z = 0;
             chunkPosition = false;
             this.eventLoop = eventLoop;
+            entityAgeTicks = -1;
             finishPublish();
         }
 
@@ -301,7 +324,7 @@ public final class PerfWorkTracker {
             }
             Snapshot result = new Snapshot(type, dimension, workClass, detailId, detailKind,
                     entityId, positioned,
-                    x, y, z, chunkPosition, eventLoop, displayName);
+                    x, y, z, chunkPosition, eventLoop, displayName, entityAgeTicks);
             return before == version ? result : null;
         }
     }

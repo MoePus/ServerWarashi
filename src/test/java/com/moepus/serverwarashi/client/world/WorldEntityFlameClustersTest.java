@@ -70,6 +70,20 @@ class WorldEntityFlameClustersTest {
     }
 
     @Test
+    void combinesRatesFromMembersWithDifferentMeasurementWindows() {
+        var recent = new WorldEntityFlameClusters.Input(
+                bounds(new Point(0.0D, 0.0D)), metric(1.0D, 1.0D, 10L), 10L, 1);
+        var old = new WorldEntityFlameClusters.Input(
+                bounds(new Point(0.2D, 0.0D)), metric(1.0D, 1.0D, 100L), 100L, 2);
+
+        WorldEntityFlameClusters.Marker marker =
+                WorldEntityFlameClusters.cluster(List.of(recent, old), 100L).get(0);
+
+        assertEquals(2.0D, marker.metric().mspt(), 0.000_001D);
+        assertEquals(2.0D, marker.effectiveSamples(), 0.000_001D);
+    }
+
+    @Test
     void clustersTheMaximumCoincidentInputBudgetWithoutPairMaterialization() {
         List<WorldEntityFlameClusters.Input> inputs = new ArrayList<>();
         for (int id = 0; id < WorldEntityFlameClusters.MAX_CLUSTER_INPUTS + 1; id++) {
@@ -85,10 +99,12 @@ class WorldEntityFlameClustersTest {
 
     private static WorldEntityFlameClusters.Input input(
             int id, Point point, PerfReportData.Metric metric) {
-        return new WorldEntityFlameClusters.Input(
-                new AABB(point.x() - 0.3D, 64.0D, point.z() - 0.3D,
-                        point.x() + 0.3D, 65.8D, point.z() + 0.3D),
-                metric, id);
+        return new WorldEntityFlameClusters.Input(bounds(point), metric, id);
+    }
+
+    private static AABB bounds(Point point) {
+        return new AABB(point.x() - 0.3D, 64.0D, point.z() - 0.3D,
+                point.x() + 0.3D, 65.8D, point.z() + 0.3D);
     }
 
     private static WorldEntityFlameClusters.Input input(int id, AABB bounds) {

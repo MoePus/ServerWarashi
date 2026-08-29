@@ -104,6 +104,7 @@ final class TickSamples {
         int x;
         int y;
         int z;
+        int entityAgeTicks = -1;
 
         void record(PerfWorkTracker.Snapshot snapshot) {
             count++;
@@ -112,6 +113,7 @@ final class TickSamples {
             x = snapshot.x();
             y = snapshot.y();
             z = snapshot.z();
+            entityAgeTicks = snapshot.entityAgeTicks();
         }
 
         void merge(TickCount source) {
@@ -121,6 +123,7 @@ final class TickSamples {
             x = source.x;
             y = source.y;
             z = source.z;
+            entityAgeTicks = Math.max(entityAgeTicks, source.entityAgeTicks);
         }
     }
 }

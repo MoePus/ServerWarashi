@@ -177,7 +177,8 @@ final class PerfObjectSnapshotBuilder {
                                       PerfReportData.Metric metric,
                                       long tickCount) {
             return new ObjectCandidate(key, aggregate, metric,
-                    ObjectPerformanceScale.effectiveSamples(metric, tickCount),
+                    ObjectPerformanceScale.effectiveSamples(
+                            metric, aggregate.measurementTicks(tickCount)),
                     StableObjectId.from(key, aggregate), tickCount);
         }
 
@@ -203,7 +204,7 @@ final class PerfObjectSnapshotBuilder {
             PerfWorldHotspotIndex.Cost cost = aggregate.stats.hotspotCost(tickCount);
             return new PerfWorldHotspotIndex.Entry(hotspotKey(), key.dimension(),
                     aggregate.x, aggregate.y, aggregate.z, key.detailKind(), key.detailId(),
-                    cost.samples(), cost.maxSamplesQ8());
+                    aggregate.measurementStartTick, cost.samples(), cost.maxSamplesQ8());
         }
 
         static ObjectCandidate newer(ObjectCandidate left, ObjectCandidate right) {

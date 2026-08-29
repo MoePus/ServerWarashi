@@ -45,7 +45,7 @@ class ClientPerfStateCoordinatorTest {
     void clearAllResetsReportMapAndWorldStores() {
         ClientPerfStateCoordinator.applyFullReport(report(), true);
         var entry = new PerfWorldHotspotPayload.Entry(
-                PerfWorldHotspotIndex.Key.entity(7), TickDetailKind.ENTITY, 1, 2L, 256);
+                PerfWorldHotspotIndex.Key.entity(7), TickDetailKind.ENTITY, 1, 1L, 2L, 256);
         ClientPerfStateCoordinator.applyWorldDelta(new PerfWorldHotspotPayload(
                 1L, 0L, 1L, 20L, 1_000_000L,
                 ResourceLocation.parse("minecraft:overworld"), true,

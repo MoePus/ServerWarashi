@@ -120,7 +120,7 @@ final class PerfWorldHotspotStream {
         int registryId = registryIds.resolve(entry.detailKind(), entry.detailId());
         return registryId < 0 ? null : new PerfWorldHotspotPayload.Entry(
                 entry.key(), entry.detailKind(), registryId,
-                entry.samples(), entry.maxSamplesQ8());
+                entry.measurementStartTick(), entry.samples(), entry.maxSamplesQ8());
     }
 
     private static int builtInRegistryId(TickDetailKind kind, ResourceLocation id) {

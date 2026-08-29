@@ -77,7 +77,7 @@ class WeakChunkPayloadTest {
 
     @Test
     void networkProtocolIsVersionSix() {
-        assertEquals("6", WarashiNetwork.NETWORK_VERSION);
+        assertEquals("7", WarashiNetwork.NETWORK_VERSION);
     }
 
     private static RegistryFriendlyByteBuf buffer() {

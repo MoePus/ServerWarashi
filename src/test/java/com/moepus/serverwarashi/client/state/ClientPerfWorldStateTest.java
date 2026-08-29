@@ -26,7 +26,7 @@ class ClientPerfWorldStateTest {
     @Test
     void scalarOnlyDeltaRefreshesMetricWithoutRepeatingEntry() {
         var entry = new PerfWorldHotspotPayload.Entry(
-                KEY, TickDetailKind.ENTITY, 4, 20L, 512);
+                KEY, TickDetailKind.ENTITY, 4, 1L, 20L, 512);
         assertTrue(ClientPerfWorldState.apply(payload(0L, 20L, 20L, 1_000_000L,
                 true, List.of(entry), List.of())));
         assertEquals(1.0D, metric().mspt(), 1.0E-9D);
@@ -40,7 +40,7 @@ class ClientPerfWorldStateTest {
     @Test
     void rejectsDeltaWithWrongBaseAndAppliesRemoval() {
         var entry = new PerfWorldHotspotPayload.Entry(
-                KEY, TickDetailKind.ENTITY, 4, 2L, 256);
+                KEY, TickDetailKind.ENTITY, 4, 1L, 2L, 256);
         ClientPerfWorldState.apply(payload(
                 0L, 20L, 20L, 1_000_000L, true, List.of(entry), List.of()));
         assertFalse(ClientPerfWorldState.apply(payload(
@@ -53,7 +53,7 @@ class ClientPerfWorldStateTest {
     @Test
     void rejectsOlderFullSnapshotButAcceptsANewStreamEpoch() {
         var entry = new PerfWorldHotspotPayload.Entry(
-                KEY, TickDetailKind.ENTITY, 4, 2L, 256);
+                KEY, TickDetailKind.ENTITY, 4, 1L, 2L, 256);
         assertTrue(ClientPerfWorldState.apply(new PerfWorldHotspotPayload(
                 7L, 0L, 20L, 20L, 1_000_000L, DIMENSION,
                 true, List.of(entry), List.of())));
@@ -68,6 +68,18 @@ class ClientPerfWorldStateTest {
                 true, List.of(), List.of())));
         assertEquals(8L, ClientPerfWorldState.snapshot().streamEpoch());
         assertEquals(1L, ClientPerfWorldState.snapshot().protocolRevision());
+    }
+
+    @Test
+    void dividesEntityCostByTicksSinceItAppeared() {
+        var entry = new PerfWorldHotspotPayload.Entry(
+                KEY, TickDetailKind.ENTITY, 4, 91L, 20L, 512);
+
+        assertTrue(ClientPerfWorldState.apply(payload(
+                0L, 100L, 100L, 1_000_000L, true, List.of(entry), List.of())));
+
+        assertEquals(2.0D, metric().mspt(), 1.0E-9D);
+        assertEquals(10L, ClientPerfWorldState.snapshot().hotspots().get(0).measurementTicks());
     }
 
     private static com.moepus.serverwarashi.common.modules.performance.report.PerfReportData.Metric metric() {

@@ -45,6 +45,9 @@ public record PerfWorldHotspotPayload(long streamEpoch,
         removals = List.copyOf(removals);
         validateSize(upserts.size());
         validateSize(removals.size());
+        if (upserts.stream().anyMatch(entry -> entry.measurementStartTick() > tickCount)) {
+            throw new IllegalArgumentException("Hotspot measurement starts after the payload");
+        }
     }
 
     @Override
@@ -84,6 +87,7 @@ public record PerfWorldHotspotPayload(long streamEpoch,
         writeKey(buffer, entry.key);
         buffer.writeByte(entry.detailKind.ordinal());
         buffer.writeVarInt(entry.registryId);
+        buffer.writeVarLong(entry.measurementStartTick);
         buffer.writeVarLong(entry.samples);
         buffer.writeVarInt(entry.maxSamplesQ8);
     }
@@ -96,7 +100,7 @@ public record PerfWorldHotspotPayload(long streamEpoch,
             throw new IllegalArgumentException("Unknown hotspot detail kind: " + detailOrdinal);
         }
         return new Entry(key, kinds[detailOrdinal], buffer.readVarInt(),
-                buffer.readVarLong(), buffer.readVarInt());
+                buffer.readVarLong(), buffer.readVarLong(), buffer.readVarInt());
     }
 
     private static void writeKey(
@@ -140,12 +144,14 @@ public record PerfWorldHotspotPayload(long streamEpoch,
     public record Entry(PerfWorldHotspotIndex.Key key,
                         TickDetailKind detailKind,
                         int registryId,
+                        long measurementStartTick,
                         long samples,
                         int maxSamplesQ8) {
         public Entry {
             Objects.requireNonNull(key, "key");
             Objects.requireNonNull(detailKind, "detailKind");
-            if (registryId < 0 || samples < 0L || maxSamplesQ8 < 0) {
+            if (registryId < 0 || measurementStartTick <= 0L
+                    || samples < 0L || maxSamplesQ8 < 0) {
                 throw new IllegalArgumentException("Invalid compact hotspot entry");
             }
             key.validateDetailKind(detailKind);

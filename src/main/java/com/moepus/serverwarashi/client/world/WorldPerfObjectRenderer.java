@@ -78,7 +78,7 @@ final class WorldPerfObjectRenderer {
         }
         for (ClientPerfWorldState.Hotspot hotspot : snapshot.hotspots()) {
             double effective = ObjectPerformanceScale.effectiveSamples(
-                    hotspot.metric(), snapshot.tickCount());
+                    hotspot.metric(), hotspot.measurementTicks());
             if (WorldOverlayMath.shouldRender(effective, currentFilter)) {
                 next.add(new Candidate(hotspot, hotspot.metric(), effective));
                 if (next.size() == WorldPerfObjectBuffers.MAX_MARKER_COUNT) {
@@ -109,7 +109,8 @@ final class WorldPerfObjectRenderer {
             }
             if (candidate.hotspot().key().kind() == PerfWorldHotspotIndex.Kind.ENTITY) {
                 var input = new WorldEntityFlameClusters.Input(
-                        bounds, candidate.metric(), candidate.hotspot().key().entityId());
+                        bounds, candidate.metric(), candidate.hotspot().measurementTicks(),
+                        candidate.hotspot().key().entityId());
                 if (shouldClusterEntity(candidate.hotspot().detailKind())) {
                     itemEntities.add(input);
                 } else {

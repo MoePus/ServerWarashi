@@ -45,7 +45,8 @@ final class PerfWorldHotspotResolver {
         String dimension = entity.level().dimension().location().toString();
         return new PerfWorldHotspotIndex.Entry(entry.key(), dimension,
                 entity.getBlockX(), entity.getBlockY(), entity.getBlockZ(),
-                entry.detailKind(), entry.detailId(), entry.samples(), entry.maxSamplesQ8());
+                entry.detailKind(), entry.detailId(), entry.measurementStartTick(),
+                entry.samples(), entry.maxSamplesQ8());
     }
 
     private static Entity findEntity(PerfWorldHotspotIndex.Entry entry,

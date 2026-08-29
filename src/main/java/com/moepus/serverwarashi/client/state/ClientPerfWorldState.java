@@ -51,8 +51,15 @@ public final class ClientPerfWorldState {
                                      long tickCount,
                                      long nanosPerSample) {
         var cost = new PerfWorldHotspotIndex.Cost(entry.samples(), entry.maxSamplesQ8());
-        PerfReportData.Metric metric = cost.metric(tickCount, nanosPerSample);
-        return new Hotspot(entry.key(), entry.detailKind(), entry.registryId(), metric);
+        long measurementTicks = measurementTicks(tickCount, entry.measurementStartTick());
+        PerfReportData.Metric metric = cost.metric(measurementTicks, nanosPerSample);
+        return new Hotspot(entry.key(), entry.detailKind(), entry.registryId(),
+                measurementTicks, metric);
+    }
+
+    static long measurementTicks(long tickCount, long measurementStartTick) {
+        return tickCount <= 0L ? 0L
+                : Math.max(1L, tickCount - measurementStartTick + 1L);
     }
 
     public static Snapshot snapshot() {
@@ -67,6 +74,7 @@ public final class ClientPerfWorldState {
     public record Hotspot(PerfWorldHotspotIndex.Key key,
                           TickDetailKind detailKind,
                           int registryId,
+                          long measurementTicks,
                           PerfReportData.Metric metric) {
     }
 

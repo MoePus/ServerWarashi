@@ -125,6 +125,35 @@ class PerfSampleAggregatorTest {
     }
 
     @Test
+    void limitsEntityAverageToItsLifetimeInsideTheSamplingSession() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(23L);
+        for (int tick = 1; tick <= 90; tick++) {
+            aggregator.accept(new TickSamples(null));
+        }
+        TickSamples spawned = new TickSamples(null);
+        spawned.sample(new PerfWorkTracker.Snapshot(TickType.ENTITY,
+                ResourceLocation.parse("test:level"), Cow.class,
+                ResourceLocation.parse("minecraft:cow"), TickDetailKind.ENTITY, 7,
+                true, 8, 64, 8, false, null, "", 1));
+        aggregator.accept(spawned);
+        for (int tick = 92; tick <= 100; tick++) {
+            aggregator.accept(new TickSamples(null));
+        }
+
+        PerfSampleAggregator.BuildSnapshot build =
+                aggregator.buildSnapshot(milliseconds(100L), 1L, 1_000);
+        double sampleMillis = observedMillis(100L, 1);
+        PerfReportData.TickableEntry entity = build.report().tickables().get(0);
+        PerfWorldHotspotIndex.Entry hotspot = build.hotspots().entries().get(0);
+
+        assertEquals(sampleMillis / 10.0D, entity.metric().mspt(), 0.000_001D);
+        assertEquals(sampleMillis / 100.0D,
+                build.report().chunks().get(0).metric().mspt(), 0.000_001D);
+        assertEquals(91L, hotspot.measurementStartTick());
+        assertEquals(10L, hotspot.measurementTicks(build.hotspots().tickCount()));
+    }
+
+    @Test
     void capturesRareMultiSampleEntityTickAsBurstMax() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(8L);
         TickSamples burst = new TickSamples(null);

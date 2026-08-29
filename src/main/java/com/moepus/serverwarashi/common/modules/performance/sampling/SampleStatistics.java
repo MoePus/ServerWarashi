@@ -35,9 +35,14 @@ final class SampleStatistics {
     }
 
     PerfReportData.Metric metric(long totalTicks, double nanosPerSample) {
-        advanceWindows(totalTicks);
-        double mspt = totalTicks == 0 ? 0.0D
-                : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / totalTicks;
+        return metric(totalTicks, totalTicks, nanosPerSample);
+    }
+
+    PerfReportData.Metric metric(long currentTick, long measurementTicks,
+                                 double nanosPerSample) {
+        advanceWindows(currentTick);
+        double mspt = measurementTicks == 0L ? 0.0D
+                : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / measurementTicks;
         double estimatedMaxSamples = estimatedMaxSamples();
         double estimatedMax = estimatedMaxSamples * nanosPerSample / NANOS_PER_MILLISECOND;
         return new PerfReportData.Metric(mspt, Math.max(mspt, estimatedMax), Math.round(totalSamples));
