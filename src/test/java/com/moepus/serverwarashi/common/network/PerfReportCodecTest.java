@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -77,14 +78,88 @@ class PerfReportCodecTest {
 
     @Test
     void roundTripsMapSubscription() {
-        PerfMapSubscriptionPayload expected = new PerfMapSubscriptionPayload(true);
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        PerfMapSubscriptionPayload expected = new PerfMapSubscriptionPayload(true, true);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), RegistryAccess.EMPTY);
         try {
             PerfMapSubscriptionPayload.STREAM_CODEC.encode(buffer, expected);
             assertEquals(expected, PerfMapSubscriptionPayload.STREAM_CODEC.decode(buffer));
         } finally {
             buffer.release();
         }
+    }
+
+    @Test
+    void roundTripsScreenCloseSubscription() {
+        PerfScreenSubscriptionPayload expected = new PerfScreenSubscriptionPayload(false);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            PerfScreenSubscriptionPayload.STREAM_CODEC.encode(buffer, expected);
+            assertEquals(expected, PerfScreenSubscriptionPayload.STREAM_CODEC.decode(buffer));
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void mapSpatialSnapshotDropsListOnlySections() {
+        PerfReportData.Metric metric = new PerfReportData.Metric(1.0D, 2.0D, 3L);
+        PerfReportData full = new PerfReportData(3L, 20.0D, 1_000L, 5_000L,
+                20L, 100L, 1_000, 0, 0, 0, 0,
+                List.of(), List.of(new PerfReportData.TickableEntry(
+                TickType.ENTITY, "minecraft:overworld", "Cow", "minecraft:cow",
+                TickDetailKind.ENTITY, 7, true, 0, 64, 0, false, "", metric)),
+                List.of(new PerfReportData.OwnerEntry(PerfReportData.AttributionKind.SYSTEM,
+                        "system", "System", true, 0L, null, 0, metric, List.of())), List.of());
+        PerfSpatialSnapshotPayload expected = PerfSpatialSnapshotPayload.forMap(full, true);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            PerfSpatialSnapshotPayload.STREAM_CODEC.encode(buffer, expected);
+            PerfSpatialSnapshotPayload decoded = PerfSpatialSnapshotPayload.STREAM_CODEC.decode(buffer);
+            assertEquals(expected, decoded);
+            assertTrue(decoded.report().tickables().isEmpty());
+            assertTrue(decoded.report().owners().isEmpty());
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void worldSpatialSnapshotKeepsChunksAndProfilingButDropsLoaders() {
+        PerfReportData.Metric metric = new PerfReportData.Metric(1.0D, 2.0D, 3L);
+        PerfReportData report = new PerfReportData(4L, 20.0D, 1_000L, 5_000L,
+                20L, 100L, 1_000, 0, 0, 0, 0,
+                List.of(new PerfReportData.ChunkEntry("minecraft:overworld", 0, 0,
+                        1, 1, List.of(), List.of(), metric)), List.of(), List.of(),
+                List.of(new PerfReportData.LoaderSourceEntry(
+                        "minecraft:overworld", "loader", "Loader", null, 0, List.of())));
+        PerfSpatialSnapshotPayload expected = PerfSpatialSnapshotPayload.forWorld(report, false);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            PerfSpatialSnapshotPayload.STREAM_CODEC.encode(buffer, expected);
+            PerfSpatialSnapshotPayload decoded = PerfSpatialSnapshotPayload.STREAM_CODEC.decode(buffer);
+            assertEquals(expected, decoded);
+            assertFalse(decoded.profiling());
+            assertEquals(1, decoded.report().chunks().size());
+            assertTrue(decoded.report().loaderSources().isEmpty());
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void mapProjectionPreservesLoaderOmissionsWithoutVisibleLoaders() {
+        PerfReportData report = new PerfReportData(5L, 20.0D, 1_000L, 5_000L,
+                20L, 100L, 1_000, 0, 0, 0, 7,
+                List.of(), List.of(), List.of(), List.of());
+
+        assertEquals(7, PerfSpatialSnapshotPayload.forMap(report, true)
+                .report().omittedLoaderSources());
+        assertEquals(0, PerfSpatialSnapshotPayload.forWorld(report, true)
+                .report().omittedLoaderSources());
     }
 
     @Test

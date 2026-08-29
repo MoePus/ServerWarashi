@@ -4,14 +4,18 @@ import com.mojang.logging.LogUtils;
 import com.moepus.serverwarashi.ServerWarashi;
 import com.moepus.serverwarashi.client.compat.xaero.XaeroMapIntegration;
 import com.moepus.serverwarashi.client.config.ClientConfig;
+import com.moepus.serverwarashi.client.network.ClientPerfPayloadRouter;
+import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
 import com.moepus.serverwarashi.client.screen.PerfReportScreen;
-import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportTextRenderer;
 import com.moepus.serverwarashi.common.network.ClientPayloadHandlers;
 import com.moepus.serverwarashi.common.network.LoaderControlStatePayload;
 import com.moepus.serverwarashi.common.network.PerfReportPayload;
+import com.moepus.serverwarashi.common.network.PerfSpatialSnapshotPayload;
+import com.moepus.serverwarashi.common.network.PerfWorldHotspotPayload;
 import com.moepus.serverwarashi.common.network.WeakChunkPayload;
 import com.moepus.serverwarashi.common.network.WeakChunkCorrectionPayload;
 import net.minecraft.client.Minecraft;
@@ -44,6 +48,8 @@ public final class ClientSetup {
             }
         }
         ClientPayloadHandlers.setPerfReportHandler(ClientSetup::handlePerfReport);
+        ClientPayloadHandlers.setPerfSpatialHandler(ClientSetup::handlePerfSpatial);
+        ClientPayloadHandlers.setPerfWorldHandler(ClientSetup::handlePerfWorld);
         ClientPayloadHandlers.setWeakChunkHandler(ClientSetup::handleWeakChunks);
         ClientPayloadHandlers.setWeakChunkCorrectionHandler(ClientSetup::handleWeakChunkCorrection);
         ClientPayloadHandlers.setLoaderControlHandler(ClientSetup::handleLoaderControl);
@@ -74,10 +80,20 @@ public final class ClientSetup {
         minecraft.execute(() -> handlePerfReportOnClient(minecraft, payload));
     }
 
+    private static void handlePerfSpatial(PerfSpatialSnapshotPayload payload) {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> ClientPerfPayloadRouter.applySpatialSnapshot(payload));
+    }
+
+    private static void handlePerfWorld(PerfWorldHotspotPayload payload) {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> ClientPerfStateCoordinator.applyWorldDelta(payload));
+    }
+
     private static void handleLoaderControl(LoaderControlStatePayload payload) {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
-            ClientPerfReportState.applyLoaderControl(payload);
+            ClientPerfStateCoordinator.applyLoaderControl(payload);
             if (payload.status() != LoaderControlStatePayload.Status.SYNC && minecraft.player != null) {
                 minecraft.player.sendSystemMessage(Component.translatable(
                         loaderControlMessage(payload), payload.controllerId().toString()));
@@ -100,7 +116,10 @@ public final class ClientSetup {
     }
 
     private static void handlePerfReportOnClient(Minecraft minecraft, PerfReportPayload payload) {
-        ClientPerfReportState.update(payload.report(), payload.profiling());
+        ClientPerfStateCoordinator.applyFullReport(payload.report(), payload.profiling());
+        if (!payload.profiling()) {
+            PerfMapSubscriptionClient.setAnalysisLive(false);
+        }
         switch (payload.mode()) {
             case DISPLAY -> displayPerfReport(minecraft, payload.report());
             case OPEN -> openOrUpdatePerfScreen(minecraft, payload);

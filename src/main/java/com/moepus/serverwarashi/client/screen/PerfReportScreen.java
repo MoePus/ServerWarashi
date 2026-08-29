@@ -2,10 +2,13 @@ package com.moepus.serverwarashi.client.screen;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.network.PerfScreenSubscriptionPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -21,6 +24,7 @@ public final class PerfReportScreen extends Screen {
     private final List<Hit> hits = new ArrayList<>();
     private Tab selectedTab = Tab.CHUNKS;
     private int contentHeight;
+    private boolean closeSent;
 
     public PerfReportScreen(PerfReportData report, boolean profiling) {
         super(Component.translatable("screen.serverwarashi.profiler.title"));
@@ -35,6 +39,31 @@ public final class PerfReportScreen extends Screen {
         this.report = report;
         this.profiling = profiling;
         states.values().forEach(PerfReportTabState::refresh);
+    }
+
+    @Override
+    public void onClose() {
+        notifyClosed();
+        super.onClose();
+    }
+
+    @Override
+    public void removed() {
+        notifyClosed();
+        super.removed();
+    }
+
+    private void notifyClosed() {
+        if (closeSent) {
+            return;
+        }
+        closeSent = true;
+        var connection = Minecraft.getInstance().getConnection();
+        if (connection != null
+                && NetworkRegistry.hasChannel(
+                connection, PerfScreenSubscriptionPayload.TYPE.id())) {
+            PacketDistributor.sendToServer(new PerfScreenSubscriptionPayload(false));
+        }
     }
 
     @Override

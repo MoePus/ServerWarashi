@@ -54,8 +54,9 @@ class PerfSessionControllerTest {
         assertTrue(controller.clearLastReport());
         assertTrue(controller.start(10, null, attribution));
         assertFalse(controller.clearLastReport());
-        assertEquals(0L, controller.currentReport().tickCount());
-        assertEquals(1, controller.currentReport().loaderSources().size());
+        PerfReportData current = controller.currentPublishedSnapshot().report();
+        assertEquals(0L, current.tickCount());
+        assertEquals(1, current.loaderSources().size());
         controller.stop();
         assertTrue(controller.clearLastReport());
     }

@@ -29,11 +29,14 @@ public abstract class MinecraftServerRuntimeMixin {
             return;
         }
         PerfReportDelivery.toPlayerOrConsole(server, report.playerId(), report.data());
-        PerfReportDelivery.publishNow(server, report.data(), false);
+        TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+        PerfReportDelivery.publishNow(server, report.data(),
+                snapshot.hotspots(), false);
     }
 
     private static void pushCurrentReport(MinecraftServer server) {
-        PerfReportDelivery.tick(server, TicketPerfRuntime.currentReportOrNull(),
+        TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+        PerfReportDelivery.tick(server, snapshot.report(), snapshot.hotspots(),
                 TicketPerfRuntime.isProfiling());
     }
 }

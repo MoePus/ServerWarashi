@@ -1,6 +1,7 @@
 package com.moepus.serverwarashi.common.modules.performance.analyze;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderRef;
@@ -83,7 +84,20 @@ public final class TicketPerfRuntime {
     }
 
     public static PerfReportData currentReportOrNull() {
-        return materializeLoaderControls(CONTROLLER.currentReport(), CONTROLLER.currentAttribution());
+        return materializeLoaderControls(currentPublishedReport(), CONTROLLER.currentAttribution());
+    }
+
+    public static DeliverySnapshot currentDeliverySnapshot() {
+        var published = CONTROLLER.currentPublishedSnapshot();
+        PerfReportData report = materializeLoaderControls(
+                published.report(), CONTROLLER.currentAttribution());
+        if (report == null) {
+            report = PerfReportData.empty(TicketPerfConfig.sampleIntervalMicros());
+        }
+        PerfWorldHotspotIndex hotspots = published.hotspots() == null
+                ? PerfWorldHotspotIndex.empty(0L, 0L, report.tickCount())
+                : published.hotspots();
+        return new DeliverySnapshot(report, hotspots);
     }
 
     public static boolean clearLastReport() {
@@ -102,7 +116,7 @@ public final class TicketPerfRuntime {
     }
 
     public static LoaderTargetLookup findLoaderTarget(long reportId, BlockLoaderRef ref) {
-        PerfReportData report = CONTROLLER.currentReport();
+        PerfReportData report = currentPublishedReport();
         PerfAttributionSnapshot attribution = CONTROLLER.currentAttribution();
         if (report == null || attribution == null || reportId <= 0L || report.reportId() != reportId) {
             return LoaderTargetLookup.failed(LoaderLookupStatus.STALE);
@@ -120,7 +134,7 @@ public final class TicketPerfRuntime {
 
     public static Optional<LoaderControlUpdate> updateLoaderControl(
             long reportId, LoaderControlState state) {
-        PerfReportData report = CONTROLLER.currentReport();
+        PerfReportData report = currentPublishedReport();
         PerfAttributionSnapshot attribution = CONTROLLER.currentAttribution();
         if (report == null || attribution == null || report.reportId() != reportId
                 || !hasReportedControl(report, state.ref())) {
@@ -133,7 +147,7 @@ public final class TicketPerfRuntime {
     }
 
     public static void onLoaderControlChanged(LoaderControlState state) {
-        PerfReportData report = CONTROLLER.currentReport();
+        PerfReportData report = currentPublishedReport();
         PerfAttributionSnapshot attribution = CONTROLLER.currentAttribution();
         if (report == null || attribution == null || !hasReportedControl(report, state.ref())) {
             return;
@@ -150,7 +164,7 @@ public final class TicketPerfRuntime {
         if (!level.dimension().equals(ref.dimension())) {
             return;
         }
-        PerfReportData report = CONTROLLER.currentReport();
+        PerfReportData report = currentPublishedReport();
         PerfAttributionSnapshot attribution = CONTROLLER.currentAttribution();
         if (report == null || attribution == null || !hasReportedControl(report, ref)
                 || !attribution.appendLoaderTarget(ref, target)) {
@@ -163,6 +177,10 @@ public final class TicketPerfRuntime {
 
     public static List<LoaderControlUpdate> drainLoaderControlUpdates() {
         return LOADER_UPDATES.drain();
+    }
+
+    private static PerfReportData currentPublishedReport() {
+        return CONTROLLER.currentPublishedSnapshot().report();
     }
 
     private static boolean hasReportedControl(PerfReportData report, BlockLoaderRef ref) {
@@ -231,6 +249,9 @@ public final class TicketPerfRuntime {
     }
 
     public record AutoReport(UUID playerId, PerfReportData data) {
+    }
+
+    public record DeliverySnapshot(PerfReportData report, PerfWorldHotspotIndex hotspots) {
     }
 
     public record StartResult(Component message, boolean started) {

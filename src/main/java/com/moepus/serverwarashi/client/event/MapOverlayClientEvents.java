@@ -6,7 +6,7 @@ import com.moepus.serverwarashi.api.client.map.MapOverlayControls;
 import com.moepus.serverwarashi.client.map.MapContextMenuService;
 import com.moepus.serverwarashi.client.map.MapOverlayRenderer;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
-import com.moepus.serverwarashi.client.state.ClientPerfReportState;
+import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -46,7 +46,7 @@ public final class MapOverlayClientEvents {
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         mapOpen = false;
         PerfMapSubscriptionClient.clear();
-        ClientPerfReportState.clear();
+        ClientPerfStateCoordinator.clearAll();
         MapOverlayControls.clear();
         closeSession();
     }

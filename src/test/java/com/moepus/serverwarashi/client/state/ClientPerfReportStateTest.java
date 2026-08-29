@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientPerfReportStateTest {
@@ -63,6 +64,17 @@ class ClientPerfReportStateTest {
 
         assertEquals(revision, ClientPerfReportState.snapshot().revision());
         assertTrue(ClientPerfReportState.snapshot().profiling());
+    }
+
+    @Test
+    void authoritativeStopRetainsTheLastReportAsStaleData() {
+        PerfReportData completed = report(false, true);
+        ClientPerfReportState.update(completed, true);
+
+        ClientPerfReportState.update(completed, false);
+
+        assertSame(completed, ClientPerfReportState.snapshot().report());
+        assertFalse(ClientPerfReportState.snapshot().profiling());
     }
 
     private static LoaderControlStatePayload payload(PayloadSpec spec) {

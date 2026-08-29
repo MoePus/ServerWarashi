@@ -43,7 +43,8 @@ final class TicketPerfCommands {
         var source = context.getSource();
         var result = TicketPerfRuntime.start(source.getServer(), seconds, playerId(source));
         if (result.started() && open && source.getEntity() instanceof ServerPlayer player) {
-            PerfReportDelivery.open(player, TicketPerfRuntime.currentReport(), true);
+            TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+            PerfReportDelivery.open(player, snapshot.report(), snapshot.hotspots(), true);
         }
         source.sendSuccess(result::message, false);
         return 1;
@@ -51,7 +52,9 @@ final class TicketPerfCommands {
 
     private static int open(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        if (!PerfReportDelivery.open(player, TicketPerfRuntime.currentReport(), TicketPerfRuntime.isProfiling())) {
+        TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+        if (!PerfReportDelivery.open(player,
+                snapshot.report(), snapshot.hotspots(), TicketPerfRuntime.isProfiling())) {
             context.getSource().sendFailure(Component.literal(
                     "Client does not support the performance profiler window."));
             return 0;
@@ -63,7 +66,9 @@ final class TicketPerfCommands {
         var result = TicketPerfRuntime.stopCurrentAnalysis(context.getSource().getServer());
         if (result.data() != null) {
             PerfReportDelivery.toCommandSource(context.getSource(), result.data());
-            PerfReportDelivery.publishNow(context.getSource().getServer(), result.data(), false);
+            TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+            PerfReportDelivery.publishNow(context.getSource().getServer(), result.data(),
+                    snapshot.hotspots(), false);
         } else {
             context.getSource().sendSuccess(result::message, false);
         }

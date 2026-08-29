@@ -446,8 +446,8 @@ class PerfSampleAggregatorTest {
         for (int offset = 0; offset < 300; offset++) {
             int id = reverse ? 299 - offset : offset;
             sampled.sample(new PerfWorkTracker.Snapshot(TickType.ENTITY,
-                    new ResourceLocation("test:level"), Cow.class,
-                    new ResourceLocation(groupId(id)), TickDetailKind.ENTITY, id,
+                    ResourceLocation.parse("test:level"), Cow.class,
+                    ResourceLocation.parse(groupId(id)), TickDetailKind.ENTITY, id,
                     true, id, 64, 0, false, null));
         }
         aggregator.accept(sampled);
@@ -458,8 +458,8 @@ class PerfSampleAggregatorTest {
     void hotspotIndexKeepsNearbyCandidatesBeyondReportRepresentativeLimit() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(21L);
         TickSamples sampled = new TickSamples(null);
-        ResourceLocation dimension = new ResourceLocation("minecraft:overworld");
-        ResourceLocation cow = new ResourceLocation("minecraft:cow");
+        ResourceLocation dimension = ResourceLocation.parse("minecraft:overworld");
+        ResourceLocation cow = ResourceLocation.parse("minecraft:cow");
         for (int id = 0; id < 100; id++) {
             sampled.sample(new PerfWorkTracker.Snapshot(TickType.ENTITY, dimension, Cow.class,
                     cow, TickDetailKind.ENTITY, id, true, id, 64, 0, false, null));
@@ -479,12 +479,12 @@ class PerfSampleAggregatorTest {
     void hotspotIndexKeepsSameBlockPositionInDifferentDimensions() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(22L);
         TickSamples sampled = new TickSamples(null);
-        ResourceLocation furnace = new ResourceLocation("minecraft:furnace");
+        ResourceLocation furnace = ResourceLocation.parse("minecraft:furnace");
         sampled.sample(new PerfWorkTracker.Snapshot(TickType.BLOCK_ENTITY,
-                new ResourceLocation("minecraft:overworld"), Furnace.class,
+                ResourceLocation.parse("minecraft:overworld"), Furnace.class,
                 furnace, TickDetailKind.BLOCK, -1, true, 8, 64, 8, false, null));
         sampled.sample(new PerfWorkTracker.Snapshot(TickType.BLOCK_ENTITY,
-                new ResourceLocation("minecraft:the_nether"), Furnace.class,
+                ResourceLocation.parse("minecraft:the_nether"), Furnace.class,
                 furnace, TickDetailKind.BLOCK, -1, true, 8, 64, 8, false, null));
         aggregator.accept(sampled);
 

@@ -3,6 +3,8 @@ package com.moepus.serverwarashi.common.network;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkClearJobs;
 import com.moepus.serverwarashi.common.modules.weakload.ChunkEntityCollector;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -68,7 +70,7 @@ public final class WeakChunkDelivery {
     private static void updateViewers(MinecraftServer server) {
         SCANNERS.values().forEach(state -> state.viewers.clear());
         Set<UUID> currentViewers = new HashSet<>();
-        for (UUID viewerId : PerfReportDelivery.mapViewers()) {
+        for (UUID viewerId : PerfReportDelivery.worldViewers()) {
             ServerPlayer player = server.getPlayerList().getPlayer(viewerId);
             if (!isEligible(player)) {
                 continue;
@@ -89,7 +91,7 @@ public final class WeakChunkDelivery {
     }
 
     private static boolean isEligible(ServerPlayer player) {
-        return player != null && player.hasPermissions(2)
+        return player != null && PerfSubscriptionAccess.isPermitted(player)
                 && WarashiNetwork.canSendWeakChunks(player);
     }
 
@@ -230,7 +232,8 @@ public final class WeakChunkDelivery {
 
     private static boolean canSend(String dimension, ServerPlayer player) {
         return shouldSend(dimension, dimension(player.serverLevel()),
-                PerfReportDelivery.isMapViewer(player.getUUID()), player.hasPermissions(2))
+                PerfReportDelivery.isWorldViewer(player.getUUID()),
+                PerfSubscriptionAccess.isPermitted(player))
                 && WarashiNetwork.canSendWeakChunks(player);
     }
 
@@ -241,7 +244,8 @@ public final class WeakChunkDelivery {
         return snapshotDimension.equals(playerDimension) && subscribed && permitted;
     }
 
-    private static boolean applyCorrection(Map<Long, WeakChunkSnapshot.ChunkEntry> cache,
+    private static boolean applyCorrection(
+                                           Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> cache,
                                            long chunkPos,
                                            WeakChunkSnapshot.ChunkEntry entry) {
         if (entry == null) {
@@ -251,7 +255,7 @@ public final class WeakChunkDelivery {
         return !entry.equals(previous);
     }
 
-    private static void merge(Map<Long, WeakChunkSnapshot.ChunkEntry> target,
+    private static void merge(Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> target,
                               List<WeakChunkSnapshot.ChunkEntry> entries) {
         for (WeakChunkSnapshot.ChunkEntry entry : entries) {
             target.put(ChunkPos.asLong(entry.chunkX(), entry.chunkZ()), entry);
@@ -302,8 +306,10 @@ public final class WeakChunkDelivery {
     }
 
     static final class SweepCache {
-        private final Map<Long, WeakChunkSnapshot.ChunkEntry> current = new LinkedHashMap<>();
-        private Map<Long, WeakChunkSnapshot.ChunkEntry> completed = new LinkedHashMap<>();
+        private final Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> current =
+                new Long2ObjectLinkedOpenHashMap<>();
+        private Long2ObjectMap<WeakChunkSnapshot.ChunkEntry> completed =
+                new Long2ObjectLinkedOpenHashMap<>();
         private long completedSweepId = -1L;
         private long completedGeneratedAt;
 
@@ -316,7 +322,7 @@ public final class WeakChunkDelivery {
         }
 
         void complete(long sweepId, long generatedAt) {
-            completed = new LinkedHashMap<>(current);
+            completed = new Long2ObjectLinkedOpenHashMap<>(current);
             completedSweepId = sweepId;
             completedGeneratedAt = generatedAt;
             current.clear();

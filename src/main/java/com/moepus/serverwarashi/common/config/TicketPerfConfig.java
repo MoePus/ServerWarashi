@@ -17,4 +17,12 @@ public final class TicketPerfConfig {
     public static int sampleIntervalMicros() {
         return ServerConfig.PERF_SAMPLE_INTERVAL_US.get();
     }
+
+    public static int worldHotspotLimit() {
+        return ServerConfig.PERF_WORLD_HOTSPOT_LIMIT.get();
+    }
+
+    public static boolean allowNonOpSubscriptions() {
+        return ServerConfig.PERF_ALLOW_NON_OP_SUBSCRIPTIONS.get();
+    }
 }

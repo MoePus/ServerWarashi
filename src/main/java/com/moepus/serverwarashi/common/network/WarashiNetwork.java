@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 @EventBusSubscriber(modid = ServerWarashi.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class WarashiNetwork {
-    static final String NETWORK_VERSION = "5";
+    static final String NETWORK_VERSION = "6";
 
     private WarashiNetwork() {
     }
@@ -33,13 +33,23 @@ public final class WarashiNetwork {
                         (payload, context) -> ClientPayloadHandlers.handleWeakChunkCorrection(payload))
                 .playToClient(LoaderControlStatePayload.TYPE, LoaderControlStatePayload.STREAM_CODEC,
                         (payload, context) -> ClientPayloadHandlers.handleLoaderControl(payload))
+                .playToClient(PerfSpatialSnapshotPayload.TYPE,
+                        PerfSpatialSnapshotPayload.STREAM_CODEC,
+                        (payload, context) -> ClientPayloadHandlers.handlePerfSpatial(payload))
+                .playToClient(PerfWorldHotspotPayload.TYPE,
+                        PerfWorldHotspotPayload.STREAM_CODEC,
+                        (payload, context) -> ClientPayloadHandlers.handlePerfWorld(payload))
                 .playToServer(PerfMapSubscriptionPayload.TYPE, PerfMapSubscriptionPayload.STREAM_CODEC,
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
-                                PerfReportDelivery.setMapSubscribed(player, payload.subscribed(),
-                                        TicketPerfRuntime.currentReport(), TicketPerfRuntime.isProfiling());
-                                WeakChunkDelivery.setMapSubscribed(
-                                        player.getUUID(), payload.subscribed());
+                                handleSubscription(player, payload);
+                            }
+                        })
+                .playToServer(PerfScreenSubscriptionPayload.TYPE,
+                        PerfScreenSubscriptionPayload.STREAM_CODEC,
+                        (payload, context) -> {
+                            if (context.player() instanceof ServerPlayer player) {
+                                handleScreenSubscription(player, payload);
                             }
                         })
                 .playToServer(PerfControlPayload.TYPE, PerfControlPayload.STREAM_CODEC,
@@ -63,6 +73,22 @@ public final class WarashiNetwork {
                         });
     }
 
+    private static void handleSubscription(
+            ServerPlayer player, PerfMapSubscriptionPayload payload) {
+        TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+        PerfReportDelivery.setSubscriptions(player, payload,
+                snapshot.report(), snapshot.hotspots(),
+                TicketPerfRuntime.isProfiling());
+        WeakChunkDelivery.setMapSubscribed(player.getUUID(), payload.worldHotspots());
+    }
+
+    private static void handleScreenSubscription(
+            ServerPlayer player, PerfScreenSubscriptionPayload payload) {
+        if (!payload.open()) {
+            PerfReportDelivery.closeScreen(player);
+        }
+    }
+
     private static void handlePerfControl(ServerPlayer player, PerfControlPayload.Action action) {
         if (!player.hasPermissions(2) || player.getServer() == null) {
             return;
@@ -76,21 +102,26 @@ public final class WarashiNetwork {
     private static void toggleProfiling(ServerPlayer player) {
         if (TicketPerfRuntime.isProfiling()) {
             TicketPerfRuntime.stopCurrentAnalysis(player.getServer());
-            PerfReportDelivery.publishNow(player.getServer(), TicketPerfRuntime.currentReport(), false);
-        } else {
-            var result = TicketPerfRuntime.start(
-                    player.getServer(), TicketPerfConfig.autoStopSeconds(), player.getUUID());
-            if (result.started() && player.getServer().isPaused()) {
-                PerfReportDelivery.publishNow(player.getServer(), TicketPerfRuntime.currentReport(), true);
-            }
+            publishCurrent(player, false);
+            return;
+        }
+        var result = TicketPerfRuntime.start(
+                player.getServer(), TicketPerfConfig.autoStopSeconds(), player.getUUID());
+        if (result.started() && player.getServer().isPaused()) {
+            publishCurrent(player, true);
         }
     }
 
     private static void clearReport(ServerPlayer player) {
-        if (!TicketPerfRuntime.clearLastReport()) {
-            return;
+        if (TicketPerfRuntime.clearLastReport()) {
+            publishCurrent(player, false);
         }
-        PerfReportDelivery.publishNow(player.getServer(), TicketPerfRuntime.currentReport(), false);
+    }
+
+    private static void publishCurrent(ServerPlayer player, boolean profiling) {
+        TicketPerfRuntime.DeliverySnapshot snapshot = TicketPerfRuntime.currentDeliverySnapshot();
+        PerfReportDelivery.publishNow(
+                player.getServer(), snapshot.report(), snapshot.hotspots(), profiling);
     }
 
     @SuppressWarnings("UnstableApiUsage")
@@ -109,11 +140,27 @@ public final class WarashiNetwork {
         PacketDistributor.sendToPlayer(player, new PerfReportPayload(report, mode, profiling));
     }
 
-    public static void sendWeakChunks(ServerPlayer player,
-                                      WeakChunkSnapshot snapshot,
-                                      long sweepId,
-                                      boolean sweepComplete) {
-        PacketDistributor.sendToPlayer(player, new WeakChunkPayload(snapshot, sweepId, sweepComplete));
+    public static void sendPerfMapProjection(
+            ServerPlayer player, PerfReportData report, boolean profiling) {
+        PacketDistributor.sendToPlayer(player,
+                PerfSpatialSnapshotPayload.forMap(report, profiling));
+    }
+
+    public static void sendPerfWorldProjection(
+            ServerPlayer player, PerfReportData report, boolean profiling) {
+        PacketDistributor.sendToPlayer(player,
+                PerfSpatialSnapshotPayload.forWorld(report, profiling));
+    }
+
+    public static void sendPerfWorldHotspots(
+            ServerPlayer player, PerfWorldHotspotPayload payload) {
+        PacketDistributor.sendToPlayer(player, payload);
+    }
+
+    public static void sendWeakChunks(ServerPlayer player, WeakChunkSnapshot snapshot,
+                                      long sweepId, boolean sweepComplete) {
+        PacketDistributor.sendToPlayer(
+                player, new WeakChunkPayload(snapshot, sweepId, sweepComplete));
     }
 
     @SuppressWarnings("UnstableApiUsage")

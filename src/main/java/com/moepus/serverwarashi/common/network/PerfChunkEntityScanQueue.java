@@ -8,6 +8,7 @@ import com.moepus.serverwarashi.common.modules.weakload.ChunkEntityCollector.Chu
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkClearJobs;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
+import com.moepus.serverwarashi.common.util.PackedPositionHash;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -213,6 +214,10 @@ final class PerfChunkEntityScanQueue {
     }
 
     record ChunkKey(ResourceKey<Level> dimension, long chunkPos) {
+        @Override
+        public int hashCode() {
+            return 31 * dimension.hashCode() + PackedPositionHash.hash(chunkPos);
+        }
     }
 
     record TrackedCorrection(ChunkKey key, WeakChunkSnapshot.ChunkEntry entry) {

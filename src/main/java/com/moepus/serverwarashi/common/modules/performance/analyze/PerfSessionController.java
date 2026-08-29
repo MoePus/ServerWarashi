@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.common.modules.performance.analyze;
 import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfSamplerSession;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
 import net.minecraft.server.MinecraftServer;
@@ -17,6 +18,7 @@ final class PerfSessionController {
     private final IntSupplier sampleIntervalMicros;
     private ActiveSession active;
     private PerfReportData lastReport;
+    private PerfWorldHotspotIndex lastHotspots;
     private PerfAttributionSnapshot lastAttribution;
     private long nextSessionId = 1L;
 
@@ -118,8 +120,10 @@ final class PerfSessionController {
         return active != null;
     }
 
-    PerfReportData currentReport() {
-        return active == null ? lastReport : active.sampler.latestReport();
+    PerfSamplerSession.PublishedSnapshot currentPublishedSnapshot() {
+        return active == null
+                ? new PerfSamplerSession.PublishedSnapshot(lastReport, lastHotspots)
+                : active.sampler.latestPublishedSnapshot();
     }
 
     PerfAttributionSnapshot currentAttribution() {
@@ -131,6 +135,7 @@ final class PerfSessionController {
             return false;
         }
         lastReport = null;
+        lastHotspots = null;
         lastAttribution = null;
         return true;
     }
@@ -142,6 +147,7 @@ final class PerfSessionController {
             PerfWorkTracker.deactivate();
         }
         lastReport = null;
+        lastHotspots = null;
         lastAttribution = null;
         nextSessionId = 1L;
     }
@@ -155,6 +161,7 @@ final class PerfSessionController {
         active = null;
         PerfWorkTracker.deactivate();
         lastReport = session.sampler.stop(retainInitialLayout);
+        lastHotspots = session.sampler.latestHotspots();
         lastAttribution = lastReport.reportId() == 0L ? null : session.attribution;
         return lastReport;
     }

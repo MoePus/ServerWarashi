@@ -6,6 +6,10 @@ import java.util.function.Consumer;
 public final class ClientPayloadHandlers {
     private static Consumer<PerfReportPayload> perfReportHandler = ignored -> {
     };
+    private static Consumer<PerfSpatialSnapshotPayload> perfSpatialHandler = ignored -> {
+    };
+    private static Consumer<PerfWorldHotspotPayload> perfWorldHandler = ignored -> {
+    };
     private static Consumer<WeakChunkPayload> weakChunkHandler = ignored -> {
     };
     private static Consumer<WeakChunkCorrectionPayload> weakChunkCorrectionHandler = ignored -> {
@@ -22,6 +26,22 @@ public final class ClientPayloadHandlers {
 
     public static void handlePerfReport(PerfReportPayload payload) {
         perfReportHandler.accept(payload);
+    }
+
+    public static void setPerfSpatialHandler(Consumer<PerfSpatialSnapshotPayload> handler) {
+        perfSpatialHandler = Objects.requireNonNull(handler, "handler");
+    }
+
+    public static void handlePerfSpatial(PerfSpatialSnapshotPayload payload) {
+        perfSpatialHandler.accept(payload);
+    }
+
+    public static void setPerfWorldHandler(Consumer<PerfWorldHotspotPayload> handler) {
+        perfWorldHandler = Objects.requireNonNull(handler, "handler");
+    }
+
+    public static void handlePerfWorld(PerfWorldHotspotPayload payload) {
+        perfWorldHandler.accept(payload);
     }
 
     public static void setWeakChunkHandler(Consumer<WeakChunkPayload> handler) {
