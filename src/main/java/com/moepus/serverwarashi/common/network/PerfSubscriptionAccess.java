@@ -10,15 +10,8 @@ final class PerfSubscriptionAccess {
 
     static boolean isPermitted(ServerPlayer player) {
         MinecraftServer server = player.getServer();
-        boolean singleplayerOwner = server != null
-                && server.isSingleplayerOwner(player.getGameProfile());
-        return isPermitted(player.hasPermissions(2),
-                TicketPerfConfig.allowNonOpSubscriptions(), singleplayerOwner);
-    }
-
-    static boolean isPermitted(boolean operator,
-                               boolean allowNonOperators,
-                               boolean singleplayerOwner) {
-        return operator || allowNonOperators || singleplayerOwner;
+        boolean singleplayer = server != null && server.isSingleplayer();
+        return PerfAccessPolicy.canSubscribe(player.hasPermissions(2),
+                TicketPerfConfig.allowNonOpSubscriptions(), singleplayer);
     }
 }

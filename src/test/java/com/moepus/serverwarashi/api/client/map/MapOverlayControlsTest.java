@@ -13,6 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapOverlayControlsTest {
     @Test
+    void showsControlsForConnectedSingleplayerWithoutOperatorCommands() {
+        assertTrue(MapOverlayControls.hasPerfPermission(true, false, true));
+        assertTrue(MapOverlayControls.hasPerfPermission(true, true, false));
+        assertFalse(MapOverlayControls.hasPerfPermission(true, false, false));
+        assertFalse(MapOverlayControls.hasPerfPermission(false, false, true));
+    }
+
+    @Test
     void initializesBeforeDeliveringButtons() {
         List<Button> delivered = new ArrayList<>();
 

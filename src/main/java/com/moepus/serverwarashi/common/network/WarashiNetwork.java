@@ -90,7 +90,9 @@ public final class WarashiNetwork {
     }
 
     private static void handlePerfControl(ServerPlayer player, PerfControlPayload.Action action) {
-        if (!player.hasPermissions(2) || player.getServer() == null) {
+        var server = player.getServer();
+        if (server == null || !PerfAccessPolicy.canControl(
+                player.hasPermissions(2), server.isSingleplayer())) {
             return;
         }
         switch (action) {

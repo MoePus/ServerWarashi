@@ -4,6 +4,7 @@ import com.moepus.serverwarashi.client.network.PerfControlClient;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
 import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
+import com.moepus.serverwarashi.common.network.PerfAccessPolicy;
 import com.moepus.serverwarashi.common.network.PerfControlPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -120,8 +121,18 @@ public final class MapOverlayControls {
     }
 
     private static boolean hasPerfPermission() {
-        var connection = Minecraft.getInstance().getConnection();
-        return connection != null && connection.getCommands().getRoot().getChild("warashi") != null;
+        Minecraft minecraft = Minecraft.getInstance();
+        var connection = minecraft.getConnection();
+        boolean commandAvailable = connection != null
+                && connection.getCommands().getRoot().getChild("warashi") != null;
+        return hasPerfPermission(connection != null, commandAvailable,
+                minecraft.getSingleplayerServer() != null);
+    }
+
+    static boolean hasPerfPermission(boolean connected,
+                                     boolean commandAvailable,
+                                     boolean singleplayer) {
+        return connected && PerfAccessPolicy.canControl(commandAvailable, singleplayer);
     }
 
     private static boolean hasCompletedReport(ClientPerfMapState.Snapshot snapshot) {
