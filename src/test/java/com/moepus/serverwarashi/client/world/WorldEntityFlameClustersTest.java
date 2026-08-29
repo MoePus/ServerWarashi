@@ -29,8 +29,7 @@ class WorldEntityFlameClustersTest {
         assertEquals(1.0D, merged.metric().mspt(), 0.000_001D);
         assertEquals(2.0D, merged.metric().max(), 0.000_001D);
         assertEquals(2L, merged.metric().samples());
-        assertEquals(2.0D + Math.log(3.0D) / Math.log(2.0D),
-                merged.effectiveSamples(), 0.000_001D);
+        assertEquals(2.0D, merged.flameStrength(), 0.000_001D);
         assertEquals(2.28D, merged.x(), 0.000_001D);
     }
 
@@ -80,7 +79,17 @@ class WorldEntityFlameClustersTest {
                 WorldEntityFlameClusters.cluster(List.of(recent, old), 100L).get(0);
 
         assertEquals(2.0D, marker.metric().mspt(), 0.000_001D);
-        assertEquals(2.0D, marker.effectiveSamples(), 0.000_001D);
+        assertEquals(2.0D, marker.flameStrength(), 0.000_001D);
+    }
+
+    @Test
+    void historicalMaximumDoesNotPinFlameStrength() {
+        var input = new WorldEntityFlameClusters.Input(
+                bounds(new Point(0.0D, 0.0D)), metric(0.02D, 0.07D, 200L), 100L, 1);
+
+        WorldEntityFlameClusters.Marker marker = WorldEntityFlameClusters.single(input, 100L);
+
+        assertEquals(2.0D, marker.flameStrength(), 0.000_001D);
     }
 
     @Test

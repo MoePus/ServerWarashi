@@ -72,10 +72,10 @@ final class WorldPerfObjectRenderer {
             return;
         }
         for (ClientPerfWorldState.Hotspot hotspot : snapshot.hotspots()) {
-            double effective = ObjectPerformanceScale.effectiveSamples(
+            double flameStrength = ObjectPerformanceScale.averageSamples(
                     hotspot.metric(), hotspot.measurementTicks());
-            if (WorldOverlayMath.shouldRender(effective, currentFilter)) {
-                next.add(new Candidate(hotspot, hotspot.metric(), effective));
+            if (WorldOverlayMath.shouldRender(flameStrength, currentFilter)) {
+                next.add(new Candidate(hotspot, hotspot.metric(), flameStrength));
                 if (next.size() == WorldPerfObjectBuffers.MAX_MARKER_COUNT) {
                     break;
                 }
@@ -139,7 +139,7 @@ final class WorldPerfObjectRenderer {
                 (bounds.minX + bounds.maxX) * 0.5D, bounds.maxY,
                 (bounds.minZ + bounds.maxZ) * 0.5D);
         var visual = new WorldEntityFlameClusters.Visual(
-                candidate.effectiveSamples(), phase, 1);
+                candidate.flameStrength(), phase, 1);
         return new WorldEntityFlameClusters.Marker(anchor, candidate.metric(), visual);
     }
 
@@ -277,6 +277,6 @@ final class WorldPerfObjectRenderer {
 
     private record Candidate(ClientPerfWorldState.Hotspot hotspot,
                              PerfReportData.Metric metric,
-                             double effectiveSamples) {
+                             double flameStrength) {
     }
 }

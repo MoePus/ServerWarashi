@@ -181,8 +181,8 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
 
     static void encodeMarker(Entry entry, FloatBuffer target) {
         WorldEntityFlameClusters.Marker marker = entry.marker();
-        int rgb = WorldOverlayMath.colorRgb(marker.effectiveSamples());
-        int strength = WorldOverlayMath.packFlameStrength(marker.effectiveSamples());
+        int rgb = WorldOverlayMath.colorRgb(marker.flameStrength());
+        int strength = WorldOverlayMath.packFlameStrength(marker.flameStrength());
         WorldOverlayMath.PackedLabel label = WorldOverlayMath.packLabel(
                 WorldOverlayMath.roundedMicros(marker.metric()));
         target.put((float) entry.x()).put((float) (entry.y() + 0.04D))
@@ -191,7 +191,7 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
                 .put((rgb & 0xFF) / 255.0F)
                 .put((float) WorldFlameParticleLayout.phaseWord(marker.phase()));
         target.put((float) label.lowWord()).put((float) label.markedHighWord())
-                .put(WorldOverlayMath.packLabelStrength(marker.effectiveSamples()) / 255.0F)
+                .put(WorldOverlayMath.packLabelStrength(marker.flameStrength()) / 255.0F)
                 .put(0.0F);
     }
 

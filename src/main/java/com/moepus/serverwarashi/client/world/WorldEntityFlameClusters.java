@@ -44,7 +44,7 @@ final class WorldEntityFlameClusters {
                 mspt, Math.max(mspt, maximum), samples);
         var anchor = new Anchor(centerX(input.bounds()), input.bounds().maxY,
                 centerZ(input.bounds()));
-        var visual = new Visual(ObjectPerformanceScale.effectiveSamples(
+        var visual = new Visual(ObjectPerformanceScale.averageSamples(
                 metric, measurementTicks(input, tickCount)),
                 updatePhase(0x811C9DC5, input.stableId()) & 0x7FFF, 1);
         return new Marker(anchor, metric, visual);
@@ -56,7 +56,6 @@ final class WorldEntityFlameClusters {
         double totalMax = 0.0D;
         long totalSamples = 0L;
         double averageSamples = 0.0D;
-        double maximumSamples = 0.0D;
         double totalWeight = 0.0D;
         double x = 0.0D;
         double z = 0.0D;
@@ -71,7 +70,6 @@ final class WorldEntityFlameClusters {
             totalSamples = saturatedAdd(totalSamples, Math.max(0L, input.metric().samples()));
             long inputTicks = measurementTicks(input, tickCount);
             averageSamples += ObjectPerformanceScale.averageSamples(input.metric(), inputTicks);
-            maximumSamples += ObjectPerformanceScale.estimatedMaxSamples(input.metric(), inputTicks);
             totalWeight += weight;
             x += centerX(input.bounds()) * weight;
             z += centerZ(input.bounds()) * weight;
@@ -81,8 +79,7 @@ final class WorldEntityFlameClusters {
         PerfReportData.Metric metric = new PerfReportData.Metric(
                 totalMspt, Math.max(totalMspt, totalMax), totalSamples);
         return new Marker(new Anchor(x / totalWeight, y, z / totalWeight), metric,
-                new Visual(ObjectPerformanceScale.effectiveSamples(averageSamples, maximumSamples),
-                        phase & 0x7FFF, group.size()));
+                new Visual(averageSamples, phase & 0x7FFF, group.size()));
     }
 
     private static long measurementTicks(Input input, long fallback) {
@@ -123,7 +120,7 @@ final class WorldEntityFlameClusters {
     record Anchor(double x, double y, double z) {
     }
 
-    record Visual(double effectiveSamples, int phase, int memberCount) {
+    record Visual(double flameStrength, int phase, int memberCount) {
     }
 
     record Marker(Anchor anchor, PerfReportData.Metric metric, Visual visual) {
@@ -139,8 +136,8 @@ final class WorldEntityFlameClusters {
             return anchor.z();
         }
 
-        double effectiveSamples() {
-            return visual.effectiveSamples();
+        double flameStrength() {
+            return visual.flameStrength();
         }
 
         int phase() {
