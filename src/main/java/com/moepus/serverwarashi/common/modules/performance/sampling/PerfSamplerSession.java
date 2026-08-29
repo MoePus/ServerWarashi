@@ -2,6 +2,7 @@ package com.moepus.serverwarashi.common.modules.performance.sampling;
 
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 
 import java.util.Objects;
 import java.util.Queue;
@@ -28,7 +29,7 @@ public final class PerfSamplerSession {
     private final TickGcTimeTracker gcTimeTracker = new TickGcTimeTracker();
     private final Thread samplerThread;
     private final WindowsTimerResolution timerResolution = new WindowsTimerResolution();
-    private volatile PerfReportData latestReport;
+    private volatile PublishedSnapshot latestSnapshot;
     private volatile TickSamples currentTick;
     private TickSamples betweenTicks = new TickSamples(null);
     private long sampleAttempts;
@@ -53,9 +54,11 @@ public final class PerfSamplerSession {
         aggregator = new PerfSampleAggregator(sessionId);
         nanoTime = options.nanoTime();
         analysisClock = new AnalysisClock(nanoTime);
-        latestReport = options.initialAttribution() == null
+        PerfReportData initialReport = options.initialAttribution() == null
                 ? PerfReportData.empty(intervalMicros)
                 : aggregator.buildLoaderLayoutOnly(options.initialAttribution(), intervalMicros);
+        latestSnapshot = new PublishedSnapshot(initialReport,
+                PerfWorldHotspotIndex.empty(initialReport.reportId(), 0L, 0L));
         intervalRandom = new SplittableRandom(sessionId ^ nanoTime.getAsLong());
         samplerThread = new Thread(this::runSampler, "ServerWarashi-PerfSampler");
         samplerThread.setDaemon(true);
@@ -178,16 +181,26 @@ public final class PerfSamplerSession {
         synchronized (aggregationLock) {
             drainClosedTicks(measurement);
             if (acceptedTicks > 0L) {
-                latestReport = buildReport(measurement);
+                latestSnapshot = buildSnapshot(measurement);
             } else if (!retainInitialLayout) {
-                latestReport = PerfReportData.empty(intervalMicros);
+                PerfReportData empty = PerfReportData.empty(intervalMicros);
+                latestSnapshot = new PublishedSnapshot(empty,
+                        PerfWorldHotspotIndex.empty(0L, 0L, 0L));
             }
         }
-        return latestReport;
+        return latestSnapshot.report();
     }
 
     public PerfReportData latestReport() {
-        return latestReport;
+        return latestSnapshot.report();
+    }
+
+    public PerfWorldHotspotIndex latestHotspots() {
+        return latestSnapshot.hotspots();
+    }
+
+    public PublishedSnapshot latestPublishedSnapshot() {
+        return latestSnapshot;
     }
 
     private void runSampler() {
@@ -262,7 +275,7 @@ public final class PerfSamplerSession {
             int entryKinds = entryKinds(tick);
             boolean firstEntryKind = (entryKinds & ~publishedEntryKinds) != 0;
             if (shouldPublishReport(acceptedTicks, tick.refreshReport, firstEntryKind)) {
-                latestReport = buildReport(measurement);
+                latestSnapshot = buildSnapshot(measurement);
             }
             publishedEntryKinds |= entryKinds;
         }
@@ -324,13 +337,15 @@ public final class PerfSamplerSession {
         synchronized (aggregationLock) {
             drainClosedTicks(measurement);
             if (acceptedTicks > 0L) {
-                latestReport = buildReport(measurement);
+                latestSnapshot = buildSnapshot(measurement);
             }
         }
     }
 
-    private PerfReportData buildReport(Measurement measurement) {
-        return aggregator.build(measurement.elapsedNanos(), measurement.sampleAttempts(), intervalMicros);
+    private PublishedSnapshot buildSnapshot(Measurement measurement) {
+        PerfSampleAggregator.BuildSnapshot build = aggregator.buildSnapshot(
+                measurement.elapsedNanos(), measurement.sampleAttempts(), intervalMicros);
+        return new PublishedSnapshot(build.report(), build.hotspots());
     }
 
     private void joinSampler() {
@@ -343,6 +358,9 @@ public final class PerfSamplerSession {
     }
 
     private record Measurement(long elapsedNanos, long sampleAttempts) {
+    }
+
+    public record PublishedSnapshot(PerfReportData report, PerfWorldHotspotIndex hotspots) {
     }
 
     private enum SamplerStatus {

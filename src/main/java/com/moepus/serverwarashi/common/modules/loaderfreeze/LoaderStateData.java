@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.modules.loaderfreeze;
 
+import com.moepus.serverwarashi.common.util.PackedPositionHash;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -200,6 +201,12 @@ public final class LoaderStateData extends SavedData {
             Objects.requireNonNull(ownerPos, "ownerPos");
             return new LoaderKey(controllerId, ownerPos.immutable());
         }
+
+        @Override
+        public int hashCode() {
+            return 31 * controllerId.hashCode()
+                    + PackedPositionHash.hash(ownerPos.asLong());
+        }
     }
 
     private record LoadedEntry(LoaderKey key, LoaderRecord record) {
@@ -213,6 +220,12 @@ public final class LoaderStateData extends SavedData {
 
         public static LoaderIdentity of(ResourceLocation controllerId, BlockPos ownerPos) {
             return new LoaderIdentity(controllerId, ownerPos);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * controllerId.hashCode()
+                    + PackedPositionHash.hash(ownerPos.asLong());
         }
     }
 

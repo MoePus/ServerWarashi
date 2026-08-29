@@ -5,6 +5,8 @@ import com.moepus.serverwarashi.common.core.ticket.TicketUtils;
 import com.moepus.serverwarashi.common.mixin.accessor.PersistentEntitySectionManagerAccessor;
 import com.moepus.serverwarashi.common.mixin.accessor.ServerLevelAccessor;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
@@ -19,7 +21,6 @@ import net.minecraft.world.level.entity.PersistentEntitySectionManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,7 +84,7 @@ public final class OwnerChunks {
         }
 
         EntitySectionStorage<?> sectionStorage = sectionStorage(level);
-        Map<Long, ChunkLoad> chunkLoads = new HashMap<>();
+        Long2ObjectMap<ChunkLoad> chunkLoads = new Long2ObjectOpenHashMap<>();
         List<Entry> entries = new ArrayList<>(ownerMap.size());
         for (var owner : ownerMap.entrySet()) {
             Set<Long> chunks = owner.getValue();
@@ -95,7 +96,7 @@ public final class OwnerChunks {
     public static Map<TicketOwner, Set<Long>> collectMap(ServerLevel level) {
         Map<TicketOwner, Set<Long>> ownerMap = new HashMap<>();
         visitOwnerChunks(level, (owner, chunkPos, paused) ->
-                ownerMap.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos));
+                ownerMap.computeIfAbsent(owner, ignored -> new LongOpenHashSet()).add(chunkPos));
         return ownerMap;
     }
 
@@ -106,9 +107,9 @@ public final class OwnerChunks {
         Map<TicketOwner, Set<Long>> activeOnly = new HashMap<>();
         Map<TicketOwner, Set<Long>> all = new HashMap<>();
         visitOwnerChunks(level, (owner, chunkPos, paused) -> {
-            all.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
+            all.computeIfAbsent(owner, ignored -> new LongOpenHashSet()).add(chunkPos);
             if (!paused) {
-                activeOnly.computeIfAbsent(owner, ignored -> new HashSet<>()).add(chunkPos);
+                activeOnly.computeIfAbsent(owner, ignored -> new LongOpenHashSet()).add(chunkPos);
             }
         });
         return new BothMaps(activeOnly, all);
@@ -135,13 +136,13 @@ public final class OwnerChunks {
 
     public static Stats stats(ServerLevel level, Set<Long> chunks) {
         EntitySectionStorage<?> sectionStorage = sectionStorage(level);
-        return computeStats(level, chunks, sectionStorage, new HashMap<>());
+        return computeStats(level, chunks, sectionStorage, new Long2ObjectOpenHashMap<>());
     }
 
     private static Stats computeStats(ServerLevel level,
                                       Set<Long> chunks,
                                       EntitySectionStorage<?> sectionStorage,
-                                      Map<Long, ChunkLoad> chunkLoads) {
+                                      Long2ObjectMap<ChunkLoad> chunkLoads) {
         int totalBlockEntities = 0;
         int totalEntities = 0;
         for (long chunkPos : chunks) {

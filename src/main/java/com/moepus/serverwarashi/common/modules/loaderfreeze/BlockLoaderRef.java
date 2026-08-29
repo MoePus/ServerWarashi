@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.modules.loaderfreeze;
 
+import com.moepus.serverwarashi.common.util.PackedPositionHash;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -23,5 +24,11 @@ public record BlockLoaderRef(
     public static BlockLoaderRef of(ServerLevel level, ResourceLocation controllerId, BlockPos ownerPos) {
         Objects.requireNonNull(level, "level");
         return new BlockLoaderRef(level.dimension(), controllerId, ownerPos);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = 31 * dimension.hashCode() + controllerId.hashCode();
+        return 31 * result + PackedPositionHash.hash(ownerPos.asLong());
     }
 }

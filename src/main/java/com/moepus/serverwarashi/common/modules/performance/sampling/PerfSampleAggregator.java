@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.common.modules.performance.sampling;
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
@@ -13,22 +14,33 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.SplittableRandom;
 import java.util.function.ToDoubleFunction;
 
 final class PerfSampleAggregator {
     private static final long GC_WINDOW_NANOS = 1_000_000_000L;
     private static final int CHUNK_VIEW_LIMIT_PER_METRIC = 256;
     private static final int TICKABLE_VIEW_LIMIT_PER_METRIC = 256;
-    private static final int MAX_COORDINATES_PER_GROUP = 16;
     private static final int TRACKED_KEY_LIMIT = 16_384;
     private static final int DROPPED_HASH_LIMIT = 65_536;
     private static final int REPLACEMENT_INTERVAL = 1_024;
+    private static final Comparator<PerfReportData.ChunkEntry> STABLE_CHUNK_ORDER = Comparator
+            .comparing(PerfReportData.ChunkEntry::dimension)
+            .thenComparingInt(PerfReportData.ChunkEntry::chunkX)
+            .thenComparingInt(PerfReportData.ChunkEntry::chunkZ);
+    private static final Comparator<PerfReportData.TickableEntry> STABLE_TICKABLE_ORDER = Comparator
+            .comparingInt((PerfReportData.TickableEntry entry) -> entry.type().ordinal())
+            .thenComparing(PerfReportData.TickableEntry::dimension)
+            .thenComparing(PerfReportData.TickableEntry::className)
+            .thenComparing(PerfReportData.TickableEntry::detailId)
+            .thenComparingInt(entry -> entry.detailKind().ordinal())
+            .thenComparingInt(PerfReportData.TickableEntry::entityId)
+            .thenComparingInt(PerfReportData.TickableEntry::x)
+            .thenComparingInt(PerfReportData.TickableEntry::y)
+            .thenComparingInt(PerfReportData.TickableEntry::z)
+            .thenComparing(PerfReportData.TickableEntry::eventLoop);
     private final long reportId;
-    private final SplittableRandom random;
     private final PerfOwnerAggregator ownerAggregator = new PerfOwnerAggregator();
     private final Map<TickSamples.TickableKey, TickableAggregate> tickables = new HashMap<>();
-    private final Map<CoordinateGroup, CoordinateReservoir> coordinateGroups = new HashMap<>();
     private final Map<TickSamples.ChunkKey, SampleStatistics> chunks = new HashMap<>();
     private final ArrayDeque<GcTick> recentGcTicks = new ArrayDeque<>();
     private final IntOpenHashSet droppedTickableHashes = new IntOpenHashSet();
@@ -36,12 +48,12 @@ final class PerfSampleAggregator {
     private int tickableDropsUntilReplacement = REPLACEMENT_INTERVAL;
     private int chunkDropsUntilReplacement = REPLACEMENT_INTERVAL;
     private long tickCount;
+    private long hotspotRevision;
     private long totalTickNanos;
     private long recentGcTotalMillis;
 
     PerfSampleAggregator(long seed) {
         reportId = seed;
-        random = new SplittableRandom(seed);
     }
 
     PerfReportData buildLoaderLayoutOnly(PerfAttributionSnapshot attribution, int intervalMicros) {
@@ -65,26 +77,36 @@ final class PerfSampleAggregator {
     }
 
     PerfReportData build(long elapsedNanos, long totalSamples, int intervalMicros) {
+        return buildSnapshot(elapsedNanos, totalSamples, intervalMicros).report();
+    }
+
+    BuildSnapshot buildSnapshot(long elapsedNanos, long totalSamples, int intervalMicros) {
         double nanosPerSample = SampleDensity.nanosPerAttempt(
                 elapsedNanos, totalSamples, intervalMicros);
-        ObjectBuild objectBuild = buildObjects(nanosPerSample);
+        PerfObjectSnapshotBuilder.Build objectBuild =
+                PerfObjectSnapshotBuilder.build(tickables, tickCount, nanosPerSample);
         var limitedChunks = PerfReportLimits.topMetricUnion(
                 chunkEntries(objectBuild.chunkCounts(), nanosPerSample), CHUNK_VIEW_LIMIT_PER_METRIC,
-                PerfReportData.ChunkEntry::metric);
+                PerfReportData.ChunkEntry::metric, STABLE_CHUNK_ORDER);
         var sampledTickables = objectBuild.tickables();
         var limitedTickables = PerfReportLimits.topMetricUnion(
                 sampledTickables.entries(), TICKABLE_VIEW_LIMIT_PER_METRIC,
-                PerfReportData.TickableEntry::metric);
+                PerfReportData.TickableEntry::metric, STABLE_TICKABLE_ORDER);
         PerfOwnerAggregator.Build ownerBuild = ownerAggregator.build(tickCount, nanosPerSample);
         GcMetric gc = gcMetric();
         List<PerfReportData.TickableEntry> reportTickables = withGcTickable(limitedTickables.entries(), gc);
         double serverMspt = tickCount == 0 ? 0.0D : totalTickNanos / 1_000_000.0D / tickCount;
-        return new PerfReportData(reportId, serverMspt, elapsedNanos / 1_000_000L, System.currentTimeMillis(),
+        PerfReportData report = new PerfReportData(
+                reportId, serverMspt, elapsedNanos / 1_000_000L, System.currentTimeMillis(),
                 tickCount, totalSamples, intervalMicros,
                 omitted(limitedChunks.omitted(), droppedChunkHashes),
                 omitted((long) sampledTickables.omitted() + limitedTickables.omitted(), droppedTickableHashes),
                 ownerBuild.omitted(), ownerBuild.omittedLoaderSources(),
                 limitedChunks.entries(), reportTickables, ownerBuild.entries(), ownerBuild.loaderSources());
+        PerfWorldHotspotIndex hotspots = new PerfWorldHotspotIndex(
+                reportId, ++hotspotRevision, tickCount, Math.max(0L, Math.round(nanosPerSample)),
+                objectBuild.hotspots());
+        return new BuildSnapshot(report, hotspots);
     }
 
     private void recordGc(TickSamples tick) {
@@ -151,7 +173,6 @@ final class PerfSampleAggregator {
         }
         tickableDropsUntilReplacement = REPLACEMENT_INTERVAL;
         TickSamples.TickableKey evicted = evictLightest(tickables, TickableAggregate::totalWeight);
-        forgetCoordinate(evicted);
         recordDropped(droppedTickableHashes, evicted);
         return addTickable(key);
     }
@@ -159,35 +180,7 @@ final class PerfSampleAggregator {
     private TickableAggregate addTickable(TickSamples.TickableKey key) {
         TickableAggregate aggregate = new TickableAggregate();
         tickables.put(key, aggregate);
-        if (isObject(key.type())) {
-            coordinateGroups.computeIfAbsent(CoordinateGroup.from(key), ignored -> new CoordinateReservoir())
-                    .offer(key, random);
-        }
         return aggregate;
-    }
-
-    private void forgetCoordinate(TickSamples.TickableKey key) {
-        if (key == null || !isObject(key.type())) {
-            return;
-        }
-        CoordinateGroup group = CoordinateGroup.from(key);
-        CoordinateReservoir reservoir = coordinateGroups.get(group);
-        if (reservoir == null || !reservoir.remove(key)) {
-            return;
-        }
-        refillCoordinate(group, reservoir);
-        if (reservoir.isEmpty()) {
-            coordinateGroups.remove(group);
-        }
-    }
-
-    private void refillCoordinate(CoordinateGroup group, CoordinateReservoir reservoir) {
-        for (TickSamples.TickableKey candidate : tickables.keySet()) {
-            if (group.equals(CoordinateGroup.from(candidate)) && !reservoir.contains(candidate)) {
-                reservoir.offer(candidate, random);
-                return;
-            }
-        }
     }
 
     private SampleStatistics chunkStatistics(TickSamples.ChunkKey key) {
@@ -237,52 +230,27 @@ final class PerfSampleAggregator {
     }
 
     private List<PerfReportData.ChunkEntry> chunkEntries(
-            Map<TickSamples.ChunkKey, ObjectCounts> objectCounts,
+            Map<TickSamples.ChunkKey, PerfObjectSnapshotBuilder.ObjectCounts> objectCounts,
             double nanosPerSample) {
         List<PerfReportData.ChunkEntry> result = new ArrayList<>(chunks.size());
         chunks.forEach((key, stats) -> {
             ChunkPos pos = new ChunkPos(key.position());
-            ObjectCounts counts = objectCounts.getOrDefault(key, ObjectCounts.EMPTY);
+            PerfObjectSnapshotBuilder.ObjectCounts counts = objectCounts.getOrDefault(
+                    key, PerfObjectSnapshotBuilder.ObjectCounts.EMPTY);
             result.add(new PerfReportData.ChunkEntry(key.dimension(), pos.x, pos.z,
-                    counts.entities, counts.blockEntities, counts.top(TickType.ENTITY),
+                    counts.count(TickType.ENTITY), counts.count(TickType.BLOCK_ENTITY),
+                    counts.top(TickType.ENTITY),
                     counts.top(TickType.BLOCK_ENTITY), stats.metric(tickCount, nanosPerSample)));
         });
         return result;
     }
 
-    private ObjectBuild buildObjects(double nanosPerSample) {
-        Map<TickSamples.ChunkKey, ObjectCounts> chunkCounts = new HashMap<>();
-        List<PerfReportData.TickableEntry> entries = new ArrayList<>();
-        tickables.forEach((key, aggregate) -> {
-            TickSamples.ChunkKey chunk = aggregate.chunkKey(key);
-            if (chunk != null) {
-                chunkCounts.computeIfAbsent(chunk, ignored -> new ObjectCounts()).add(key, aggregate);
-            }
-            if (isRepresentative(key)) {
-                entries.add(aggregate.toReport(key, tickCount, nanosPerSample));
-            }
-        });
-        var limited = new PerfReportLimits.Limited<>(List.copyOf(entries), tickables.size() - entries.size());
-        return new ObjectBuild(chunkCounts, limited);
-    }
-
-    private boolean isRepresentative(TickSamples.TickableKey key) {
-        if (!isObject(key.type())) {
-            return true;
-        }
-        CoordinateReservoir reservoir = coordinateGroups.get(CoordinateGroup.from(key));
-        return reservoir != null && reservoir.contains(key);
-    }
-
-    private static boolean isObject(TickType type) {
-        return type == TickType.ENTITY || type == TickType.BLOCK_ENTITY;
-    }
-
-    private static final class TickableAggregate {
+    static final class TickableAggregate {
         final SampleStatistics stats = new SampleStatistics();
         boolean positioned;
         boolean chunkPosition;
         int x, y, z;
+        long lastSeenTick;
 
         void record(TickSamples.TickCount count, long tick) {
             positioned = count.positioned;
@@ -290,6 +258,7 @@ final class PerfSampleAggregator {
             x = count.x;
             y = count.y;
             z = count.z;
+            lastSeenTick = tick;
             stats.record(count.count, tick);
         }
 
@@ -301,11 +270,20 @@ final class PerfSampleAggregator {
                 TickSamples.TickableKey key,
                 long ticks,
                 double nanosPerSample) {
+            return toReport(key, metric(ticks, nanosPerSample));
+        }
+
+        PerfReportData.TickableEntry toReport(TickSamples.TickableKey key,
+                                              PerfReportData.Metric metric) {
             String displayName = key.displayName().isEmpty() ? className(key.workClass()) : key.displayName();
             return new PerfReportData.TickableEntry(key.type(), key.dimension(), displayName,
                     nullableId(key.detailId()), key.detailKind(), key.entityId(), positioned,
                     x, y, z, chunkPosition, key.eventLoop(),
-                    stats.metric(ticks, nanosPerSample));
+                    metric);
+        }
+
+        PerfReportData.Metric metric(long ticks, double nanosPerSample) {
+            return stats.metric(ticks, nanosPerSample);
         }
 
         TickSamples.ChunkKey chunkKey(TickSamples.TickableKey key) {
@@ -315,7 +293,7 @@ final class PerfSampleAggregator {
             return new TickSamples.ChunkKey(key.dimension(), ChunkPos.asLong(x >> 4, z >> 4));
         }
 
-        private static String className(Class<?> type) {
+        static String className(Class<?> type) {
             String simple = type.getSimpleName();
             if (!simple.isEmpty()) {
                 return simple;
@@ -327,14 +305,12 @@ final class PerfSampleAggregator {
             return name.substring(packageEnd + 1, end);
         }
 
-        private static String nullableId(ResourceLocation id) {
+        static String nullableId(ResourceLocation id) {
             return id == null ? "" : id.toString();
         }
     }
 
-    private record ObjectBuild(
-            Map<TickSamples.ChunkKey, ObjectCounts> chunkCounts,
-            PerfReportLimits.Limited<PerfReportData.TickableEntry> tickables) {
+    record BuildSnapshot(PerfReportData report, PerfWorldHotspotIndex hotspots) {
     }
 
     private record GcTick(long completedAtNanos, long gcMillis) {
@@ -343,99 +319,4 @@ final class PerfSampleAggregator {
     private record GcMetric(double averageMillis, long maxMillis, long ticks) {
     }
 
-    private static final class ObjectCounts {
-        private static final int TOP_LIMIT = 3;
-        static final ObjectCounts EMPTY = new ObjectCounts();
-        final Map<ObjectType, ObjectSummary> types = new HashMap<>();
-        int entities;
-        int blockEntities;
-
-        void add(TickSamples.TickableKey key, TickableAggregate aggregate) {
-            if (key.type() == TickType.ENTITY) {
-                entities++;
-            } else if (key.type() == TickType.BLOCK_ENTITY) {
-                blockEntities++;
-            } else {
-                return;
-            }
-            types.computeIfAbsent(new ObjectType(
-                            key.type(), key.workClass(), key.detailId(), key.detailKind()),
-                    ignored -> new ObjectSummary()).add(aggregate);
-        }
-
-        List<PerfReportData.ObjectCount> top(TickType type) {
-            return types.entrySet().stream()
-                    .filter(entry -> entry.getKey().type == type)
-                    .sorted(Comparator.<Map.Entry<ObjectType, ObjectSummary>>comparingInt(
-                                    entry -> entry.getValue().count)
-                            .reversed()
-                            .thenComparing(entry -> entry.getKey().workClass.getName())
-                            .thenComparing(entry -> String.valueOf(entry.getKey().detailId)))
-                    .limit(TOP_LIMIT)
-                    .map(entry -> new PerfReportData.ObjectCount(
-                            TickableAggregate.className(entry.getKey().workClass),
-                            TickableAggregate.nullableId(entry.getKey().detailId),
-                            entry.getKey().detailKind,
-                            entry.getValue().count, entry.getValue().x, entry.getValue().y, entry.getValue().z))
-                    .toList();
-        }
-    }
-    private static final class ObjectSummary {
-        int count;
-        double representativeWeight = -1.0D;
-        int x;
-        int y;
-        int z;
-
-        void add(TickableAggregate aggregate) {
-            count++;
-            double weight = aggregate.stats.sampleWeight();
-            if (weight > representativeWeight) {
-                representativeWeight = weight;
-                x = aggregate.x;
-                y = aggregate.y;
-                z = aggregate.z;
-            }
-        }
-    }
-    private record ObjectType(TickType type, Class<?> workClass, ResourceLocation detailId,
-                              TickDetailKind detailKind) {
-    }
-
-    private record CoordinateGroup(TickType type, String dimension, Class<?> workClass,
-                                   ResourceLocation detailId, TickDetailKind detailKind) {
-        static CoordinateGroup from(TickSamples.TickableKey key) {
-            return new CoordinateGroup(key.type(), key.dimension(), key.workClass(),
-                    key.detailId(), key.detailKind());
-        }
-    }
-
-    private static final class CoordinateReservoir {
-        private final List<TickSamples.TickableKey> keys = new ArrayList<>(MAX_COORDINATES_PER_GROUP);
-        private long observed;
-
-        void offer(TickSamples.TickableKey key, SplittableRandom random) {
-            observed++;
-            if (keys.size() < MAX_COORDINATES_PER_GROUP) {
-                keys.add(key);
-                return;
-            }
-            long slot = random.nextLong(observed);
-            if (slot < MAX_COORDINATES_PER_GROUP) {
-                keys.set((int) slot, key);
-            }
-        }
-
-        boolean contains(TickSamples.TickableKey key) {
-            return keys.contains(key);
-        }
-
-        boolean remove(TickSamples.TickableKey key) {
-            return keys.remove(key);
-        }
-
-        boolean isEmpty() {
-            return keys.isEmpty();
-        }
-    }
 }

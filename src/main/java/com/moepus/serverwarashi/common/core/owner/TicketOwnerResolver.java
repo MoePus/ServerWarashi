@@ -132,5 +132,10 @@ public final class TicketOwnerResolver {
     }
 
     record ForcedOwner(Object id, Object owner) {
+        @Override
+        public int hashCode() {
+            return 31 * TicketOwnerKey.identityHash(id)
+                    + TicketOwnerKey.identityHash(owner);
+        }
     }
 }

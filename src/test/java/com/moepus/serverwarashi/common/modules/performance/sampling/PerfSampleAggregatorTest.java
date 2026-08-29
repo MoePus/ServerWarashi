@@ -3,6 +3,7 @@ package com.moepus.serverwarashi.common.modules.performance.sampling;
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 import org.junit.jupiter.api.Test;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -10,7 +11,9 @@ import net.minecraft.world.level.ChunkPos;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -196,9 +199,78 @@ class PerfSampleAggregatorTest {
                 .filter(entry -> entry.type() == TickType.ENTITY && entry.className().equals("Cow"))
                 .count();
 
-        assertEquals(16, cowCoordinates);
+        assertEquals(32, cowCoordinates);
         assertEquals(40, report.chunks().getFirst().entityCount());
-        assertEquals(24, report.omittedTickables());
+        assertEquals(8, report.omittedTickables());
+        assertEquals(IntStream.range(0, 32).boxed().toList(),
+                report.tickables().stream().filter(entry -> entry.type() == TickType.ENTITY)
+                        .map(PerfReportData.TickableEntry::entityId).toList());
+    }
+
+    @Test
+    void keepsTheHottestObjectWhenAGroupExceedsCoordinateLimit() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(13L);
+        TickSamples sampled = new TickSamples(null);
+        for (int id = 0; id < 33; id++) {
+            sampled.sample(snapshot(new TestWork(TickType.ENTITY, Cow.class, id),
+                    new BlockPos(id, 64, 0)));
+        }
+        PerfWorkTracker.Snapshot hottest = snapshot(
+                new TestWork(TickType.ENTITY, Cow.class, 32), new BlockPos(32, 64, 0));
+        for (int sample = 0; sample < 8; sample++) {
+            sampled.sample(hottest);
+        }
+        aggregator.accept(sampled);
+
+        PerfReportData report = aggregator.build(milliseconds(50L), 41L, 1_000);
+
+        assertEquals(32, report.tickables().stream()
+                .filter(entry -> entry.type() == TickType.ENTITY).count());
+        assertTrue(report.tickables().stream().anyMatch(entry -> entry.entityId() == 32));
+        assertTrue(report.tickables().stream().noneMatch(entry -> entry.entityId() == 31));
+        assertEquals(1, report.omittedTickables());
+    }
+
+    @Test
+    void keepsLowAverageObjectWhenItsBurstMaximumIsHot() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(15L);
+        for (int tick = 0; tick < 20; tick++) {
+            TickSamples sampled = new TickSamples(null);
+            for (int id = 0; id < 32; id++) {
+                PerfWorkTracker.Snapshot steady = snapshot(
+                        new TestWork(TickType.ENTITY, Cow.class, id), new BlockPos(id, 64, 0));
+                sampled.sample(steady);
+                sampled.sample(steady);
+            }
+            if (tick == 0) {
+                PerfWorkTracker.Snapshot burst = snapshot(
+                        new TestWork(TickType.ENTITY, Cow.class, 32), new BlockPos(32, 64, 0));
+                for (int sample = 0; sample < 10; sample++) {
+                    sampled.sample(burst);
+                }
+            }
+            aggregator.accept(sampled);
+        }
+
+        PerfReportData report = aggregator.build(milliseconds(50L), 1_290L, 1_000);
+
+        assertTrue(report.tickables().stream().anyMatch(entry -> entry.entityId() == 32));
+        assertTrue(report.tickables().stream().noneMatch(entry -> entry.entityId() == 31));
+    }
+
+    @Test
+    void globalObjectCutoffAndOrderIgnoreInsertionOrder() {
+        List<String> forward = buildTiedObjectGroups(false).tickables().stream()
+                .filter(entry -> entry.type() == TickType.ENTITY)
+                .map(PerfReportData.TickableEntry::detailId).toList();
+        List<String> reverse = buildTiedObjectGroups(true).tickables().stream()
+                .filter(entry -> entry.type() == TickType.ENTITY)
+                .map(PerfReportData.TickableEntry::detailId).toList();
+        List<String> expected = IntStream.range(0, 256)
+                .mapToObj(PerfSampleAggregatorTest::groupId).toList();
+
+        assertEquals(expected, forward);
+        assertEquals(forward, reverse);
     }
 
     @Test
@@ -366,6 +438,68 @@ class PerfSampleAggregatorTest {
         return report.tickables().stream()
                 .filter(entry -> entry.type() == TickType.GC)
                 .findFirst().orElseThrow().metric();
+    }
+
+    private static PerfReportData buildTiedObjectGroups(boolean reverse) {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(14L);
+        TickSamples sampled = new TickSamples(null);
+        for (int offset = 0; offset < 300; offset++) {
+            int id = reverse ? 299 - offset : offset;
+            sampled.sample(new PerfWorkTracker.Snapshot(TickType.ENTITY,
+                    new ResourceLocation("test:level"), Cow.class,
+                    new ResourceLocation(groupId(id)), TickDetailKind.ENTITY, id,
+                    true, id, 64, 0, false, null));
+        }
+        aggregator.accept(sampled);
+        return aggregator.build(milliseconds(50L), 300L, 1_000);
+    }
+
+    @Test
+    void hotspotIndexKeepsNearbyCandidatesBeyondReportRepresentativeLimit() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(21L);
+        TickSamples sampled = new TickSamples(null);
+        ResourceLocation dimension = new ResourceLocation("minecraft:overworld");
+        ResourceLocation cow = new ResourceLocation("minecraft:cow");
+        for (int id = 0; id < 100; id++) {
+            sampled.sample(new PerfWorkTracker.Snapshot(TickType.ENTITY, dimension, Cow.class,
+                    cow, TickDetailKind.ENTITY, id, true, id, 64, 0, false, null));
+        }
+        aggregator.accept(sampled);
+
+        PerfSampleAggregator.BuildSnapshot build =
+                aggregator.buildSnapshot(milliseconds(50L), 100L, 1_000);
+
+        long reportEntities = build.report().tickables().stream()
+                .filter(entry -> entry.type() == TickType.ENTITY).count();
+        assertEquals(32L, reportEntities);
+        assertEquals(100, build.hotspots().entries().size());
+    }
+
+    @Test
+    void hotspotIndexKeepsSameBlockPositionInDifferentDimensions() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(22L);
+        TickSamples sampled = new TickSamples(null);
+        ResourceLocation furnace = new ResourceLocation("minecraft:furnace");
+        sampled.sample(new PerfWorkTracker.Snapshot(TickType.BLOCK_ENTITY,
+                new ResourceLocation("minecraft:overworld"), Furnace.class,
+                furnace, TickDetailKind.BLOCK, -1, true, 8, 64, 8, false, null));
+        sampled.sample(new PerfWorkTracker.Snapshot(TickType.BLOCK_ENTITY,
+                new ResourceLocation("minecraft:the_nether"), Furnace.class,
+                furnace, TickDetailKind.BLOCK, -1, true, 8, 64, 8, false, null));
+        aggregator.accept(sampled);
+
+        PerfSampleAggregator.BuildSnapshot build =
+                aggregator.buildSnapshot(milliseconds(50L), 2L, 1_000);
+
+        assertEquals(2, build.hotspots().entries().size());
+        assertEquals(java.util.Set.of("minecraft:overworld", "minecraft:the_nether"),
+                build.hotspots().entries().stream()
+                        .map(PerfWorldHotspotIndex.Entry::dimension)
+                        .collect(java.util.stream.Collectors.toSet()));
+    }
+
+    private static String groupId(int id) {
+        return "test:group_" + String.format(Locale.ROOT, "%03d", id);
     }
 
     private static void sampleEntities(TickSamples samples, Class<?> type, int firstId, int count) {

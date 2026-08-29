@@ -1,6 +1,7 @@
 package com.moepus.serverwarashi.common.modules.performance.sampling;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 
 final class SampleStatistics {
     private static final int WINDOW_TICKS = 20;
@@ -37,12 +38,23 @@ final class SampleStatistics {
         advanceWindows(totalTicks);
         double mspt = totalTicks == 0 ? 0.0D
                 : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / totalTicks;
-        double estimatedMaxSamples = Math.max(maxEstimatedSamples,
-                Math.max(estimateUpperSamples(primarySamples),
-                        estimateUpperSamples(staggeredSamples)));
-        estimatedMaxSamples = Math.max(estimatedMaxSamples, maxBurstSamples);
+        double estimatedMaxSamples = estimatedMaxSamples();
         double estimatedMax = estimatedMaxSamples * nanosPerSample / NANOS_PER_MILLISECOND;
         return new PerfReportData.Metric(mspt, Math.max(mspt, estimatedMax), Math.round(totalSamples));
+    }
+
+    PerfWorldHotspotIndex.Cost hotspotCost(long totalTicks) {
+        advanceWindows(totalTicks);
+        long samples = Math.max(0L, Math.round(totalSamples));
+        long scaledMax = Math.round(estimatedMaxSamples() * PerfWorldHotspotIndex.MAX_SAMPLES_SCALE);
+        int maxSamplesQ8 = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, scaledMax));
+        return new PerfWorldHotspotIndex.Cost(samples, maxSamplesQ8);
+    }
+
+    private double estimatedMaxSamples() {
+        double windowMaximum = Math.max(estimateUpperSamples(primarySamples),
+                estimateUpperSamples(staggeredSamples));
+        return Math.max(Math.max(maxEstimatedSamples, windowMaximum), maxBurstSamples);
     }
 
     private void recordBurst(double samples) {

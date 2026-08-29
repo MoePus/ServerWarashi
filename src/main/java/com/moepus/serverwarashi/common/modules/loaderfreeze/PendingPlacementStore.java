@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.modules.loaderfreeze;
 
+import com.moepus.serverwarashi.common.util.PackedPositionHash;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -98,5 +99,9 @@ final class PendingPlacementStore {
     }
 
     private record Key(ResourceKey<Level> dimension, BlockPos pos) {
+        @Override
+        public int hashCode() {
+            return 31 * dimension.hashCode() + PackedPositionHash.hash(pos.asLong());
+        }
     }
 }

@@ -21,11 +21,26 @@ public final class PerfReportLimits {
     public static <T> Limited<T> topMetricUnion(List<T> entries,
                                                  int perMetricLimit,
                                                  Function<T, PerfReportData.Metric> metric) {
+        return topMetricUnion(entries, perMetricLimit, metric, (left, right) -> 0);
+    }
+
+    public static <T> Limited<T> topMetricUnion(List<T> entries,
+                                                 int perMetricLimit,
+                                                 Function<T, PerfReportData.Metric> metric,
+                                                 Comparator<T> stableOrder) {
+        Comparator<T> byMspt = Comparator
+                .comparingDouble((T value) -> metric.apply(value).mspt()).reversed()
+                .thenComparing(Comparator.comparingDouble(
+                        (T value) -> metric.apply(value).max()).reversed())
+                .thenComparing(stableOrder);
+        Comparator<T> byMax = Comparator
+                .comparingDouble((T value) -> metric.apply(value).max()).reversed()
+                .thenComparing(Comparator.comparingDouble(
+                        (T value) -> metric.apply(value).mspt()).reversed())
+                .thenComparing(stableOrder);
         if (entries.size() <= perMetricLimit) {
-            return new Limited<>(List.copyOf(entries), 0);
+            return new Limited<>(entries.stream().sorted(byMspt).toList(), 0);
         }
-        Comparator<T> byMspt = Comparator.comparingDouble((T value) -> metric.apply(value).mspt()).reversed();
-        Comparator<T> byMax = Comparator.comparingDouble((T value) -> metric.apply(value).max()).reversed();
         LinkedHashSet<T> selected = new LinkedHashSet<>();
         entries.stream().sorted(byMspt).limit(perMetricLimit).forEach(selected::add);
         entries.stream().sorted(byMax).limit(perMetricLimit).forEach(selected::add);

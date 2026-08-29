@@ -1,12 +1,14 @@
 package com.moepus.serverwarashi.common.modules.performance.sampling;
 
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
+import com.moepus.serverwarashi.common.util.PackedPositionHash;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 final class TickSamples {
     final Map<TickableKey, TickCount> tickables = new HashMap<>();
@@ -53,6 +55,11 @@ final class TickSamples {
                     : ChunkPos.asLong(snapshot.x() >> 4, snapshot.z() >> 4);
             return new ChunkKey(snapshot.dimension().toString(), position);
         }
+
+        @Override
+        public int hashCode() {
+            return 31 * dimension.hashCode() + PackedPositionHash.hash(position);
+        }
     }
 
     record TickableKey(TickType type,
@@ -74,6 +81,19 @@ final class TickSamples {
             return new TickableKey(snapshot.type(), dimension, snapshot.workClass(), snapshot.detailId(),
                     snapshot.detailKind(),
                     snapshot.entityId(), position, snapshot.eventLoop(), snapshot.displayName());
+        }
+
+        @Override
+        public int hashCode() {
+            int result = type.hashCode();
+            result = 31 * result + dimension.hashCode();
+            result = 31 * result + workClass.hashCode();
+            result = 31 * result + Objects.hashCode(detailId);
+            result = 31 * result + detailKind.hashCode();
+            result = 31 * result + entityId;
+            result = 31 * result + PackedPositionHash.hash(fixedPosition);
+            result = 31 * result + Objects.hashCode(eventLoop);
+            return 31 * result + Objects.hashCode(displayName);
         }
     }
 

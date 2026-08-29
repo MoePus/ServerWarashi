@@ -7,6 +7,7 @@ import com.moepus.serverwarashi.common.modules.loaderfreeze.LoaderStateData;
 import com.moepus.serverwarashi.common.modules.loaderfreeze.LoaderTicketTarget;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
@@ -131,7 +132,8 @@ public final class PerfAttributionSnapshot {
                     var key = new LoaderRegionPlanner.SourceKey(
                             entry.getKey().dimension(), bucket.source.id,
                             bucket.source.name, bucket.source.position, bucket.source.loaderRef);
-                    grouped.computeIfAbsent(key, ignored -> new HashSet<>()).add(entry.getKey().chunkPos());
+                    grouped.computeIfAbsent(key, ignored -> new LongOpenHashSet())
+                            .add(entry.getKey().chunkPos());
                 }
             }
         }
