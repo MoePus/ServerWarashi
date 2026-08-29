@@ -8,6 +8,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
@@ -74,6 +75,7 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
         shader.setSampler("Sampler0", RenderSystem.getShaderTexture(0));
         shader.setSampler("Sampler1", RenderSystem.getShaderTexture(1));
         shader.apply();
+        batch.applyBlend();
         int previousVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int previousActiveTexture = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + MARKER_TEXTURE_UNIT);
@@ -228,22 +230,25 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
 
     enum Batch {
         SMOKE(2, WorldFlameParticleLayout.ORANGE_PARTICLE_START,
-                WorldFlameParticleLayout.ORANGE_PARTICLE_COUNT),
-        NORMAL(0, 0, WorldFlameParticleLayout.NORMAL_PARTICLE_COUNT),
+                WorldFlameParticleLayout.ORANGE_PARTICLE_COUNT, BlendMode.PREMULTIPLIED),
+        NORMAL(0, 0, WorldFlameParticleLayout.NORMAL_PARTICLE_COUNT,
+                BlendMode.PREMULTIPLIED),
         GLOW(1, WorldFlameParticleLayout.GLOW_PARTICLE_START,
-                WorldFlameParticleLayout.GLOW_PARTICLE_COUNT),
+                WorldFlameParticleLayout.GLOW_PARTICLE_COUNT, BlendMode.ADDITIVE),
         SPARK(4, WorldFlameParticleLayout.SPARK_PARTICLE_START,
-                WorldFlameParticleLayout.SPARK_PARTICLE_COUNT),
-        LABEL(3, 0, 1);
+                WorldFlameParticleLayout.SPARK_PARTICLE_COUNT, BlendMode.ADDITIVE),
+        LABEL(3, 0, 1, BlendMode.PREMULTIPLIED);
 
         private final int renderPass;
         private final int particleStart;
         private final int slotsPerMarker;
+        private final BlendMode blendMode;
 
-        Batch(int renderPass, int particleStart, int slotsPerMarker) {
+        Batch(int renderPass, int particleStart, int slotsPerMarker, BlendMode blendMode) {
             this.renderPass = renderPass;
             this.particleStart = particleStart;
             this.slotsPerMarker = slotsPerMarker;
+            this.blendMode = blendMode;
         }
 
         int instancesFor(int markers) {
@@ -260,6 +265,32 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
 
         int slotsPerMarker() {
             return slotsPerMarker;
+        }
+
+        BlendMode blendMode() {
+            return blendMode;
+        }
+
+        private void applyBlend() {
+            blendMode.apply();
+        }
+    }
+
+    enum BlendMode {
+        PREMULTIPLIED(GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA),
+        ADDITIVE(GlStateManager.DestFactor.ONE);
+
+        private final GlStateManager.DestFactor colorDestination;
+
+        BlendMode(GlStateManager.DestFactor colorDestination) {
+            this.colorDestination = colorDestination;
+        }
+
+        private void apply() {
+            RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
+            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, colorDestination,
+                    GlStateManager.SourceFactor.ONE,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
         }
     }
 

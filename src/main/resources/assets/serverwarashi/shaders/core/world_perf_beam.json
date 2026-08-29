@@ -1,11 +1,4 @@
 {
-  "blend": {
-    "func": "add",
-    "srcrgb": "one",
-    "dstrgb": "1-srcalpha",
-    "srcalpha": "one",
-    "dstalpha": "1-srcalpha"
-  },
   "vertex": "serverwarashi:world_perf_beam",
   "fragment": "serverwarashi:world_perf_beam",
   "attributes": ["Position", "Color"],

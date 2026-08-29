@@ -1,6 +1,5 @@
 package com.moepus.serverwarashi.client.world;
 
-import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.client.state.ClientPerfWorldState;
@@ -28,10 +27,6 @@ import java.util.Comparator;
 import java.util.List;
 
 final class WorldPerfObjectRenderer {
-    static final GlStateManager.DestFactor FIRE_DESTINATION_FACTOR =
-            GlStateManager.DestFactor.ONE_MINUS_SRC_COLOR;
-    static final GlStateManager.DestFactor SMOKE_DESTINATION_FACTOR =
-            GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA;
     private static final double MAX_DISTANCE_SQUARED =
             WorldOverlayMath.OBJECT_FADE_END * WorldOverlayMath.OBJECT_FADE_END;
     private static final double FLAME_FRUSTUM_MARGIN = 1.2D;
@@ -244,22 +239,10 @@ final class WorldPerfObjectRenderer {
         RenderSystem.depthMask(false);
         RenderSystem.enableCull();
         try {
-            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
-                    SMOKE_DESTINATION_FACTOR,
-                    GlStateManager.SourceFactor.ONE,
-                    SMOKE_DESTINATION_FACTOR);
             buffers.draw(WorldPerfObjectBuffers.Batch.SMOKE, drawContext);
-            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
-                    FIRE_DESTINATION_FACTOR,
-                    GlStateManager.SourceFactor.ONE,
-                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
             buffers.draw(WorldPerfObjectBuffers.Batch.NORMAL, drawContext);
             buffers.draw(WorldPerfObjectBuffers.Batch.GLOW, drawContext);
             buffers.draw(WorldPerfObjectBuffers.Batch.SPARK, drawContext);
-            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
-                    SMOKE_DESTINATION_FACTOR,
-                    GlStateManager.SourceFactor.ONE,
-                    SMOKE_DESTINATION_FACTOR);
             buffers.draw(WorldPerfObjectBuffers.Batch.LABEL, drawContext);
         } finally {
             RenderSystem.depthMask(true);

@@ -18,8 +18,12 @@ class WorldPerfShaderResourceTest {
 
     @Test
     void shaderJsonDeclaresCompleteUniformDefaults() throws Exception {
-        assertCompleteDefaults(json("world_perf_object.json"));
-        assertCompleteDefaults(json("world_perf_beam.json"));
+        JsonObject object = json("world_perf_object.json");
+        JsonObject beam = json("world_perf_beam.json");
+        assertCompleteDefaults(object);
+        assertCompleteDefaults(beam);
+        assertFalse(object.has("blend"));
+        assertFalse(beam.has("blend"));
     }
 
     @Test

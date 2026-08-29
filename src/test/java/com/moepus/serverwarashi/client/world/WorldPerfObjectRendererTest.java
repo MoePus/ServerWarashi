@@ -1,6 +1,5 @@
 package com.moepus.serverwarashi.client.world;
 
-import com.mojang.blaze3d.platform.GlStateManager;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import net.minecraft.world.phys.Vec3;
@@ -48,11 +47,17 @@ class WorldPerfObjectRendererTest {
     }
 
     @Test
-    void compositesAllFireLayersWithScreenBlend() {
-        assertEquals(GlStateManager.DestFactor.ONE_MINUS_SRC_COLOR,
-                WorldPerfObjectRenderer.FIRE_DESTINATION_FACTOR);
-        assertEquals(GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-                WorldPerfObjectRenderer.SMOKE_DESTINATION_FACTOR);
+    void compositesBodyWithPremultipliedAlphaAndEmissionAdditively() {
+        assertEquals(WorldPerfObjectBuffers.BlendMode.PREMULTIPLIED,
+                WorldPerfObjectBuffers.Batch.SMOKE.blendMode());
+        assertEquals(WorldPerfObjectBuffers.BlendMode.PREMULTIPLIED,
+                WorldPerfObjectBuffers.Batch.NORMAL.blendMode());
+        assertEquals(WorldPerfObjectBuffers.BlendMode.ADDITIVE,
+                WorldPerfObjectBuffers.Batch.GLOW.blendMode());
+        assertEquals(WorldPerfObjectBuffers.BlendMode.ADDITIVE,
+                WorldPerfObjectBuffers.Batch.SPARK.blendMode());
+        assertEquals(WorldPerfObjectBuffers.BlendMode.PREMULTIPLIED,
+                WorldPerfObjectBuffers.Batch.LABEL.blendMode());
     }
 
     @Test

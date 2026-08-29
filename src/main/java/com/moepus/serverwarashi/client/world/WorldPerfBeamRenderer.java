@@ -10,11 +10,13 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.moepus.serverwarashi.client.heatmap.DangerousChunkModel;
 import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
+import org.lwjgl.opengl.GL14;
 
 import java.util.List;
 
@@ -54,16 +56,24 @@ final class WorldPerfBeamRenderer {
         Matrix4f modelView = WorldPerfObjectRenderer.cameraRelativeMatrix(
                 event, originX, originZ);
         RenderSystem.enableBlend();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
-                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-                GlStateManager.SourceFactor.ONE,
-                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(false);
         RenderSystem.disableCull();
         try {
             buffer.bind();
-            buffer.drawWithShader(modelView, event.getProjectionMatrix(), shader);
+            shader.setDefaultUniforms(VertexFormat.Mode.QUADS, modelView,
+                    event.getProjectionMatrix(), Minecraft.getInstance().getWindow());
+            shader.apply();
+            try {
+                RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
+                RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
+                        GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                        GlStateManager.SourceFactor.ONE,
+                        GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+                buffer.draw();
+            } finally {
+                shader.clear();
+            }
         } finally {
             VertexBuffer.unbind();
             RenderSystem.enableCull();
