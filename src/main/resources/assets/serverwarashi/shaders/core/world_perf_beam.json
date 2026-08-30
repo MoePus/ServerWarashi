@@ -6,6 +6,7 @@
   "uniforms": [
     {"name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]},
     {"name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]},
-    {"name": "FadeDistances", "type": "float", "count": 2, "values": [64, 128]}
+    {"name": "FadeDistances", "type": "float", "count": 2, "values": [64, 128]},
+    {"name": "CameraOffset", "type": "float", "count": 2, "values": [0, 0]}
   ]
 }

@@ -150,8 +150,11 @@ class WorldPerfShaderResourceTest {
         JsonObject root = json("world_perf_beam.json");
         assertUniform(root, "FadeDistances", WorldOverlayMath.BEAM_FADE_START,
                 WorldOverlayMath.BEAM_FADE_END);
+        assertUniform(root, "CameraOffset", 0.0D, 0.0D);
         String vertex = resource("world_perf_beam.vsh");
         assertTrue(vertex.contains("uniform vec2 FadeDistances;"));
+        assertTrue(vertex.contains("length(Position.xz - CameraOffset)"));
+        assertFalse(vertex.contains("length(viewPosition.xz)"));
         assertFalse(vertex.contains("smoothRange(64.0, 128.0"));
     }
 

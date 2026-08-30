@@ -6,6 +6,7 @@ in vec4 Color;
 uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
 uniform vec2 FadeDistances;
+uniform vec2 CameraOffset;
 
 out vec4 vertexColor;
 
@@ -16,7 +17,7 @@ float smoothRange(float start, float end, float value) {
 
 void main() {
     vec4 viewPosition = ModelViewMat * vec4(Position, 1.0);
-    float distanceToCamera = length(viewPosition.xz);
+    float distanceToCamera = length(Position.xz - CameraOffset);
     vertexColor = Color;
     vertexColor.a *= smoothRange(FadeDistances.x, FadeDistances.y, distanceToCamera);
     gl_Position = ProjMat * viewPosition;

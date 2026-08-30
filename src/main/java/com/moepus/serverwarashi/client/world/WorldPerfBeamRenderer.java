@@ -53,6 +53,8 @@ final class WorldPerfBeamRenderer {
         shader.safeGetUniform("FadeDistances").set(
                 (float) WorldOverlayMath.BEAM_FADE_START,
                 (float) WorldOverlayMath.BEAM_FADE_END);
+        shader.safeGetUniform("CameraOffset").set(
+                (float) (camera.x - originX), (float) (camera.z - originZ));
         Matrix4f modelView = WorldPerfObjectRenderer.cameraRelativeMatrix(
                 event, originX, originZ);
         RenderSystem.enableBlend();
