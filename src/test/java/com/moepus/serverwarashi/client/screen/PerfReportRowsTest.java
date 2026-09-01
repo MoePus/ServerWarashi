@@ -24,7 +24,7 @@ class PerfReportRowsTest {
                 List.of(),
                 List.of());
 
-        List<PerfReportRows.Row> rows = PerfReportRows.chunks(report, PerfReportRows.SortKey.MSPT, Map.of());
+        List<PerfReportRow> rows = PerfReportRows.chunks(report, PerfReportRows.SortKey.MSPT, Map.of());
 
         assertEquals(List.of("slow [1, 2]", "fast [3, 4]"), labels(rows));
         assertEquals(3.0, rows.get(0).metric().max());
@@ -38,13 +38,13 @@ class PerfReportRowsTest {
                         tickable("SpikyTick", metric(1.0, 9.0))),
                 List.of());
 
-        List<PerfReportRows.Row> rows = PerfReportRows.tickables(report, PerfReportRows.SortKey.MAX, Map.of());
+        List<PerfReportRow> rows = PerfReportRows.tickables(report, PerfReportRows.SortKey.MAX, Map.of());
 
         assertEquals(List.of("SpikyTick#1 @ test (1, 2, 3)",
                 "FastTick#1 @ test (1, 2, 3)"), labels(rows));
         assertEquals(List.of("screen.serverwarashi.profiler.type.entity",
                         "screen.serverwarashi.profiler.type.entity"),
-                rows.stream().map(PerfReportRows.Row::type).toList());
+                rows.stream().map(row -> row.auxiliary().type()).toList());
         assertEquals(1.0, rows.get(0).metric().mspt());
     }
 
@@ -66,13 +66,15 @@ class PerfReportRowsTest {
                 TickType.HANDLER, "", "ServerEvents#onTick(ServerTickEvent.Pre)", "",
                 TickDetailKind.NONE, -1, false, 0, 0, 0, false, fullName, metric(2.0, 3.0));
 
-        PerfReportRows.Row row = PerfReportRows.tickables(
+        PerfReportRow row = PerfReportRows.tickables(
                 report(List.of(), List.of(handler), List.of()), PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
 
         assertEquals("ServerEvents#onTick(ServerTickEvent.Pre)", row.label());
-        assertEquals("screen.serverwarashi.profiler.type.handler", row.type());
-        assertEquals(fullName, row.tooltip());
-        assertEquals("", row.coordinate());
+        assertEquals("screen.serverwarashi.profiler.type.handler", row.auxiliary().type());
+        assertEquals(fullName, tooltip(row));
+        assertEquals("", row.content().coordinate());
+        assertTrue(row.capabilities().coordinateAction().isEmpty());
+        assertTrue(row.capabilities().expansion().isEmpty());
     }
 
     @Test
@@ -81,13 +83,14 @@ class PerfReportRowsTest {
                 TickType.TASK, "", "Unknown", "", TickDetailKind.NONE,
                 -1, false, 0, 0, 0, false, "", metric(2.0, 3.0));
 
-        PerfReportRows.Row row = PerfReportRows.tickables(
+        PerfReportRow row = PerfReportRows.tickables(
                 report(List.of(), List.of(unknown), List.of()),
                 PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
 
         assertEquals("screen.serverwarashi.profiler.tickable.unknown", row.label());
-        assertEquals("screen.serverwarashi.profiler.type.task", row.type());
-        assertNull(row.tooltip());
+        assertEquals("screen.serverwarashi.profiler.type.task", row.auxiliary().type());
+        assertNull(tooltip(row));
+        assertEquals(PerfReportRow.Capabilities.none(), row.capabilities());
     }
 
     @Test
@@ -96,14 +99,14 @@ class PerfReportRowsTest {
                 TickType.GC, "", "Rolling 1s", "", TickDetailKind.NONE,
                 -1, false, 0, 0, 0, false, "", metric(5.0D, 100.0D, 20L));
 
-        PerfReportRows.Row row = PerfReportRows.tickables(
+        PerfReportRow row = PerfReportRows.tickables(
                 report(List.of(), List.of(tickable("HotTick", metric(50.0D, 200.0D)), gc), List.of()),
                 PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
 
         assertEquals("screen.serverwarashi.profiler.tickable.gc", row.label());
-        assertEquals("screen.serverwarashi.profiler.type.gc", row.type());
+        assertEquals("screen.serverwarashi.profiler.type.gc", row.auxiliary().type());
         assertEquals(new PerfReportData.Metric(5.0D, 100.0D, 20L), row.metric());
-        assertNull(row.tooltip());
+        assertNull(tooltip(row));
     }
 
     @Test
@@ -134,7 +137,7 @@ class PerfReportRowsTest {
                                 TickDetailKind.BLOCK, 1, 9, 62, 10)),
                 metric(3.0, 2.0));
 
-        List<PerfReportRows.Row> rows = PerfReportRows.chunks(report(List.of(chunk), List.of(), List.of()),
+        List<PerfReportRow> rows = PerfReportRows.chunks(report(List.of(chunk), List.of(), List.of()),
                 PerfReportRows.SortKey.MSPT, Set.of(key), Map.of());
 
         assertEquals(List.of("test [0, 0]", "Cow(1, 64, 2)", "Paper(3, 64, 4)",
@@ -142,10 +145,13 @@ class PerfReportRowsTest {
                         "Furnace(9, 62, 10)"),
                 labels(rows));
         assertEquals(List.of(6, 3, 2, 1, 0, 0), rows.stream()
-                .map(PerfReportRows.Row::entityCount).toList());
+                .map(row -> row.auxiliary().entityCount()).toList());
         assertEquals(List.of(5, 0, 0, 0, 3, 1), rows.stream()
-                .map(PerfReportRows.Row::blockEntityCount).toList());
-        assertEquals("execute in test run tp @s 1 64 2", rows.get(1).teleportCommand());
+                .map(row -> row.auxiliary().blockEntityCount()).toList());
+        assertEquals("execute in test run tp @s 1 64 2", coordinateCommand(rows.get(1)));
+        assertFalse(rows.get(1).showsMetric());
+        assertTrue(rows.getFirst().capabilities().expansion().orElseThrow().expanded());
+        assertEquals("execute in test run tp @s 8 ~ 8", coordinateCommand(rows.getFirst()));
     }
 
     @Test
@@ -234,18 +240,20 @@ class PerfReportRowsTest {
         assertEquals(List.of("Bob(4, 65, 6)", "Alice(4, 65, 6)"),
                 labels(PerfReportRows.players(report, PerfReportRows.SortKey.MAX, Set.of(), Map.of())));
 
-        List<PerfReportRows.Row> expanded = PerfReportRows.players(
+        List<PerfReportRow> expanded = PerfReportRows.players(
                 report, PerfReportRows.SortKey.MAX, Set.of("owner:PLAYER:alice"), Map.of());
         assertEquals(List.of("Bob(4, 65, 6)", "Alice(4, 65, 6)",
                 "LoaderA(8, 64, 9)", "screen.serverwarashi.profiler.source.self"), labels(expanded));
-        assertEquals(List.of(0, 0, 1, 1), expanded.stream().map(PerfReportRows.Row::depth).toList());
-        assertEquals(List.of(296, 296, 25, 271), expanded.stream().map(PerfReportRows.Row::chunkCount).toList());
-        assertEquals("execute in test run tp @s 8 64 9", expanded.get(2).teleportCommand());
-        List<PerfReportRows.Row> byChunks = PerfReportRows.players(
+        assertEquals(List.of(0, 0, 1, 1), expanded.stream()
+                .map(row -> row.presentation().depth()).toList());
+        assertEquals(List.of(296, 296, 25, 271), expanded.stream()
+                .map(row -> row.auxiliary().chunkCount()).toList());
+        assertEquals("execute in test run tp @s 8 64 9", coordinateCommand(expanded.get(2)));
+        List<PerfReportRow> byChunks = PerfReportRows.players(
                 report, PerfReportRows.SortKey.CHUNKS, Set.of("owner:PLAYER:alice"), Map.of());
         assertEquals(List.of("screen.serverwarashi.profiler.source.self", "LoaderA(8, 64, 9)"),
                 labels(byChunks.stream()
-                .filter(row -> row.depth() == 1).toList()));
+                .filter(row -> row.presentation().depth() == 1).toList()));
     }
 
     @Test
@@ -256,12 +264,12 @@ class PerfReportRowsTest {
                 List.of(ownerSource("loader", "example:chunk_loader", position("test", 8, 64, 9),
                         25, metric(1.0, 2.0))));
 
-        PerfReportRows.Row row = PerfReportRows.players(report(List.of(), List.of(), List.of(loader)),
+        PerfReportRow row = PerfReportRows.players(report(List.of(), List.of(), List.of(loader)),
                 PerfReportRows.SortKey.MSPT, Set.of("owner:LOADER:loader"), Map.of()).getFirst();
 
         assertEquals("example:chunk_loader(8, 64, 9)", row.label());
-        assertFalse(row.expandable());
-        assertEquals(0, row.depth());
+        assertTrue(row.capabilities().expansion().isEmpty());
+        assertEquals(0, row.presentation().depth());
     }
 
     @Test
@@ -269,7 +277,7 @@ class PerfReportRowsTest {
         PerfReportData initial = report(List.of(
                 chunk("first", 1, 1, metric(5.0, 2.0)),
                 chunk("second", 2, 2, metric(1.0, 1.0))), List.of(), List.of());
-        List<PerfReportRows.Row> firstRows = PerfReportRows.chunks(
+        List<PerfReportRow> firstRows = PerfReportRows.chunks(
                 initial, PerfReportRows.SortKey.MSPT, Map.of());
         Map<String, Integer> stable = new LinkedHashMap<>();
         for (int index = 0; index < firstRows.size(); index++) {
@@ -291,19 +299,29 @@ class PerfReportRowsTest {
                 chunk("test:level", 2, -3, 7, 4, metric(1.0, 1.0))),
                 List.of(tickable("Cow", metric(1.0, 1.0))), List.of());
 
-        PerfReportRows.Row chunk = PerfReportRows.chunks(report, PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
-        PerfReportRows.Row tickable = PerfReportRows.tickables(
+        PerfReportRow chunk = PerfReportRows.chunks(report, PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
+        PerfReportRow tickable = PerfReportRows.tickables(
                 report, PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
-        assertEquals(7, chunk.entityCount());
-        assertEquals(4, chunk.blockEntityCount());
-        assertEquals("[2, -3]", chunk.coordinate());
-        assertEquals("(1, 2, 3)", tickable.coordinate());
-        assertEquals("execute in test:level run tp @s 40 ~ -40", chunk.teleportCommand());
-        assertEquals("execute in test run tp @s 1 2 3", tickable.teleportCommand());
+        assertEquals(7, chunk.auxiliary().entityCount());
+        assertEquals(4, chunk.auxiliary().blockEntityCount());
+        assertEquals("[2, -3]", chunk.content().coordinate());
+        assertEquals("(1, 2, 3)", tickable.content().coordinate());
+        assertEquals("execute in test:level run tp @s 40 ~ -40", coordinateCommand(chunk));
+        assertEquals("execute in test run tp @s 1 2 3", coordinateCommand(tickable));
     }
 
-    private static List<String> labels(List<PerfReportRows.Row> rows) {
-        return rows.stream().map(PerfReportRows.Row::label).toList();
+    private static List<String> labels(List<PerfReportRow> rows) {
+        return rows.stream().map(PerfReportRow::label).toList();
+    }
+
+    private static String coordinateCommand(PerfReportRow row) {
+        return row.capabilities().coordinateAction()
+                .map(PerfReportRow.CoordinateAction::command).orElse(null);
+    }
+
+    private static String tooltip(PerfReportRow row) {
+        return row.capabilities().labelTooltip()
+                .map(PerfReportRow.LabelTooltip::text).orElse(null);
     }
 
     private static List<PerfReportRows.SortKey> headerSorts(

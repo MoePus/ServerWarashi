@@ -70,7 +70,7 @@ final class PerfReportTableRenderer {
     }
 
     static void renderRow(GuiGraphics graphics, Font font, RowContext context) {
-        PerfReportRows.Row row = context.row;
+        PerfReportRow row = context.row;
         PerfReportGeometry geometry = context.table.geometry;
         int labelWidth = labelWidth(context.table);
         renderLabel(graphics, font, context, labelWidth);
@@ -81,34 +81,37 @@ final class PerfReportTableRenderer {
     }
 
     static PerfReportBounds coordinateBounds(Font font, RowContext context) {
-        if (context.row.coordinate().isEmpty()) {
+        if (context.row.content().coordinate().isEmpty()) {
             return null;
         }
         PerfReportGeometry geometry = context.table.geometry;
-        String coordinate = fit(font, context.row.coordinate(), Math.max(1, geometry.positionWidth() - 6));
+        String coordinate = fit(font, context.row.content().coordinate(),
+                Math.max(1, geometry.positionWidth() - 6));
         int x = geometry.contentX() + labelWidth(context.table) + 3;
         return new PerfReportBounds(x, context.y, font.width(coordinate), ROW_HEIGHT);
     }
 
     static PerfReportBounds labelBounds(Font font, RowContext context) {
         int labelWidth = labelWidth(context.table);
-        int x = context.table.geometry.contentX() + context.row.depth() * INDENT;
-        int width = Math.max(1, labelWidth - context.row.depth() * INDENT);
-        String marker = context.row.expandable() ? (context.row.expanded() ? "[-] " : "[+] ") : "";
-        String label = fit(font, marker + context.row.labelPrefix(), width);
+        int depth = context.row.presentation().depth();
+        int x = context.table.geometry.contentX() + depth * INDENT;
+        int width = Math.max(1, labelWidth - depth * INDENT);
+        String label = fit(font, expansionMarker(context.row)
+                + context.row.content().labelPrefix(), width);
         return new PerfReportBounds(x, context.y, font.width(label), ROW_HEIGHT);
     }
 
     private static void renderLabel(GuiGraphics graphics, Font font, RowContext context, int labelWidth) {
-        int x = context.table.geometry.contentX() + context.row.depth() * INDENT;
-        int width = labelWidth - context.row.depth() * INDENT;
-        String marker = context.row.expandable() ? (context.row.expanded() ? "[-] " : "[+] ") : "";
-        graphics.drawString(font, fit(font, marker + context.row.labelPrefix(), width),
+        int depth = context.row.presentation().depth();
+        int x = context.table.geometry.contentX() + depth * INDENT;
+        int width = labelWidth - depth * INDENT;
+        graphics.drawString(font, fit(font, expansionMarker(context.row)
+                        + context.row.content().labelPrefix(), width),
                 x, context.y + 3, TEXT, true);
     }
 
     private static void renderPosition(GuiGraphics graphics, Font font, RowContext context, int x) {
-        drawCell(graphics, font, context.row.coordinate(), x, context.y + 3,
+        drawCell(graphics, font, context.row.content().coordinate(), x, context.y + 3,
                 context.table.geometry.positionWidth(), false, LINK);
     }
 
@@ -141,25 +144,28 @@ final class PerfReportTableRenderer {
 
     private static int renderExtraCells(GuiGraphics graphics, Font font, RowContext context, int x) {
         PerfReportGeometry geometry = context.table.geometry;
+        PerfReportRow.AuxiliaryCells cells = context.row.auxiliary();
         if (context.table.layout == Layout.CHUNKS) {
-            drawCell(graphics, font, Integer.toString(context.row.entityCount()), x, context.y + 3,
+            drawCell(graphics, font, Integer.toString(cells.entityCount()), x, context.y + 3,
                     geometry.countWidth(), true, TEXT);
             x += geometry.countWidth();
-            drawCell(graphics, font, Integer.toString(context.row.blockEntityCount()), x, context.y + 3,
+            drawCell(graphics, font, Integer.toString(cells.blockEntityCount()), x, context.y + 3,
                     geometry.countWidth(), true, TEXT);
             return x + geometry.countWidth();
         }
         if (context.table.layout == Layout.TICKABLES) {
-            drawCell(graphics, font, context.row.type(), x, context.y + 3, geometry.typeWidth(), false, TEXT);
+            drawCell(graphics, font, cells.type(), x, context.y + 3,
+                    geometry.typeWidth(), false, TEXT);
             return x + geometry.typeWidth();
         }
         if (context.table.layout == Layout.PLAYERS) {
-            drawCell(graphics, font, Integer.toString(context.row.chunkCount()), x, context.y + 3,
+            drawCell(graphics, font, Integer.toString(cells.chunkCount()), x, context.y + 3,
                     geometry.countWidth(), true, TEXT);
             x += geometry.countWidth();
-            String value = context.row.playerOwner()
-                    ? PerfTimeText.player(context.row.online(), context.row.lastLoginEpochMillis(),
-                    System.currentTimeMillis()).getString() : "";
+            String value = cells.playerStatus()
+                    .map(status -> PerfTimeText.player(status.online(), status.lastLoginEpochMillis(),
+                            System.currentTimeMillis()).getString())
+                    .orElse("");
             drawCell(graphics, font, value, x, context.y + 3, geometry.lastLoginWidth(), false, TEXT);
             return x + geometry.lastLoginWidth();
         }
@@ -194,8 +200,8 @@ final class PerfReportTableRenderer {
     }
 
     private static void renderMetricCells(GuiGraphics graphics, Font font, PerfReportGeometry geometry,
-                                          PerfReportRows.Row row, int x, int y) {
-        if (row.summary()) {
+                                          PerfReportRow row, int x, int y) {
+        if (!row.showsMetric()) {
             return;
         }
         drawCell(graphics, font, PerfReportRows.metric(row.metric().mspt()), x, y,
@@ -215,6 +221,12 @@ final class PerfReportTableRenderer {
             case PLAYERS -> context.geometry.countWidth() + context.geometry.lastLoginWidth();
         };
         return context.geometry.labelWidth(auxiliary);
+    }
+
+    private static String expansionMarker(PerfReportRow row) {
+        return row.capabilities().expansion()
+                .map(expansion -> expansion.expanded() ? "[-] " : "[+] ")
+                .orElse("");
     }
 
     private static void drawCell(GuiGraphics graphics, Font font, String value,
@@ -239,7 +251,7 @@ final class PerfReportTableRenderer {
     record TableContext(PerfReportGeometry geometry, Layout layout) {
     }
 
-    record RowContext(TableContext table, PerfReportRows.Row row, int y) {
+    record RowContext(TableContext table, PerfReportRow row, int y) {
     }
 
     record SortHeader(PerfReportRows.SortKey sort, PerfReportBounds bounds) {

@@ -14,7 +14,7 @@ final class PerfReportTabState {
     PerfReportRows.SortKey sort = PerfReportRows.SortKey.MSPT;
     final Set<String> expanded = new HashSet<>();
     final LinkedHashMap<String, Integer> stableOrder = new LinkedHashMap<>();
-    List<PerfReportRows.Row> rows;
+    List<PerfReportRow> rows;
 
     void rememberOrder() {
         rows.forEach(row -> stableOrder.computeIfAbsent(row.key(), ignored -> nextOrder++));

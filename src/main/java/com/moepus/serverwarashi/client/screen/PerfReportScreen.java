@@ -70,7 +70,7 @@ public final class PerfReportScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, BACKDROP);
         PerfReportGeometry geometry = geometry();
-        List<PerfReportRows.Row> rows = visibleRows();
+        List<PerfReportRow> rows = visibleRows();
         PerfReportTabState state = state();
         contentHeight = Math.max(ROW_HEIGHT, rows.size() * ROW_HEIGHT);
         state.scroll = clampScroll(state.scroll, contentHeight, geometry.viewHeight());
@@ -234,7 +234,7 @@ public final class PerfReportScreen extends Screen {
 
     private String renderRows(GuiGraphics graphics,
                               PerfReportGeometry geometry,
-                              List<PerfReportRows.Row> rows,
+                              List<PerfReportRow> rows,
                               int mouseX,
                               int mouseY) {
         String tooltip = null;
@@ -257,7 +257,7 @@ public final class PerfReportScreen extends Screen {
 
     private String renderRow(GuiGraphics graphics,
                              PerfReportGeometry geometry,
-                             PerfReportRows.Row row,
+                             PerfReportRow row,
                              int index,
                              int y,
                              int mouseX,
@@ -267,7 +267,8 @@ public final class PerfReportScreen extends Screen {
         }
         var context = new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y);
         List<Hit> rowHits = rowHits(row, geometry, y);
-        boolean tooltipHovered = row.tooltip() != null
+        PerfReportRow.LabelTooltip tooltip = row.capabilities().labelTooltip().orElse(null);
+        boolean tooltipHovered = tooltip != null
                 && PerfReportTableRenderer.labelBounds(font, context).contains(mouseX, mouseY);
         boolean hovered = tooltipHovered || rowHits.stream().anyMatch(hit -> hit.contains(mouseX, mouseY));
         if (hovered || index % 2 == 0) {
@@ -276,7 +277,7 @@ public final class PerfReportScreen extends Screen {
         }
         PerfReportTableRenderer.renderRow(graphics, font, context);
         hits.addAll(rowHits);
-        return tooltipHovered ? row.tooltip() : null;
+        return tooltipHovered ? tooltip.text() : null;
     }
 
     private void renderTooltip(GuiGraphics graphics, String tooltip, int mouseX, int mouseY) {
@@ -287,18 +288,21 @@ public final class PerfReportScreen extends Screen {
         graphics.renderTooltip(font, font.split(Component.literal(tooltip), tooltipWidth), mouseX, mouseY);
     }
 
-    private List<Hit> rowHits(PerfReportRows.Row row, PerfReportGeometry geometry, int y) {
+    private List<Hit> rowHits(PerfReportRow row, PerfReportGeometry geometry, int y) {
         List<Hit> result = new ArrayList<>(2);
-        if (row.teleportCommand() != null) {
+        PerfReportRow.CoordinateAction coordinateAction =
+                row.capabilities().coordinateAction().orElse(null);
+        if (coordinateAction != null) {
             var context = new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y);
             PerfReportBounds bounds = PerfReportTableRenderer.coordinateBounds(font, context);
             if (bounds != null) {
-                result.add(new Hit(Action.TELEPORT, row.teleportCommand(), bounds));
+                result.add(new Hit(Action.TELEPORT, coordinateAction.command(), bounds));
             }
         }
-        if (row.expandable()) {
+        PerfReportRow.Expansion expansion = row.capabilities().expansion().orElse(null);
+        if (expansion != null) {
             int clickWidth = PerfReportTableRenderer.labelWidth(tableContext(geometry));
-            result.add(new Hit(Action.EXPAND, row.expansionKey(),
+            result.add(new Hit(Action.EXPAND, expansion.key(),
                     new PerfReportBounds(geometry.contentX(), y, clickWidth, ROW_HEIGHT)));
         }
         return result;
@@ -344,13 +348,13 @@ public final class PerfReportScreen extends Screen {
         state().rows = null;
     }
 
-    private List<PerfReportRows.Row> visibleRows() {
-        List<PerfReportRows.Row> rows = allRows();
+    private List<PerfReportRow> visibleRows() {
+        List<PerfReportRow> rows = allRows();
         state().page = PerfReportPager.clampPage(state().page, rows.size());
         return PerfReportPager.page(rows, state().page);
     }
 
-    private List<PerfReportRows.Row> allRows() {
+    private List<PerfReportRow> allRows() {
         if (state().rows == null) {
             state().rows = buildRows();
             state().rememberOrder();
@@ -367,7 +371,7 @@ public final class PerfReportScreen extends Screen {
         state().scroll = 0;
     }
 
-    private List<PerfReportRows.Row> buildRows() {
+    private List<PerfReportRow> buildRows() {
         return switch (selectedTab) {
             case CHUNKS -> PerfReportRows.chunks(report, state().sort, state().expanded, state().stableOrder);
             case TICKABLES -> PerfReportRows.tickables(report, state().sort, state().stableOrder);

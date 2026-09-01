@@ -9,49 +9,50 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 final class PerfReportRows {
-    private static final PerfReportData.Metric EMPTY_METRIC = new PerfReportData.Metric(0.0D, 0.0D, 0L);
-
     private PerfReportRows() {
     }
 
-    static List<Row> chunks(PerfReportData report, SortKey sort,
-                            Set<String> expanded, Map<String, Integer> stableOrder) {
+    static List<PerfReportRow> chunks(PerfReportData report, SortKey sort,
+                                     Set<String> expanded, Map<String, Integer> stableOrder) {
         List<ChunkRow> chunks = report.chunks().stream()
                 .map(entry -> new ChunkRow(entry, chunkRow(entry, expanded)))
                 .sorted(Comparator.comparing(ChunkRow::row, comparator(sort, stableOrder)))
                 .toList();
-        List<Row> rows = new ArrayList<>();
+        List<PerfReportRow> rows = new ArrayList<>();
         chunks.forEach(chunk -> appendChunk(rows, chunk));
         return List.copyOf(rows);
     }
 
-    static List<Row> chunks(PerfReportData report, SortKey sort, Map<String, Integer> stableOrder) {
+    static List<PerfReportRow> chunks(
+            PerfReportData report, SortKey sort, Map<String, Integer> stableOrder) {
         return chunks(report, sort, Set.of(), stableOrder);
     }
 
-    static List<Row> tickables(PerfReportData report, SortKey sort, Map<String, Integer> stableOrder) {
-        List<Row> rows = report.tickables().stream()
+    static List<PerfReportRow> tickables(
+            PerfReportData report, SortKey sort, Map<String, Integer> stableOrder) {
+        List<PerfReportRow> rows = report.tickables().stream()
                 .filter(entry -> entry.type() != TickType.GC)
                 .map(PerfReportRows::tickableRow).toList();
-        List<Row> result = new ArrayList<>(rows.size() + 1);
+        List<PerfReportRow> result = new ArrayList<>(rows.size() + 1);
         report.tickables().stream().filter(entry -> entry.type() == TickType.GC)
                 .map(PerfReportRows::tickableRow).findFirst().ifPresent(result::add);
         result.addAll(sortRows(rows, sort, stableOrder));
         return List.copyOf(result);
     }
 
-    static List<Row> players(PerfReportData report,
-                             SortKey sort,
-                             Set<String> expanded,
-                             Map<String, Integer> stableOrder) {
+    static List<PerfReportRow> players(PerfReportData report,
+                                      SortKey sort,
+                                      Set<String> expanded,
+                                      Map<String, Integer> stableOrder) {
         List<OwnerRow> owners = report.owners().stream()
                 .map(owner -> new OwnerRow(owner, ownerRow(owner, expanded)))
                 .sorted(Comparator.comparing(OwnerRow::row, comparator(sort, stableOrder)))
                 .toList();
-        List<Row> rows = new ArrayList<>();
+        List<PerfReportRow> rows = new ArrayList<>();
         for (OwnerRow owner : owners) {
             appendOwner(rows, owner, sort, stableOrder);
         }
@@ -62,68 +63,107 @@ final class PerfReportRows {
         return String.format(Locale.ROOT, "%.3f", value);
     }
 
-    private static void appendOwner(List<Row> rows,
+    private static void appendOwner(List<PerfReportRow> rows,
                                     OwnerRow ownerRow,
                                     SortKey sort,
                                     Map<String, Integer> stableOrder) {
         PerfReportData.OwnerEntry owner = ownerRow.owner();
         String key = ownerKey(owner);
         rows.add(ownerRow.row());
-        if (!ownerRow.row().expanded()) {
+        if (!isExpanded(ownerRow.row())) {
             return;
         }
         sortRows(owner.sources().stream().map(entry -> ownerSourceRow(key, entry)).toList(), sort, stableOrder).stream()
                 .forEach(rows::add);
     }
 
-    private static Row ownerRow(PerfReportData.OwnerEntry owner, Set<String> expanded) {
+    private static PerfReportRow ownerRow(PerfReportData.OwnerEntry owner, Set<String> expanded) {
         String key = ownerKey(owner);
         boolean expandable = owner.kind() != PerfReportData.AttributionKind.LOADER && !owner.sources().isEmpty();
-        return Row.owner(key, ownerLabel(owner), owner, expandable, expandable && expanded.contains(key));
+        PerfReportRow.Capabilities capabilities = PerfReportRow.Capabilities.none()
+                .withCoordinateAction(teleportCommand(owner.position()));
+        if (expandable) {
+            capabilities = capabilities.withExpansion(key, expanded.contains(key));
+        }
+        Optional<PerfReportRow.PlayerStatus> playerStatus =
+                owner.kind() == PerfReportData.AttributionKind.PLAYER
+                        ? Optional.of(new PerfReportRow.PlayerStatus(
+                        owner.online(), owner.lastLoginEpochMillis())) : Optional.empty();
+        return PerfReportRow.metric(key,
+                new PerfReportRow.Content(ownerLabel(owner), positionText(owner.position())),
+                new PerfReportRow.MetricOptions(
+                        new PerfReportRow.OwnerCells(owner.chunkCount(), playerStatus), owner.metric(),
+                        new PerfReportRow.Presentation(0, capabilities)));
     }
 
-    private static Row chunkRow(PerfReportData.ChunkEntry entry, Set<String> expanded) {
+    private static PerfReportRow chunkRow(PerfReportData.ChunkEntry entry, Set<String> expanded) {
         String key = chunkKey(entry);
         String command = ReportButtons.chunkTeleportCommand(entry.dimension(), entry.chunkX(), entry.chunkZ());
         boolean expandable = !entry.topEntities().isEmpty() || !entry.topBlockEntities().isEmpty();
-        return Row.chunk(key, entry.dimension() + " ", chunkPosition(entry.chunkX(), entry.chunkZ()),
-                entry.entityCount(), entry.blockEntityCount(), entry.metric(), command,
-                expandable, expandable && expanded.contains(key));
+        PerfReportRow.Capabilities capabilities = PerfReportRow.Capabilities.none()
+                .withCoordinateAction(command);
+        if (expandable) {
+            capabilities = capabilities.withExpansion(key, expanded.contains(key));
+        }
+        return PerfReportRow.metric(key,
+                new PerfReportRow.Content(
+                        entry.dimension() + " ", chunkPosition(entry.chunkX(), entry.chunkZ())),
+                new PerfReportRow.MetricOptions(
+                        new PerfReportRow.ChunkCells(entry.entityCount(), entry.blockEntityCount()),
+                        entry.metric(), new PerfReportRow.Presentation(0, capabilities)));
     }
 
-    private static void appendChunk(List<Row> rows, ChunkRow chunk) {
+    private static void appendChunk(List<PerfReportRow> rows, ChunkRow chunk) {
         rows.add(chunk.row());
-        if (!chunk.row().expanded()) {
+        if (!isExpanded(chunk.row())) {
             return;
         }
         chunk.entry().topEntities().forEach(count -> rows.add(objectCountRow(chunk, count, true)));
         chunk.entry().topBlockEntities().forEach(count -> rows.add(objectCountRow(chunk, count, false)));
     }
 
-    private static Row objectCountRow(ChunkRow chunk, PerfReportData.ObjectCount count, boolean entity) {
+    private static PerfReportRow objectCountRow(
+            ChunkRow chunk, PerfReportData.ObjectCount count, boolean entity) {
         String type = entity ? "entity" : "block_entity";
         String key = chunk.row().key() + ":" + type + ":" + count.className() + ":" + count.detailId();
         String coordinate = "(" + count.x() + ", " + count.y() + ", " + count.z() + ")";
         String command = ReportButtons.teleportCommand(
                 chunk.entry().dimension(), count.x(), count.y(), count.z());
-        return Row.summary(key, PerfDisplayText.objectName(
-                        count.detailKind(), count.className(), count.detailId()),
-                entity ? count.count() : 0, entity ? 0 : count.count(), coordinate, command);
+        return PerfReportRow.summary(key,
+                new PerfReportRow.Content(PerfDisplayText.objectName(
+                        count.detailKind(), count.className(), count.detailId()), coordinate),
+                new PerfReportRow.SummaryOptions(
+                        new PerfReportRow.ChunkCells(
+                                entity ? count.count() : 0, entity ? 0 : count.count()),
+                        new PerfReportRow.Presentation(1, PerfReportRow.Capabilities.none()
+                                .withCoordinateAction(command))));
     }
 
-    private static Row tickableRow(PerfReportData.TickableEntry entry) {
+    private static PerfReportRow tickableRow(PerfReportData.TickableEntry entry) {
         String label = tickableLabel(entry);
         String coordinate = tickablePosition(entry);
         String prefix = coordinate.isEmpty() ? label : label.substring(0, label.length() - coordinate.length());
-        String tooltip = entry.type() == TickType.HANDLER ? entry.eventLoop() : null;
-        return Row.leaf(tickableKey(entry), prefix, coordinate, typeLabel(entry.type()),
-                0, 0, 0, entry.metric(), 0, teleportCommand(entry), tooltip);
+        PerfReportRow.Capabilities capabilities = PerfReportRow.Capabilities.none()
+                .withCoordinateAction(teleportCommand(entry));
+        if (entry.type() == TickType.HANDLER) {
+            capabilities = capabilities.withLabelTooltip(entry.eventLoop());
+        }
+        return PerfReportRow.metric(tickableKey(entry),
+                new PerfReportRow.Content(prefix, coordinate),
+                new PerfReportRow.MetricOptions(
+                        new PerfReportRow.TickableCells(typeLabel(entry.type())), entry.metric(),
+                        new PerfReportRow.Presentation(0, capabilities)));
     }
 
-    private static Row ownerSourceRow(String ownerKey, PerfReportData.OwnerSourceEntry entry) {
+    private static PerfReportRow ownerSourceRow(
+            String ownerKey, PerfReportData.OwnerSourceEntry entry) {
         String key = ownerKey + ":source:" + entry.id();
-        return Row.leaf(key, sourceName(entry), positionText(entry.position()), "",
-                0, 0, entry.chunkCount(), entry.metric(), 1, teleportCommand(entry.position()));
+        return PerfReportRow.metric(key,
+                new PerfReportRow.Content(sourceName(entry), positionText(entry.position())),
+                new PerfReportRow.MetricOptions(
+                        new PerfReportRow.OwnerCells(entry.chunkCount(), Optional.empty()), entry.metric(),
+                        new PerfReportRow.Presentation(1, PerfReportRow.Capabilities.none()
+                                .withCoordinateAction(teleportCommand(entry.position())))));
     }
 
     private static String tickableLabel(PerfReportData.TickableEntry entry) {
@@ -236,13 +276,23 @@ final class PerfReportRows {
         return "owner:" + owner.kind() + ":" + owner.id();
     }
 
-    private static List<Row> sortRows(List<Row> rows, SortKey sort, Map<String, Integer> stableOrder) {
+    private static boolean isExpanded(PerfReportRow row) {
+        return row.capabilities().expansion()
+                .map(PerfReportRow.Expansion::expanded)
+                .orElse(false);
+    }
+
+    private static List<PerfReportRow> sortRows(
+            List<PerfReportRow> rows, SortKey sort, Map<String, Integer> stableOrder) {
         return rows.stream().sorted(comparator(sort, stableOrder)).toList();
     }
 
-    private static Comparator<Row> comparator(SortKey sort, Map<String, Integer> stableOrder) {
-        Comparator<Row> requested = Comparator.comparingDouble(sort::value).reversed().thenComparing(Row::label);
-        return Comparator.comparingInt((Row row) -> stableOrder.getOrDefault(row.key(), Integer.MAX_VALUE))
+    private static Comparator<PerfReportRow> comparator(
+            SortKey sort, Map<String, Integer> stableOrder) {
+        Comparator<PerfReportRow> requested = Comparator.comparingDouble(sort::value)
+                .reversed().thenComparing(PerfReportRow::label);
+        return Comparator.comparingInt((PerfReportRow row) ->
+                        stableOrder.getOrDefault(row.key(), Integer.MAX_VALUE))
                 .thenComparing(requested);
     }
 
@@ -250,82 +300,24 @@ final class PerfReportRows {
         MSPT(row -> row.metric().mspt()),
         MAX(row -> row.metric().max()),
         SAMPLES(row -> row.metric().samples()),
-        CHUNKS(Row::chunkCount),
-        ENTITIES(Row::entityCount),
-        BLOCK_ENTITIES(Row::blockEntityCount);
+        CHUNKS(row -> row.auxiliary().chunkCount()),
+        ENTITIES(row -> row.auxiliary().entityCount()),
+        BLOCK_ENTITIES(row -> row.auxiliary().blockEntityCount());
 
-        private final java.util.function.ToDoubleFunction<Row> value;
+        private final java.util.function.ToDoubleFunction<PerfReportRow> value;
 
-        SortKey(java.util.function.ToDoubleFunction<Row> value) {
+        SortKey(java.util.function.ToDoubleFunction<PerfReportRow> value) {
             this.value = value;
         }
 
-        double value(Row row) {
+        double value(PerfReportRow row) {
             return value.applyAsDouble(row);
         }
     }
 
-    private record OwnerRow(PerfReportData.OwnerEntry owner, Row row) {
+    private record OwnerRow(PerfReportData.OwnerEntry owner, PerfReportRow row) {
     }
 
-    private record ChunkRow(PerfReportData.ChunkEntry entry, Row row) {
-    }
-
-    record Row(String key,
-               String labelPrefix,
-               String coordinate,
-               String type,
-               int entityCount,
-               int blockEntityCount,
-               int chunkCount,
-               boolean playerOwner,
-               boolean online,
-               long lastLoginEpochMillis,
-               PerfReportData.Metric metric,
-               int depth,
-               boolean expandable,
-               boolean expanded,
-               String expansionKey,
-               String teleportCommand,
-               boolean summary,
-               String tooltip) {
-        static Row leaf(String key, String labelPrefix, String coordinate, String type,
-                        int entityCount, int blockEntityCount, int chunkCount,
-                        PerfReportData.Metric metric, int depth, String teleportCommand) {
-            return leaf(key, labelPrefix, coordinate, type, entityCount, blockEntityCount,
-                    chunkCount, metric, depth, teleportCommand, null);
-        }
-
-        static Row leaf(String key, String labelPrefix, String coordinate, String type,
-                        int entityCount, int blockEntityCount, int chunkCount,
-                        PerfReportData.Metric metric, int depth, String teleportCommand, String tooltip) {
-            return new Row(key, labelPrefix, coordinate, type, entityCount, blockEntityCount, chunkCount,
-                    false, false, 0L, metric, depth, false, false, null, teleportCommand, false, tooltip);
-        }
-
-        static Row chunk(String key, String labelPrefix, String coordinate,
-                         int entityCount, int blockEntityCount, PerfReportData.Metric metric,
-                         String teleportCommand, boolean expandable, boolean expanded) {
-            return new Row(key, labelPrefix, coordinate, "", entityCount, blockEntityCount,
-                    0, false, false, 0L, metric, 0, expandable, expanded, key, teleportCommand, false, null);
-        }
-
-        static Row summary(String key, String label, int entityCount, int blockEntityCount,
-                           String coordinate, String teleportCommand) {
-            return new Row(key, label, coordinate, "", entityCount, blockEntityCount,
-                    0, false, false, 0L, EMPTY_METRIC, 1, false, false, null, teleportCommand, true, null);
-        }
-
-        static Row owner(String key, String label, PerfReportData.OwnerEntry owner,
-                         boolean expandable, boolean expanded) {
-            boolean player = owner.kind() == PerfReportData.AttributionKind.PLAYER;
-            return new Row(key, label, positionText(owner.position()), "", 0, 0, owner.chunkCount(),
-                    player, owner.online(), owner.lastLoginEpochMillis(), owner.metric(), 0,
-                    expandable, expanded, key, PerfReportRows.teleportCommand(owner.position()), false, null);
-        }
-
-        String label() {
-            return labelPrefix + coordinate;
-        }
+    private record ChunkRow(PerfReportData.ChunkEntry entry, PerfReportRow row) {
     }
 }
