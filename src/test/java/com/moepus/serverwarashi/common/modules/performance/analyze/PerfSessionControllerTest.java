@@ -4,6 +4,7 @@ import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderRef;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
+import com.moepus.serverwarashi.common.modules.performance.sampling.PerfSamplerSession;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,5 +93,48 @@ class PerfSessionControllerTest {
                 ChunkPos.asLong(0, 0), List.of(new PerfAttributionSnapshot.Bucket(owner, source, 0, 0))));
         assertNull(TicketPerfRuntime.withLiveLoaderControls(report, missing)
                 .loaderSources().getFirst().control());
+    }
+
+    @Test
+    void retainsStoppedUnknownStacksAndInvalidatesThemOnNewSessionOrClear()
+            throws Exception {
+        PerfSessionController controller = sampledController();
+        long reportId = controller.currentPublishedSnapshot().report().reportId();
+
+        assertTrue(controller.unknownStackSnapshot(reportId).totalObserved() > 0L);
+        assertTrue(controller.start(10, null, null));
+        assertNull(controller.unknownStackSnapshot(reportId));
+        controller.stop();
+
+        controller = sampledController();
+        reportId = controller.currentPublishedSnapshot().report().reportId();
+        assertTrue(controller.unknownStackSnapshot(reportId).retainedCount() > 0);
+        assertTrue(controller.clearLastReport());
+        assertNull(controller.unknownStackSnapshot(reportId));
+    }
+
+    private static PerfSessionController sampledController() throws Exception {
+        PerfSessionController controller = new PerfSessionController(() -> 1_000);
+        assertTrue(controller.start(10, null, null));
+        controller.onServerTickPre(null);
+        PerfSamplerSession sampler = activeSampler(controller);
+        long deadline = System.nanoTime() + 1_000_000_000L;
+        while (sampler.unknownStackSnapshot().totalObserved() == 0L
+                && System.nanoTime() < deadline) {
+            Thread.sleep(1L);
+        }
+        sampler.endTick(10_000_000L);
+        controller.stop();
+        return controller;
+    }
+
+    private static PerfSamplerSession activeSampler(PerfSessionController controller)
+            throws ReflectiveOperationException {
+        Field activeField = PerfSessionController.class.getDeclaredField("active");
+        activeField.setAccessible(true);
+        Object active = activeField.get(controller);
+        Field samplerField = active.getClass().getDeclaredField("sampler");
+        samplerField.setAccessible(true);
+        return (PerfSamplerSession) samplerField.get(active);
     }
 }

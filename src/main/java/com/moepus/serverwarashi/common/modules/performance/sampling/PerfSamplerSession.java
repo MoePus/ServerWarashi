@@ -21,6 +21,8 @@ public final class PerfSamplerSession {
     private final Object aggregationLock = new Object();
     private final Queue<TickSamples> closedTicks = new ConcurrentLinkedQueue<>();
     private final PerfSampleAggregator aggregator;
+    private final UnknownStackReservoir unknownStacks;
+    private final long reportId;
     private final int intervalMicros;
     private final long durationNanos;
     private final SplittableRandom intervalRandom;
@@ -34,6 +36,12 @@ public final class PerfSamplerSession {
     private TickSamples betweenTicks = new TickSamples(null);
     private long sampleAttempts;
     private long acceptedTicks;
+    private long currentTickId;
+    private long completedTickId;
+    private long currentUnknownSamples;
+    private long betweenUnknownSamples;
+    private long discardedUnknownSamples;
+    private boolean stopped;
     private int publishedEntryKinds;
 
     public static PerfSamplerSession create(long sessionId,
@@ -50,8 +58,10 @@ public final class PerfSamplerSession {
             throw new IllegalArgumentException("Sample interval must be positive");
         }
         this.intervalMicros = intervalMicros;
+        this.reportId = sessionId;
         durationNanos = options.durationNanos();
         aggregator = new PerfSampleAggregator(sessionId);
+        unknownStacks = new UnknownStackReservoir(sessionId ^ 0x6A09E667F3BCC909L);
         nanoTime = options.nanoTime();
         analysisClock = new AnalysisClock(nanoTime);
         PerfReportData initialReport = options.initialAttribution() == null
@@ -133,6 +143,9 @@ public final class PerfSamplerSession {
                 throw new IllegalStateException("Cannot begin a tick while sampling is not running");
             }
             TickSamples tick = new TickSamples(attribution);
+            currentTickId++;
+            currentUnknownSamples = betweenUnknownSamples;
+            betweenUnknownSamples = 0L;
             tick.mergeSamples(betweenTicks);
             betweenTicks = new TickSamples(null);
             tick.gcStartMillis = gcTimeTracker.snapshot();
@@ -159,6 +172,9 @@ public final class PerfSamplerSession {
             tick.durationNanos = durationNanos;
             tick.gcTimeMillis = gcTimeTracker.elapsedSince(tick.gcStartMillis);
             tick.completedAtNanos = nanoTime.getAsLong();
+            unknownStacks.completeTick(currentTickId, currentUnknownSamples);
+            completedTickId = currentTickId;
+            currentUnknownSamples = 0L;
             currentTick = null;
             closedTicks.add(tick);
         }
@@ -171,9 +187,16 @@ public final class PerfSamplerSession {
     public PerfReportData stop(boolean retainInitialLayout) {
         Measurement measurement;
         synchronized (stateLock) {
+            discardedUnknownSamples += betweenUnknownSamples;
+            if (currentTick != null) {
+                discardedUnknownSamples += currentUnknownSamples;
+            }
+            betweenUnknownSamples = 0L;
+            currentUnknownSamples = 0L;
             currentTick = null;
             betweenTicks = new TickSamples(null);
             analysisClock.stop();
+            stopped = true;
             measurement = measurementLocked();
         }
         LockSupport.unpark(samplerThread);
@@ -201,6 +224,25 @@ public final class PerfSamplerSession {
 
     public PublishedSnapshot latestPublishedSnapshot() {
         return latestSnapshot;
+    }
+
+    public long reportId() {
+        return reportId;
+    }
+
+    public UnknownStackSnapshot unknownStackSnapshot() {
+        synchronized (stateLock) {
+            boolean openTick = currentTick != null;
+            long maximumTickId = openTick ? currentTickId : completedTickId;
+            long excluded = discardedUnknownSamples
+                    + (openTick ? 0L : betweenUnknownSamples);
+            long tickCount = openTick ? currentTickId : completedTickId;
+            var parameters = new UnknownStackReservoir.SnapshotParameters(
+                    reportId, tickCount, intervalMicros, maximumTickId, excluded,
+                    openTick ? currentTickId : 0L,
+                    openTick ? currentUnknownSamples : 0L, stopped);
+            return unknownStacks.snapshot(parameters);
+        }
     }
 
     private void runSampler() {
@@ -240,9 +282,11 @@ public final class PerfSamplerSession {
         }
         TickSamples expected = currentTick;
         PerfWorkTracker.Snapshot snapshot = PerfWorkTracker.snapshot();
+        StackTraceElement[] capturedStack = null;
         SampleMetricMode metricMode = SampleMetricMode.STATISTICAL;
         if (snapshot == null) {
-            snapshot = PerfStackAttributor.capture(PerfWorkTracker.profiledThread());
+            capturedStack = PerfStackAttributor.captureStack(PerfWorkTracker.profiledThread());
+            snapshot = capturedStack == null ? null : PerfStackAttributor.classify(capturedStack);
             metricMode = PerfStackAttributor.metricMode(snapshot);
         } else if (snapshot.type() == TickType.ENTITY) {
             PerfWorkTracker.Snapshot handler =
@@ -259,8 +303,16 @@ public final class PerfSamplerSession {
             sampleAttempts++;
             if (expected != null && currentTick == expected) {
                 expected.sample(snapshot, metricMode);
+                if (metricMode == SampleMetricMode.DIRECT_INTERVAL) {
+                    unknownStacks.record(capturedStack, currentTickId);
+                    currentUnknownSamples++;
+                }
             } else if (expected == null && currentTick == null && snapshot != null) {
                 betweenTicks.sample(snapshot, metricMode);
+                if (metricMode == SampleMetricMode.DIRECT_INTERVAL) {
+                    unknownStacks.record(capturedStack, currentTickId + 1L);
+                    betweenUnknownSamples++;
+                }
             }
             return SamplerStatus.RUNNING;
         }

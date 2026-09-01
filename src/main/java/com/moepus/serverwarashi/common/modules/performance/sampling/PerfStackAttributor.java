@@ -42,7 +42,7 @@ final class PerfStackAttributor {
                 ? SampleMetricMode.DIRECT_INTERVAL : SampleMetricMode.STATISTICAL;
     }
 
-    private static StackTraceElement[] captureStack(Thread thread) {
+    static StackTraceElement[] captureStack(Thread thread) {
         if (thread == null || !thread.isAlive()) {
             return null;
         }

@@ -39,6 +39,8 @@ class PerfSamplerSessionTest {
             stopped = true;
             assertTrue(report.tickables().stream().anyMatch(entry ->
                     entry.type() == TickType.TASK && "Unknown".equals(entry.className())));
+            assertTrue(session.unknownStackSnapshot().totalObserved() > 0L);
+            assertEquals(1L, session.unknownStackSnapshot().tickIdAt(0));
         } finally {
             PerfWorkTracker.deactivate();
             if (!stopped) {
@@ -227,6 +229,23 @@ class PerfSamplerSessionTest {
 
         assertEquals(0L, report.tickCount());
         assertEquals(0L, report.totalSamples());
+    }
+
+    @Test
+    void stopExcludesUnassignedBetweenTickUnknownStacks() throws InterruptedException {
+        PerfSamplerSession session = unlimitedSession(13L, null);
+        PerfWorkTracker.activate(Thread.currentThread());
+        session.start();
+        try {
+            Thread.sleep(30L);
+        } finally {
+            PerfWorkTracker.deactivate();
+        }
+
+        session.stop();
+
+        assertEquals(0L, session.unknownStackSnapshot().totalObserved());
+        assertEquals(0, session.unknownStackSnapshot().retainedCount());
     }
 
     @Test

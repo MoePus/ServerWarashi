@@ -6,6 +6,7 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData
 import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfSamplerSession;
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
+import com.moepus.serverwarashi.common.modules.performance.sampling.UnknownStackSnapshot;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.UUID;
@@ -20,6 +21,7 @@ final class PerfSessionController {
     private PerfReportData lastReport;
     private PerfWorldHotspotIndex lastHotspots;
     private PerfAttributionSnapshot lastAttribution;
+    private UnknownStackSnapshot lastUnknownStacks;
     private long nextSessionId = 1L;
 
     PerfSessionController() {
@@ -51,6 +53,7 @@ final class PerfSessionController {
                 nextSessionId++, sampleIntervalMicros.getAsInt(),
                 new PerfSamplerSession.Options(attribution, durationNanos));
         try {
+            lastUnknownStacks = null;
             active = new ActiveSession(playerId, sampler, attribution);
             return true;
         } catch (RuntimeException | Error exception) {
@@ -130,6 +133,28 @@ final class PerfSessionController {
         return active == null ? lastAttribution : active.attribution;
     }
 
+    UnknownStackSnapshot unknownStackSnapshot(long reportId) {
+        if (!hasUnknownStackReport(reportId)) {
+            return null;
+        }
+        if (active != null) {
+            return active.sampler.unknownStackSnapshot();
+        }
+        return lastUnknownStacks;
+    }
+
+    boolean hasUnknownStackReport(long reportId) {
+        if (reportId <= 0L) {
+            return false;
+        }
+        return active != null ? active.sampler.reportId() == reportId
+                : lastUnknownStacks != null && lastUnknownStacks.reportId() == reportId;
+    }
+
+    boolean isUnknownStackReportFinalized(long reportId) {
+        return hasUnknownStackReport(reportId) && active == null;
+    }
+
     boolean clearLastReport() {
         if (hasActiveSession()) {
             return false;
@@ -137,6 +162,7 @@ final class PerfSessionController {
         lastReport = null;
         lastHotspots = null;
         lastAttribution = null;
+        lastUnknownStacks = null;
         return true;
     }
 
@@ -149,6 +175,7 @@ final class PerfSessionController {
         lastReport = null;
         lastHotspots = null;
         lastAttribution = null;
+        lastUnknownStacks = null;
         nextSessionId = 1L;
     }
 
@@ -162,6 +189,8 @@ final class PerfSessionController {
         PerfWorkTracker.deactivate();
         lastReport = session.sampler.stop(retainInitialLayout);
         lastHotspots = session.sampler.latestHotspots();
+        lastUnknownStacks = lastReport.reportId() == 0L
+                ? null : session.sampler.unknownStackSnapshot();
         lastAttribution = lastReport.reportId() == 0L ? null : session.attribution;
         return lastReport;
     }
