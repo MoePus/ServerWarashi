@@ -76,7 +76,7 @@ class WeakChunkPayloadTest {
     }
 
     @Test
-    void networkProtocolIsVersionSix() {
+    void networkProtocolIsVersionSeven() {
         assertEquals("7", WarashiNetwork.NETWORK_VERSION);
     }
 

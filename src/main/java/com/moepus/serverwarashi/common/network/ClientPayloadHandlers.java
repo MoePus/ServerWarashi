@@ -16,6 +16,8 @@ public final class ClientPayloadHandlers {
     };
     private static Consumer<LoaderControlStatePayload> loaderControlHandler = ignored -> {
     };
+    private static Consumer<UnknownStackDetailsPayload> unknownStackDetailsHandler = ignored -> {
+    };
 
     private ClientPayloadHandlers() {
     }
@@ -67,6 +69,15 @@ public final class ClientPayloadHandlers {
 
     public static void handleLoaderControl(LoaderControlStatePayload payload) {
         loaderControlHandler.accept(payload);
+    }
+
+    public static void setUnknownStackDetailsHandler(
+            Consumer<UnknownStackDetailsPayload> handler) {
+        unknownStackDetailsHandler = Objects.requireNonNull(handler, "handler");
+    }
+
+    public static void handleUnknownStackDetails(UnknownStackDetailsPayload payload) {
+        unknownStackDetailsHandler.accept(payload);
     }
 
 }

@@ -5,6 +5,7 @@ import com.moepus.serverwarashi.common.modules.performance.analyze.TicketPerfRun
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkClearJobs;
 import com.moepus.serverwarashi.common.network.PerfReportDelivery;
 import com.moepus.serverwarashi.common.network.WeakChunkDelivery;
+import com.moepus.serverwarashi.common.network.UnknownStackDetailDelivery;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -28,6 +29,7 @@ public final class ServerWarashiEvents {
         PerfReportDelivery.clearRuntimeState();
         WeakChunkDelivery.clearRuntimeState();
         WeakChunkClearJobs.clear();
+        UnknownStackDetailDelivery.clearRuntimeState();
     }
 
     @SubscribeEvent
@@ -35,6 +37,7 @@ public final class ServerWarashiEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             PerfReportDelivery.onLogout(player);
             WeakChunkDelivery.setMapSubscribed(player.getUUID(), false);
+            UnknownStackDetailDelivery.onLogout(player);
         }
     }
 }

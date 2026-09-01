@@ -2,6 +2,7 @@ package com.moepus.serverwarashi.common.modules.performance.analyze;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
+import com.moepus.serverwarashi.common.modules.performance.sampling.UnknownStackSnapshot;
 import com.moepus.serverwarashi.common.config.TicketPerfConfig;
 import com.moepus.serverwarashi.common.core.owner.PerfAttributionSnapshot;
 import com.moepus.serverwarashi.common.modules.loaderfreeze.BlockLoaderRef;
@@ -107,6 +108,18 @@ public final class TicketPerfRuntime {
             clearMaterializedReport();
         }
         return cleared;
+    }
+
+    public static Optional<UnknownStackSnapshot> unknownStackSnapshot(long reportId) {
+        return Optional.ofNullable(CONTROLLER.unknownStackSnapshot(reportId));
+    }
+
+    public static boolean hasUnknownStackReport(long reportId) {
+        return CONTROLLER.hasUnknownStackReport(reportId);
+    }
+
+    public static boolean isUnknownStackReportFinalized(long reportId) {
+        return CONTROLLER.isUnknownStackReportFinalized(reportId);
     }
 
     public static void clearRuntimeState() {

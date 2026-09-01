@@ -39,6 +39,9 @@ public final class WarashiNetwork {
                 .playToClient(PerfWorldHotspotPayload.TYPE,
                         PerfWorldHotspotPayload.STREAM_CODEC,
                         (payload, context) -> ClientPayloadHandlers.handlePerfWorld(payload))
+                .playToClient(UnknownStackDetailsPayload.TYPE,
+                        UnknownStackDetailsPayload.STREAM_CODEC,
+                        (payload, context) -> ClientPayloadHandlers.handleUnknownStackDetails(payload))
                 .playToServer(PerfMapSubscriptionPayload.TYPE, PerfMapSubscriptionPayload.STREAM_CODEC,
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
@@ -56,6 +59,13 @@ public final class WarashiNetwork {
                         (payload, context) -> {
                             if (context.player() instanceof ServerPlayer player) {
                                 handlePerfControl(player, payload.action());
+                            }
+                        })
+                .playToServer(UnknownStackDetailsRequestPayload.TYPE,
+                        UnknownStackDetailsRequestPayload.STREAM_CODEC,
+                        (payload, context) -> {
+                            if (context.player() instanceof ServerPlayer player) {
+                                UnknownStackDetailDelivery.handle(player, payload);
                             }
                         })
                 .playToServer(WeakChunkClearPayload.TYPE, WeakChunkClearPayload.STREAM_CODEC,
