@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.modules.entityload;
 
+import com.moepus.serverwarashi.common.config.EntityLoadGuardConfig;
 import com.moepus.serverwarashi.common.mixin.accessor.ChunkEntitiesAccessor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -31,7 +32,11 @@ public final class EntityLoadGuard {
     @SuppressWarnings("unchecked")
     public static <T extends EntityAccess> Stream<T> filter(ChunkEntities<T> batch) {
         List<T> loaded = ((ChunkEntitiesAccessor<T>) batch).serverwarashi$getEntities();
-        if (loaded.size() <= BATCH_THRESHOLD) {
+        EntityLoadGuardConfig.Settings settings = EntityLoadGuardConfig.current();
+        if (!settings.enabled()) {
+            return loaded.stream();
+        }
+        if (loaded.size() <= settings.batchThreshold()) {
             return loaded.stream();
         }
 
@@ -42,7 +47,8 @@ public final class EntityLoadGuard {
 
         List<EntityLoadType> types = typeView(loaded);
         EntityLoadBatchPlanner.Plan<EntityLoadType> plan = EntityLoadBatchPlanner.plan(
-                types, BATCH_THRESHOLD, TOP_TYPE_LIMIT, RETAINED_PER_TYPE);
+                types, settings.batchThreshold(), settings.topTypeLimit(),
+                settings.retainedPerType());
         if (plan.removalCount() == 0) {
             return loaded.stream();
         }
@@ -61,7 +67,9 @@ public final class EntityLoadGuard {
                 entity.discard();
             }
         }
-        broadcast(level, batch.getPos(), plan.removals(), representatives);
+        if (settings.broadcast()) {
+            broadcast(level, batch.getPos(), plan.removals(), representatives);
+        }
         return survivorStream(loaded, plan);
     }
 

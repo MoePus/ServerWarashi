@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.network;
 
+import com.moepus.serverwarashi.common.config.FeatureConfig;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkClearJobs;
 import com.moepus.serverwarashi.common.modules.weakload.ChunkEntityCollector;
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
@@ -47,7 +48,9 @@ public final class WeakChunkDelivery {
         PerfChunkEntityScanQueue.ScanBatch priority =
                 PerfReportDelivery.scanEntityCounts(server, completed);
         publishCorrections(server, priority.trackedCorrections());
-        scanWeakChunks(remainingWeakBudget(priority.scannedChunks()));
+        if (FeatureConfig.weakChunkScanEnabled()) {
+            scanWeakChunks(remainingWeakBudget(priority.scannedChunks()));
+        }
     }
 
     public static void clearRuntimeState() {

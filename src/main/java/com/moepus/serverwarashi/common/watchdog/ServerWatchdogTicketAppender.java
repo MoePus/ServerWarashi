@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.watchdog;
 
+import com.moepus.serverwarashi.common.config.FeatureConfig;
 import com.moepus.serverwarashi.common.core.owner.OwnerChunks;
 import com.moepus.serverwarashi.common.core.owner.TicketOwner;
 import net.minecraft.CrashReport;
@@ -17,6 +18,9 @@ public final class ServerWatchdogTicketAppender {
     }
 
     public static void appendTicketInfoToReport(CrashReport report, Iterable<ServerLevel> levels) {
+        if (!FeatureConfig.watchdogTicketReportEnabled()) {
+            return;
+        }
         try {
             CrashReportCategory category = report.addCategory("ServerWarashi Ticket Info");
             List<WatchdogTicketFormatter.Dimension> dimensions = new ArrayList<>();

@@ -23,6 +23,27 @@ public final class ServerConfig {
     static final ModConfigSpec.BooleanValue PERF_ALLOW_NON_OP_SUBSCRIPTIONS = BUILDER
             .comment("Allow non-operator players to subscribe to performance reports.")
             .define("perf_allow_non_op_subscriptions", false);
+    static final ModConfigSpec.BooleanValue ENTITY_LOAD_GUARD_ENABLED = BUILDER
+            .comment("Enable automatic protection against exceptionally large entity chunk loads.")
+            .define("entity_load_guard_enabled", true);
+    static final ModConfigSpec.ConfigValue<Integer> ENTITY_LOAD_GUARD_BATCH_THRESHOLD = BUILDER
+            .comment("Entity count that a single chunk load must exceed before protection runs.")
+            .defineInRange("entity_load_guard_batch_threshold", 5_000, 100, 1_000_000);
+    static final ModConfigSpec.ConfigValue<Integer> ENTITY_LOAD_GUARD_TOP_TYPE_LIMIT = BUILDER
+            .comment("Maximum number of the most common entity or item types reduced by protection.")
+            .defineInRange("entity_load_guard_top_type_limit", 3, 1, 64);
+    static final ModConfigSpec.ConfigValue<Integer> ENTITY_LOAD_GUARD_RETAIN_PER_TYPE = BUILDER
+            .comment("Number of entities retained for each type selected by protection.")
+            .defineInRange("entity_load_guard_retain_per_type", 100, 1, 1_000_000);
+    static final ModConfigSpec.BooleanValue ENTITY_LOAD_GUARD_BROADCAST = BUILDER
+            .comment("Broadcast entity load protection removals to all online players.")
+            .define("entity_load_guard_broadcast", true);
+    static final ModConfigSpec.BooleanValue WEAK_CHUNK_SCAN_ENABLED = BUILDER
+            .comment("Enable background scans for entity-dense weak-loaded chunks.")
+            .define("weak_chunk_scan_enabled", true);
+    static final ModConfigSpec.BooleanValue WATCHDOG_TICKET_REPORT_ENABLED = BUILDER
+            .comment("Append ServerWarashi ticket ownership diagnostics to watchdog crash reports.")
+            .define("watchdog_ticket_report_enabled", true);
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 
