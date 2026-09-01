@@ -9,6 +9,35 @@ class SampleStatisticsTest {
     private static final double ONE_MILLISECOND = 1_000_000.0D;
 
     @Test
+    void directIntervalDoesNotApplyTheStatisticalUpperBound() {
+        SampleStatistics statistics = new SampleStatistics();
+        for (long tick = 1L; tick <= 20L; tick++) {
+            statistics.record(1.0D, tick);
+        }
+
+        var metric = statistics.metric(SampleMetricMode.DIRECT_INTERVAL,
+                new SampleMetricContext(20L, 20L, 8_000_000.0D, ONE_MILLISECOND));
+
+        assertEquals(1.0D, metric.mspt(), 0.000_001D);
+        assertEquals(1.0D, metric.max(), 0.000_001D);
+        assertEquals(20L, metric.samples());
+    }
+
+    @Test
+    void directIntervalUsesTheConfiguredDurationAndRawTickMaximum() {
+        SampleStatistics statistics = new SampleStatistics();
+        statistics.record(1.0D, 1L);
+        statistics.record(4.0D, 2L);
+
+        var metric = statistics.metric(SampleMetricMode.DIRECT_INTERVAL,
+                new SampleMetricContext(2L, 2L, 10_000_000.0D, 250_000.0D));
+
+        assertEquals(0.625D, metric.mspt(), 0.000_001D);
+        assertEquals(1.0D, metric.max(), 0.000_001D);
+        assertEquals(5L, metric.samples());
+    }
+
+    @Test
     void estimatesMaxFromRepeatedHitProbability() {
         SampleStatistics statistics = new SampleStatistics();
         for (long tick = 1L; tick <= 10L; tick++) {

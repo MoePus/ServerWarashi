@@ -240,8 +240,10 @@ public final class PerfSamplerSession {
         }
         TickSamples expected = currentTick;
         PerfWorkTracker.Snapshot snapshot = PerfWorkTracker.snapshot();
+        SampleMetricMode metricMode = SampleMetricMode.STATISTICAL;
         if (snapshot == null) {
             snapshot = PerfStackAttributor.capture(PerfWorkTracker.profiledThread());
+            metricMode = PerfStackAttributor.metricMode(snapshot);
         } else if (snapshot.type() == TickType.ENTITY) {
             PerfWorkTracker.Snapshot handler =
                     PerfStackAttributor.captureTickHandler(PerfWorkTracker.profiledThread());
@@ -256,9 +258,9 @@ public final class PerfSamplerSession {
             }
             sampleAttempts++;
             if (expected != null && currentTick == expected) {
-                expected.sample(snapshot);
+                expected.sample(snapshot, metricMode);
             } else if (expected == null && currentTick == null && snapshot != null) {
-                betweenTicks.sample(snapshot);
+                betweenTicks.sample(snapshot, metricMode);
             }
             return SamplerStatus.RUNNING;
         }

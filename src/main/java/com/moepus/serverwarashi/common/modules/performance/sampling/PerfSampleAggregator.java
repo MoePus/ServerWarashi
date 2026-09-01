@@ -83,8 +83,10 @@ final class PerfSampleAggregator {
     BuildSnapshot buildSnapshot(long elapsedNanos, long totalSamples, int intervalMicros) {
         double nanosPerSample = SampleDensity.nanosPerAttempt(
                 elapsedNanos, totalSamples, intervalMicros);
+        SampleMetricContext metricContext = new SampleMetricContext(
+                tickCount, tickCount, nanosPerSample, intervalMicros * 1_000.0D);
         PerfObjectSnapshotBuilder.Build objectBuild =
-                PerfObjectSnapshotBuilder.build(tickables, tickCount, nanosPerSample);
+                PerfObjectSnapshotBuilder.build(tickables, metricContext);
         var limitedChunks = PerfReportLimits.topMetricUnion(
                 chunkEntries(objectBuild.chunkCounts(), nanosPerSample), CHUNK_VIEW_LIMIT_PER_METRIC,
                 PerfReportData.ChunkEntry::metric, STABLE_CHUNK_ORDER);
@@ -273,9 +275,8 @@ final class PerfSampleAggregator {
 
         PerfReportData.TickableEntry toReport(
                 TickSamples.TickableKey key,
-                long ticks,
-                double nanosPerSample) {
-            return toReport(key, metric(ticks, nanosPerSample));
+                SampleMetricContext context) {
+            return toReport(key, metric(key, context));
         }
 
         PerfReportData.TickableEntry toReport(TickSamples.TickableKey key,
@@ -287,8 +288,10 @@ final class PerfSampleAggregator {
                     metric);
         }
 
-        PerfReportData.Metric metric(long ticks, double nanosPerSample) {
-            return stats.metric(ticks, measurementTicks(ticks), nanosPerSample);
+        PerfReportData.Metric metric(TickSamples.TickableKey key,
+                                     SampleMetricContext context) {
+            return stats.metric(key.metricMode(),
+                    context.withMeasurementTicks(measurementTicks(context.currentTick())));
         }
 
         long measurementTicks(long ticks) {

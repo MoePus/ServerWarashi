@@ -11,6 +11,7 @@ final class SampleStatistics {
     private static final double HALF_SAMPLE = 0.5D;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0D;
     private double totalSamples;
+    private double maxObservedSamples;
     private double maxBurstSamples;
     private long primaryWindow = NO_WINDOW;
     private double primarySamples;
@@ -27,6 +28,7 @@ final class SampleStatistics {
         }
         advanceWindows(tick);
         totalSamples += samples;
+        maxObservedSamples = Math.max(maxObservedSamples, samples);
         recordBurst(samples);
         primarySamples += samples;
         if (tick > WINDOW_STAGGER_TICKS) {
@@ -40,12 +42,19 @@ final class SampleStatistics {
 
     PerfReportData.Metric metric(long currentTick, long measurementTicks,
                                  double nanosPerSample) {
-        advanceWindows(currentTick);
-        double mspt = measurementTicks == 0L ? 0.0D
-                : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / measurementTicks;
-        double estimatedMaxSamples = estimatedMaxSamples();
-        double estimatedMax = estimatedMaxSamples * nanosPerSample / NANOS_PER_MILLISECOND;
-        return new PerfReportData.Metric(mspt, Math.max(mspt, estimatedMax), Math.round(totalSamples));
+        return metric(SampleMetricMode.STATISTICAL, new SampleMetricContext(
+                currentTick, measurementTicks, nanosPerSample, nanosPerSample));
+    }
+
+    PerfReportData.Metric metric(SampleMetricMode mode, SampleMetricContext context) {
+        advanceWindows(context.currentTick());
+        double nanosPerSample = context.nanosPerSample(mode);
+        double mspt = context.measurementTicks() == 0L ? 0.0D
+                : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / context.measurementTicks();
+        double maximumSamples = mode == SampleMetricMode.DIRECT_INTERVAL
+                ? maxObservedSamples : estimatedMaxSamples();
+        double maximum = maximumSamples * nanosPerSample / NANOS_PER_MILLISECOND;
+        return new PerfReportData.Metric(mspt, Math.max(mspt, maximum), Math.round(totalSamples));
     }
 
     PerfWorldHotspotIndex.Cost hotspotCost(long totalTicks) {

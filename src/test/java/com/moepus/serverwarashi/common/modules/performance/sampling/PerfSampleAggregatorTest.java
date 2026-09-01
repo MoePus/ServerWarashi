@@ -20,6 +20,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfSampleAggregatorTest {
     @Test
+    void unknownUsesDirectIntervalAfterBetweenTickSamplesAreMerged() {
+        PerfWorkTracker.Snapshot unknown = PerfStackAttributor.classify(new StackTraceElement[]{
+                new StackTraceElement("com.example.TickWork", "calculate", "TickWork.java", 1)
+        });
+        SampleMetricMode mode = PerfStackAttributor.metricMode(unknown);
+        TickSamples betweenTicks = new TickSamples(null);
+        for (int sample = 0; sample < 3; sample++) {
+            betweenTicks.sample(unknown, mode);
+        }
+
+        TickSamples first = new TickSamples(null);
+        first.mergeSamples(betweenTicks);
+        first.sample(unknown, mode);
+        TickSamples second = new TickSamples(null);
+        second.sample(unknown, mode);
+
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(24L);
+        aggregator.accept(first);
+        aggregator.accept(second);
+        PerfReportData report = aggregator.build(milliseconds(1_000L), 100L, 500);
+        PerfReportData.Metric metric = report.tickables().getFirst().metric();
+
+        assertEquals(1.25D, metric.mspt(), 0.000_001D);
+        assertEquals(2.0D, metric.max(), 0.000_001D);
+        assertEquals(5L, metric.samples());
+    }
+
+    @Test
     void reportsHandlerAsAnUnpositionedIndependentTickable() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(12L);
         TickSamples sampled = new TickSamples(null);

@@ -45,9 +45,8 @@ final class PerfObjectSnapshotBuilder {
     }
 
     static Build build(Map<TickSamples.TickableKey, PerfSampleAggregator.TickableAggregate> tickables,
-                       long tickCount,
-                       double nanosPerSample) {
-        Builder builder = new Builder(tickCount, nanosPerSample);
+                       SampleMetricContext metricContext) {
+        Builder builder = new Builder(metricContext);
         tickables.forEach(builder::add);
         return builder.finish(tickables.size());
     }
@@ -68,15 +67,15 @@ final class PerfObjectSnapshotBuilder {
 
     private static final class Builder {
         private final long tickCount;
-        private final double nanosPerSample;
+        private final SampleMetricContext metricContext;
         private final Map<TickSamples.ChunkKey, ObjectCounts> chunkCounts = new HashMap<>();
         private final Map<CoordinateGroup, PriorityQueue<ObjectCandidate>> groups = new HashMap<>();
         private final Map<HotspotIdentity, ObjectCandidate> hotspots = new HashMap<>();
         private final List<PerfReportData.TickableEntry> reportEntries = new ArrayList<>();
 
-        private Builder(long tickCount, double nanosPerSample) {
-            this.tickCount = tickCount;
-            this.nanosPerSample = nanosPerSample;
+        private Builder(SampleMetricContext metricContext) {
+            this.tickCount = metricContext.currentTick();
+            this.metricContext = metricContext;
         }
 
         void add(TickSamples.TickableKey key,
@@ -86,11 +85,11 @@ final class PerfObjectSnapshotBuilder {
                 chunkCounts.computeIfAbsent(chunk, ignored -> new ObjectCounts()).add(key, aggregate);
             }
             if (!isObject(key.type())) {
-                reportEntries.add(aggregate.toReport(key, tickCount, nanosPerSample));
+                reportEntries.add(aggregate.toReport(key, metricContext));
                 return;
             }
             ObjectCandidate candidate = ObjectCandidate.create(
-                    key, aggregate, aggregate.metric(tickCount, nanosPerSample), tickCount);
+                    key, aggregate, aggregate.metric(key, metricContext), tickCount);
             PriorityQueue<ObjectCandidate> group = groups.computeIfAbsent(
                     CoordinateGroup.from(key), ignored -> new PriorityQueue<>(
                             MAX_COORDINATES_PER_GROUP, HOTTEST_FIRST.reversed()));

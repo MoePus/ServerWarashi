@@ -37,6 +37,11 @@ final class PerfStackAttributor {
         return stack == null ? null : findTickHandler(stack);
     }
 
+    static SampleMetricMode metricMode(PerfWorkTracker.Snapshot snapshot) {
+        return snapshot != null && snapshot.workClass() == UnknownWork.class
+                ? SampleMetricMode.DIRECT_INTERVAL : SampleMetricMode.STATISTICAL;
+    }
+
     private static StackTraceElement[] captureStack(Thread thread) {
         if (thread == null || !thread.isAlive()) {
             return null;

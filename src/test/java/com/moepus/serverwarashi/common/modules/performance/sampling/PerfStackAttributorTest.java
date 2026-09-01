@@ -35,6 +35,7 @@ class PerfStackAttributorTest {
             ));
 
             assertEquals(TickType.HANDLER, sample.type());
+            assertEquals(SampleMetricMode.STATISTICAL, PerfStackAttributor.metricMode(sample));
             assertEquals("ServerEvents#onTick(" + tickCase.event() + ")", sample.displayName());
             assertEquals("com.example.ServerEvents#onTick(" + TICK_PACKAGE + tickCase.event() + ")",
                     sample.eventLoop());
@@ -83,6 +84,7 @@ class PerfStackAttributorTest {
 
         assertEquals(TickType.TASK, sample.type());
         assertEquals("Unknown", sample.displayName());
+        assertEquals(SampleMetricMode.DIRECT_INTERVAL, PerfStackAttributor.metricMode(sample));
     }
 
     @Test
@@ -108,6 +110,7 @@ class PerfStackAttributorTest {
             assertEquals(TickType.TASK, sample.type());
             assertEquals("Unknown", sample.displayName());
             assertEquals("", sample.eventLoop());
+            assertEquals(SampleMetricMode.DIRECT_INTERVAL, PerfStackAttributor.metricMode(sample));
         }
     }
 

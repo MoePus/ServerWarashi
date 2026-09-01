@@ -26,23 +26,42 @@ final class TickSamples {
     }
 
     void sample(PerfWorkTracker.Snapshot snapshot) {
+        sample(snapshot, SampleMetricMode.STATISTICAL);
+    }
+
+    void sample(PerfWorkTracker.Snapshot snapshot, SampleMetricMode metricMode) {
         totalSamples++;
         if (snapshot == null) {
             return;
         }
-        TickableKey key = TickableKey.from(snapshot);
-        tickables.computeIfAbsent(key, ignored -> new TickCount()).record(snapshot);
+        TickableKey key = TickableKey.from(snapshot, metricMode);
+        TickCount count = tickables.get(key);
+        if (count == null) {
+            count = new TickCount();
+            tickables.put(key, count);
+        }
+        count.record(snapshot);
         ChunkKey chunk = ChunkKey.from(snapshot);
         if (chunk != null) {
-            chunks.merge(chunk, 1, Integer::sum);
+            Integer previous = chunks.get(chunk);
+            chunks.put(chunk, previous == null ? 1 : previous + 1);
         }
     }
 
     void mergeSamples(TickSamples source) {
         totalSamples += source.totalSamples;
-        source.tickables.forEach((key, count) ->
-                tickables.computeIfAbsent(key, ignored -> new TickCount()).merge(count));
-        source.chunks.forEach((key, count) -> chunks.merge(key, count, Integer::sum));
+        for (var entry : source.tickables.entrySet()) {
+            TickCount count = tickables.get(entry.getKey());
+            if (count == null) {
+                count = new TickCount();
+                tickables.put(entry.getKey(), count);
+            }
+            count.merge(entry.getValue());
+        }
+        for (var entry : source.chunks.entrySet()) {
+            Integer previous = chunks.get(entry.getKey());
+            chunks.put(entry.getKey(), previous == null ? entry.getValue() : previous + entry.getValue());
+        }
     }
 
     record ChunkKey(String dimension, long position) {
@@ -70,8 +89,9 @@ final class TickSamples {
                        int entityId,
                        long fixedPosition,
                        String eventLoop,
-                       String displayName) {
-        static TickableKey from(PerfWorkTracker.Snapshot snapshot) {
+                       String displayName,
+                       SampleMetricMode metricMode) {
+        static TickableKey from(PerfWorkTracker.Snapshot snapshot, SampleMetricMode metricMode) {
             String dimension = snapshot.dimension() == null ? "" : snapshot.dimension().toString();
             long position = switch (snapshot.type()) {
                 case CHUNK -> ChunkPos.asLong(snapshot.x(), snapshot.z());
@@ -80,7 +100,7 @@ final class TickSamples {
             };
             return new TickableKey(snapshot.type(), dimension, snapshot.workClass(), snapshot.detailId(),
                     snapshot.detailKind(),
-                    snapshot.entityId(), position, snapshot.eventLoop(), snapshot.displayName());
+                    snapshot.entityId(), position, snapshot.eventLoop(), snapshot.displayName(), metricMode);
         }
 
         @Override
@@ -93,7 +113,8 @@ final class TickSamples {
             result = 31 * result + entityId;
             result = 31 * result + PackedPositionHash.hash(fixedPosition);
             result = 31 * result + Objects.hashCode(eventLoop);
-            return 31 * result + Objects.hashCode(displayName);
+            result = 31 * result + Objects.hashCode(displayName);
+            return 31 * result + metricMode.hashCode();
         }
     }
 
