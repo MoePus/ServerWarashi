@@ -7,6 +7,7 @@ import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.client.network.ClientPerfPayloadRouter;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
 import com.moepus.serverwarashi.client.screen.PerfReportScreen;
+import com.moepus.serverwarashi.client.screen.UnknownStackCopyController;
 import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
@@ -18,6 +19,7 @@ import com.moepus.serverwarashi.common.network.PerfSpatialSnapshotPayload;
 import com.moepus.serverwarashi.common.network.PerfWorldHotspotPayload;
 import com.moepus.serverwarashi.common.network.WeakChunkPayload;
 import com.moepus.serverwarashi.common.network.WeakChunkCorrectionPayload;
+import com.moepus.serverwarashi.common.network.UnknownStackDetailsPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
@@ -53,6 +55,7 @@ public final class ClientSetup {
         ClientPayloadHandlers.setWeakChunkHandler(ClientSetup::handleWeakChunks);
         ClientPayloadHandlers.setWeakChunkCorrectionHandler(ClientSetup::handleWeakChunkCorrection);
         ClientPayloadHandlers.setLoaderControlHandler(ClientSetup::handleLoaderControl);
+        ClientPayloadHandlers.setUnknownStackDetailsHandler(ClientSetup::handleUnknownStackDetails);
     }
 
     private static void handleWeakChunks(WeakChunkPayload payload) {
@@ -99,6 +102,11 @@ public final class ClientSetup {
                         loaderControlMessage(payload), payload.controllerId().toString()));
             }
         });
+    }
+
+    private static void handleUnknownStackDetails(UnknownStackDetailsPayload payload) {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> UnknownStackCopyController.handlePayload(payload));
     }
 
     private static String loaderControlMessage(LoaderControlStatePayload payload) {

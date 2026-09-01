@@ -22,6 +22,7 @@ public final class PerfReportScreen extends Screen {
     private boolean profiling;
     private final EnumMap<Tab, PerfReportTabState> states = new EnumMap<>(Tab.class);
     private final List<Hit> hits = new ArrayList<>();
+    private final UnknownStackCopyController unknownStackCopy;
     private Tab selectedTab = Tab.CHUNKS;
     private int contentHeight;
     private boolean closeSent;
@@ -30,6 +31,7 @@ public final class PerfReportScreen extends Screen {
         super(Component.translatable("screen.serverwarashi.profiler.title"));
         this.report = report;
         this.profiling = profiling;
+        unknownStackCopy = UnknownStackCopyController.production(report.reportId(), profiling);
         for (Tab tab : Tab.values()) {
             states.put(tab, new PerfReportTabState());
         }
@@ -38,7 +40,20 @@ public final class PerfReportScreen extends Screen {
     public void updateReport(PerfReportData report, boolean profiling) {
         this.report = report;
         this.profiling = profiling;
+        unknownStackCopy.updateReport(report.reportId(), profiling);
         states.values().forEach(PerfReportTabState::refresh);
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        unknownStackCopy.activate();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        unknownStackCopy.tick();
     }
 
     @Override
@@ -54,6 +69,7 @@ public final class PerfReportScreen extends Screen {
     }
 
     private void notifyClosed() {
+        unknownStackCopy.close();
         if (closeSent) {
             return;
         }
@@ -268,7 +284,8 @@ public final class PerfReportScreen extends Screen {
         var context = new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y);
         List<Hit> rowHits = rowHits(row, geometry, y);
         PerfReportRow.LabelTooltip tooltip = row.capabilities().labelTooltip().orElse(null);
-        boolean tooltipHovered = tooltip != null
+        PerfReportRow.LabelAction labelAction = row.capabilities().labelAction().orElse(null);
+        boolean tooltipHovered = (tooltip != null || labelAction != null)
                 && PerfReportTableRenderer.labelBounds(font, context).contains(mouseX, mouseY);
         boolean hovered = tooltipHovered || rowHits.stream().anyMatch(hit -> hit.contains(mouseX, mouseY));
         if (hovered || index % 2 == 0) {
@@ -277,7 +294,10 @@ public final class PerfReportScreen extends Screen {
         }
         PerfReportTableRenderer.renderRow(graphics, font, context);
         hits.addAll(rowHits);
-        return tooltipHovered ? tooltip.text() : null;
+        if (!tooltipHovered) {
+            return null;
+        }
+        return labelAction == null ? tooltip.text() : unknownStackCopy.tooltip();
     }
 
     private void renderTooltip(GuiGraphics graphics, String tooltip, int mouseX, int mouseY) {
@@ -289,7 +309,7 @@ public final class PerfReportScreen extends Screen {
     }
 
     private List<Hit> rowHits(PerfReportRow row, PerfReportGeometry geometry, int y) {
-        List<Hit> result = new ArrayList<>(2);
+        List<Hit> result = new ArrayList<>(3);
         PerfReportRow.CoordinateAction coordinateAction =
                 row.capabilities().coordinateAction().orElse(null);
         if (coordinateAction != null) {
@@ -304,6 +324,11 @@ public final class PerfReportScreen extends Screen {
             int clickWidth = PerfReportTableRenderer.labelWidth(tableContext(geometry));
             result.add(new Hit(Action.EXPAND, expansion.key(),
                     new PerfReportBounds(geometry.contentX(), y, clickWidth, ROW_HEIGHT)));
+        }
+        if (row.capabilities().labelAction().isPresent()) {
+            var context = new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y);
+            result.add(new Hit(Action.UNKNOWN_DETAILS, null,
+                    PerfReportTableRenderer.labelBounds(font, context)));
         }
         return result;
     }
@@ -328,6 +353,7 @@ public final class PerfReportScreen extends Screen {
             case SORT -> selectSort((PerfReportRows.SortKey) hit.target());
             case EXPAND -> toggleExpanded((String) hit.target());
             case TELEPORT -> sendCommand((String) hit.target());
+            case UNKNOWN_DETAILS -> unknownStackCopy.request();
             case TOGGLE_PROFILE -> toggleProfiling();
             case PREVIOUS_PAGE -> changePage(-1);
             case NEXT_PAGE -> changePage(1);
@@ -374,7 +400,8 @@ public final class PerfReportScreen extends Screen {
     private List<PerfReportRow> buildRows() {
         return switch (selectedTab) {
             case CHUNKS -> PerfReportRows.chunks(report, state().sort, state().expanded, state().stableOrder);
-            case TICKABLES -> PerfReportRows.tickables(report, state().sort, state().stableOrder);
+            case TICKABLES -> PerfReportRows.tickables(
+                    report, state().sort, state().stableOrder, unknownStackCopy.available());
             case PLAYERS -> PerfReportRows.players(report, state().sort, state().expanded, state().stableOrder);
         };
     }
@@ -439,6 +466,7 @@ public final class PerfReportScreen extends Screen {
         SORT,
         EXPAND,
         TELEPORT,
+        UNKNOWN_DETAILS,
         TOGGLE_PROFILE,
         PREVIOUS_PAGE,
         NEXT_PAGE

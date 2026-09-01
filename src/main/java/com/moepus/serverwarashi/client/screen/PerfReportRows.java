@@ -34,12 +34,20 @@ final class PerfReportRows {
 
     static List<PerfReportRow> tickables(
             PerfReportData report, SortKey sort, Map<String, Integer> stableOrder) {
+        return tickables(report, sort, stableOrder, false);
+    }
+
+    static List<PerfReportRow> tickables(PerfReportData report,
+                                         SortKey sort,
+                                         Map<String, Integer> stableOrder,
+                                         boolean unknownDetailsAvailable) {
         List<PerfReportRow> rows = report.tickables().stream()
                 .filter(entry -> entry.type() != TickType.GC)
-                .map(PerfReportRows::tickableRow).toList();
+                .map(entry -> tickableRow(entry, unknownDetailsAvailable)).toList();
         List<PerfReportRow> result = new ArrayList<>(rows.size() + 1);
         report.tickables().stream().filter(entry -> entry.type() == TickType.GC)
-                .map(PerfReportRows::tickableRow).findFirst().ifPresent(result::add);
+                .map(entry -> tickableRow(entry, unknownDetailsAvailable))
+                .findFirst().ifPresent(result::add);
         result.addAll(sortRows(rows, sort, stableOrder));
         return List.copyOf(result);
     }
@@ -139,7 +147,8 @@ final class PerfReportRows {
                                 .withCoordinateAction(command))));
     }
 
-    private static PerfReportRow tickableRow(PerfReportData.TickableEntry entry) {
+    private static PerfReportRow tickableRow(
+            PerfReportData.TickableEntry entry, boolean unknownDetailsAvailable) {
         String label = tickableLabel(entry);
         String coordinate = tickablePosition(entry);
         String prefix = coordinate.isEmpty() ? label : label.substring(0, label.length() - coordinate.length());
@@ -147,12 +156,22 @@ final class PerfReportRows {
                 .withCoordinateAction(teleportCommand(entry));
         if (entry.type() == TickType.HANDLER) {
             capabilities = capabilities.withLabelTooltip(entry.eventLoop());
+        } else if (unknownDetailsAvailable && isUnknownFallback(entry)) {
+            capabilities = capabilities
+                    .withLabelTooltip(PerfDisplayText.translated(
+                            "screen.serverwarashi.profiler.unknown.click"))
+                    .withLabelAction();
         }
         return PerfReportRow.metric(tickableKey(entry),
                 new PerfReportRow.Content(prefix, coordinate),
                 new PerfReportRow.MetricOptions(
                         new PerfReportRow.TickableCells(typeLabel(entry.type())), entry.metric(),
                         new PerfReportRow.Presentation(0, capabilities)));
+    }
+
+    private static boolean isUnknownFallback(PerfReportData.TickableEntry entry) {
+        return entry.type() == TickType.TASK && entry.eventLoop().isEmpty()
+                && "Unknown".equals(entry.className());
     }
 
     private static PerfReportRow ownerSourceRow(

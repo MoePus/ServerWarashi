@@ -133,15 +133,17 @@ record PerfReportRow(String key, Content content, Display display) {
     }
 
     record Capabilities(Optional<Expansion> expansion,
-                        Optional<CoordinateAction> coordinateAction,
-                        Optional<LabelTooltip> labelTooltip) {
+                         Optional<CoordinateAction> coordinateAction,
+                         Optional<LabelTooltip> labelTooltip,
+                         Optional<LabelAction> labelAction) {
         private static final Capabilities NONE = new Capabilities(
-                Optional.empty(), Optional.empty(), Optional.empty());
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
         Capabilities {
             Objects.requireNonNull(expansion, "expansion");
             Objects.requireNonNull(coordinateAction, "coordinateAction");
             Objects.requireNonNull(labelTooltip, "labelTooltip");
+            Objects.requireNonNull(labelAction, "labelAction");
         }
 
         static Capabilities none() {
@@ -150,17 +152,22 @@ record PerfReportRow(String key, Content content, Display display) {
 
         Capabilities withExpansion(String key, boolean expanded) {
             return new Capabilities(Optional.of(new Expansion(key, expanded)),
-                    coordinateAction, labelTooltip);
+                    coordinateAction, labelTooltip, labelAction);
         }
 
         Capabilities withCoordinateAction(String command) {
             return command == null ? this : new Capabilities(expansion,
-                    Optional.of(new CoordinateAction(command)), labelTooltip);
+                    Optional.of(new CoordinateAction(command)), labelTooltip, labelAction);
         }
 
         Capabilities withLabelTooltip(String text) {
             return text == null ? this : new Capabilities(expansion,
-                    coordinateAction, Optional.of(new LabelTooltip(text)));
+                    coordinateAction, Optional.of(new LabelTooltip(text)), labelAction);
+        }
+
+        Capabilities withLabelAction() {
+            return new Capabilities(expansion, coordinateAction, labelTooltip,
+                    Optional.of(new LabelAction()));
         }
     }
 
@@ -171,5 +178,8 @@ record PerfReportRow(String key, Content content, Display display) {
     }
 
     record LabelTooltip(String text) {
+    }
+
+    record LabelAction() {
     }
 }

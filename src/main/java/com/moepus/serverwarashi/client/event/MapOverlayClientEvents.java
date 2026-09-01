@@ -8,6 +8,7 @@ import com.moepus.serverwarashi.client.map.MapOverlayRenderer;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
 import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
+import com.moepus.serverwarashi.client.screen.UnknownStackCopyController;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
 import com.moepus.serverwarashi.client.world.WorldPerfOverlayRenderer;
 import net.minecraft.client.Minecraft;
@@ -50,6 +51,7 @@ public final class MapOverlayClientEvents {
         mapOpen = false;
         PerfMapSubscriptionClient.clear();
         ClientPerfStateCoordinator.clearAll();
+        UnknownStackCopyController.clearRuntimeState();
         ClientWeakChunkState.clear();
         WorldPerfOverlayRenderer.close();
         MapOverlayControls.clear();

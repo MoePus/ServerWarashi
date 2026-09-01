@@ -94,6 +94,22 @@ class PerfReportRowsTest {
     }
 
     @Test
+    void negotiatedUnknownFallbackHasOnlyLabelTooltipAndAction() {
+        var unknown = new PerfReportData.TickableEntry(
+                TickType.TASK, "", "Unknown", "", TickDetailKind.NONE,
+                -1, false, 0, 0, 0, false, "", metric(2.0, 3.0));
+
+        PerfReportRow row = PerfReportRows.tickables(
+                report(List.of(), List.of(unknown), List.of()),
+                PerfReportRows.SortKey.MSPT, Map.of(), true).getFirst();
+
+        assertEquals("screen.serverwarashi.profiler.unknown.click", tooltip(row));
+        assertTrue(row.capabilities().labelAction().isPresent());
+        assertTrue(row.capabilities().coordinateAction().isEmpty());
+        assertTrue(row.capabilities().expansion().isEmpty());
+    }
+
+    @Test
     void gcAppearsAsARollingTickableMetric() {
         var gc = new PerfReportData.TickableEntry(
                 TickType.GC, "", "Rolling 1s", "", TickDetailKind.NONE,

@@ -27,6 +27,15 @@
   "screen.serverwarashi.profiler.type.handler": "Handler",
   "screen.serverwarashi.profiler.type.gc": "GC",
   "screen.serverwarashi.profiler.tickable.unknown": "Unknown",
+  "screen.serverwarashi.profiler.unknown.click": "Click to copy details",
+  "screen.serverwarashi.profiler.unknown.fetching": "Fetching details...",
+  "screen.serverwarashi.profiler.unknown.copied": "Details copied",
+  "screen.serverwarashi.profiler.unknown.timeout": "Request timed out; click to retry",
+  "screen.serverwarashi.profiler.unknown.stale": "Report expired; click to retry",
+  "screen.serverwarashi.profiler.unknown.empty": "No stack details available; click to retry",
+  "screen.serverwarashi.profiler.unknown.denied": "You do not have permission to view details",
+  "screen.serverwarashi.profiler.unknown.busy": "Request is busy; click to retry",
+  "screen.serverwarashi.profiler.unknown.error": "Could not fetch details; click to retry",
   "screen.serverwarashi.profiler.tickable.gc": "Garbage Collection (1s)",
   "screen.serverwarashi.profiler.owner.system": "System (system)",
   "screen.serverwarashi.profiler.owner.unknown": "Unknown (unknown)",
@@ -66,5 +75,6 @@
   "message.serverwarashi.loader_control.stale": "The report for loader %s is stale; refresh it and try again",
   "message.serverwarashi.loader_control.missing": "Loader %s no longer has a matching ticket",
   "message.serverwarashi.loader_control.unsupported": "Loader %s cannot be controlled",
-  "message.serverwarashi.loader_control.denied": "You do not have permission to control loader %s"
+  "message.serverwarashi.loader_control.denied": "You do not have permission to control loader %s",
+  "message.serverwarashi.unknown.copied": "Copied %s representative stacks"
 }

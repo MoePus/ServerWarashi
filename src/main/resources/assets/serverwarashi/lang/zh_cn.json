@@ -27,6 +27,15 @@
   "screen.serverwarashi.profiler.type.handler": "处理器",
   "screen.serverwarashi.profiler.type.gc": "GC",
   "screen.serverwarashi.profiler.tickable.unknown": "未知",
+  "screen.serverwarashi.profiler.unknown.click": "点击复制详情",
+  "screen.serverwarashi.profiler.unknown.fetching": "正在获取详情…",
+  "screen.serverwarashi.profiler.unknown.copied": "已复制详情",
+  "screen.serverwarashi.profiler.unknown.timeout": "获取超时，点击重试",
+  "screen.serverwarashi.profiler.unknown.stale": "报告已过期，点击重试",
+  "screen.serverwarashi.profiler.unknown.empty": "没有可用的栈详情，点击重试",
+  "screen.serverwarashi.profiler.unknown.denied": "没有查看详情的权限",
+  "screen.serverwarashi.profiler.unknown.busy": "请求过于频繁，点击重试",
+  "screen.serverwarashi.profiler.unknown.error": "获取失败，点击重试",
   "screen.serverwarashi.profiler.tickable.gc": "垃圾回收（近 1 秒）",
   "screen.serverwarashi.profiler.owner.system": "系统",
   "screen.serverwarashi.profiler.owner.unknown": "未知",
@@ -66,5 +75,6 @@
   "message.serverwarashi.loader_control.stale": "加载器 %s 的报告已过期，请刷新后重试",
   "message.serverwarashi.loader_control.missing": "加载器 %s 已没有匹配的 ticket",
   "message.serverwarashi.loader_control.unsupported": "加载器 %s 不支持控制",
-  "message.serverwarashi.loader_control.denied": "你没有控制加载器 %s 的权限"
+  "message.serverwarashi.loader_control.denied": "你没有控制加载器 %s 的权限",
+  "message.serverwarashi.unknown.copied": "已复制 %s 条典型栈"
 }
