@@ -71,6 +71,24 @@ class PerfMapSubscriptionStateTest {
     }
 
     @Test
+    void disablingWorldOverlayEndsOnlyTheWorldOnlySubscription() {
+        RecordingSender sender = new RecordingSender();
+        PerfMapSubscriptionState state = new PerfMapSubscriptionState(sender);
+
+        assertTrue(state.setAnalysisLive(true));
+        assertTrue(state.setWorldOverlayEnabled(false));
+        assertTrue(state.setMapOpen(true));
+        assertFalse(state.setWorldOverlayEnabled(true));
+        assertTrue(state.setMapOpen(false));
+
+        assertEquals(List.of(
+                new PerfMapSubscriptionState.Request(false, true),
+                new PerfMapSubscriptionState.Request(false, false),
+                new PerfMapSubscriptionState.Request(true, true),
+                new PerfMapSubscriptionState.Request(false, true)), sender.requests);
+    }
+
+    @Test
     void clearResetsAllSourcesAndTransportState() {
         RecordingSender sender = new RecordingSender();
         PerfMapSubscriptionState state = new PerfMapSubscriptionState(sender);

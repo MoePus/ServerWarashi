@@ -6,6 +6,7 @@ final class PerfMapSubscriptionState {
     private final Sender sender;
     private boolean mapOpen;
     private boolean analysisLive;
+    private boolean worldOverlayEnabled = true;
     private Request sent = new Request(false, false);
 
     PerfMapSubscriptionState(Sender sender) {
@@ -22,14 +23,21 @@ final class PerfMapSubscriptionState {
         return sync();
     }
 
+    boolean setWorldOverlayEnabled(boolean enabled) {
+        worldOverlayEnabled = enabled;
+        return sync();
+    }
+
     void clear() {
         mapOpen = false;
         analysisLive = false;
+        worldOverlayEnabled = true;
         sent = new Request(false, false);
     }
 
     private boolean sync() {
-        Request requested = new Request(mapOpen, mapOpen || analysisLive);
+        Request requested = new Request(
+                mapOpen, mapOpen || (analysisLive && worldOverlayEnabled));
         if (sent.equals(requested) || !sender.send(requested)) {
             return false;
         }

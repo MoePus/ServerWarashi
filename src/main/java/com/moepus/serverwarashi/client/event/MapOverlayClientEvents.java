@@ -27,6 +27,7 @@ public final class MapOverlayClientEvents {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+        PerfMapSubscriptionClient.refreshWorldOverlayEnabled();
         if (minecraft.level != null) {
             ClientWeakChunkState.tick();
             ClientWeakChunkState.clearIfDimensionMismatch(

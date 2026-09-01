@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.client.network;
 
+import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.common.network.PerfMapSubscriptionPayload;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -18,6 +19,10 @@ public final class PerfMapSubscriptionClient {
 
     public static boolean setAnalysisLive(boolean live) {
         return STATE.setAnalysisLive(live);
+    }
+
+    public static boolean refreshWorldOverlayEnabled() {
+        return STATE.setWorldOverlayEnabled(ClientConfig.worldOverlayEnabled());
     }
 
     public static void clear() {

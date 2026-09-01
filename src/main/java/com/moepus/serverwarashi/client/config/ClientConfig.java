@@ -11,6 +11,9 @@ public final class ClientConfig {
     private static final ModConfigSpec.EnumValue<WorldOverlayFilter> WORLD_OVERLAY_FILTER = BUILDER
             .comment("Controls whether the world perf overlay displays all sampled objects or effective sample strengths of two and above.")
             .defineEnum("world_overlay_filter", WorldOverlayFilter.TWO_OR_MORE);
+    private static final ModConfigSpec.BooleanValue WORLD_OVERLAY_ENABLED = BUILDER
+            .comment("Enable the in-world performance overlay.")
+            .define("world_overlay_enabled", true);
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private ClientConfig() {
@@ -22,6 +25,10 @@ public final class ClientConfig {
 
     public static WorldOverlayFilter worldOverlayFilter() {
         return WORLD_OVERLAY_FILTER.get();
+    }
+
+    public static boolean worldOverlayEnabled() {
+        return WORLD_OVERLAY_ENABLED.get();
     }
 
     public enum OutputMode {

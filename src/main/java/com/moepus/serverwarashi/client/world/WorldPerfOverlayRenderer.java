@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.client.world;
 
+import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientPerfWorldState;
 import com.moepus.serverwarashi.client.state.ClientWeakChunkState;
@@ -15,6 +16,10 @@ public final class WorldPerfOverlayRenderer {
     }
 
     public static void render(RenderLevelStageEvent event) {
+        if (!ClientConfig.worldOverlayEnabled()) {
+            close();
+            return;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         ClientLevel level = minecraft.level;
         if (level == null) {
