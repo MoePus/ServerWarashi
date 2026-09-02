@@ -27,26 +27,36 @@ import java.util.Set;
 
 final class PerfChunkEntityScanQueue {
     private static final int TOP_TYPE_LIMIT = 3;
+    private static final ChunkKey[] EMPTY_CHUNK_KEYS = new ChunkKey[0];
+    private static final ScanBatch EMPTY_SCAN_BATCH = new ScanBatch(0, List.of(), null);
     private final LinkedHashSet<ChunkKey> deletionQueue = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkKey> reportQueue = new LinkedHashSet<>();
     private final Map<ChunkKey, ChunkEntitySummary> cache = new HashMap<>();
+    private final Map<String, ResourceKey<Level>> dimensionKeys = new HashMap<>();
+    private final Set<String> invalidDimensions = new HashSet<>();
     private Set<ChunkKey> currentKeys = Set.of();
     private Set<ChunkKey> currentRedKeys = Set.of();
     private final Set<ChunkKey> forcedCurrentKeys = new HashSet<>();
     private ReportVersion version;
     private PerfReportData sourceReport;
     private PerfReportData materializedReport;
+    private ChunkKey[] sourceChunkKeys = EMPTY_CHUNK_KEYS;
 
     PerfReportData accept(PerfReportData report) {
         if (report == null) {
             return null;
         }
+        if (report == sourceReport) {
+            return materializedReport;
+        }
         ReportVersion nextVersion = ReportVersion.from(report);
+        ChunkKey[] nextChunkKeys = indexChunkKeys(report);
         sourceReport = report;
+        sourceChunkKeys = nextChunkKeys;
         if (!nextVersion.equals(version)) {
             version = nextVersion;
-            currentKeys = indexKeys(report);
-            currentRedKeys = indexRedKeys(report);
+            currentKeys = indexKeys(nextChunkKeys);
+            currentRedKeys = indexRedKeys(report, nextChunkKeys);
             forcedCurrentKeys.clear();
             reportQueue.clear();
             reportQueue.addAll(currentRedKeys);
@@ -65,16 +75,26 @@ final class PerfChunkEntityScanQueue {
     }
 
     ScanBatch scan(MinecraftServer server) {
+        if (scanQueuesAreEmpty()) {
+            return EMPTY_SCAN_BATCH;
+        }
         return scan((key, deletion) -> scan(server, key, deletion));
     }
 
     ScanBatch scan(EntityScanner scanner) {
+        if (scanQueuesAreEmpty()) {
+            return EMPTY_SCAN_BATCH;
+        }
         List<TrackedCorrection> trackedCorrections = new ArrayList<>();
         Set<ChunkKey> scanned = new HashSet<>();
         drainDeletionQueue(scanner, trackedCorrections, scanned);
         drainReportQueue(scanner, trackedCorrections, scanned);
         PerfReportData update = updatedReport();
         return new ScanBatch(scanned.size(), trackedCorrections, update);
+    }
+
+    private boolean scanQueuesAreEmpty() {
+        return deletionQueue.isEmpty() && reportQueue.isEmpty();
     }
 
     void clear() {
@@ -84,9 +104,12 @@ final class PerfChunkEntityScanQueue {
         currentKeys = Set.of();
         currentRedKeys = Set.of();
         forcedCurrentKeys.clear();
+        dimensionKeys.clear();
+        invalidDimensions.clear();
         version = null;
         sourceReport = null;
         materializedReport = null;
+        sourceChunkKeys = EMPTY_CHUNK_KEYS;
     }
 
     private void drainDeletionQueue(EntityScanner scanner,
@@ -141,14 +164,27 @@ final class PerfChunkEntityScanQueue {
         if (sourceReport == null) {
             return null;
         }
-        List<PerfReportData.ChunkEntry> chunks = sourceReport.chunks().stream()
-                .map(this::materializeChunk)
-                .toList();
-        return sourceReport.withChunks(chunks);
+        List<PerfReportData.ChunkEntry> chunks = sourceReport.chunks();
+        List<PerfReportData.ChunkEntry> updated = null;
+        for (int index = 0; index < chunks.size(); index++) {
+            PerfReportData.ChunkEntry original = chunks.get(index);
+            PerfReportData.ChunkEntry materialized = materializeChunk(
+                    original, sourceChunkKeys[index]);
+            if (updated != null) {
+                updated.add(materialized);
+            } else if (materialized != original) {
+                updated = new ArrayList<>(chunks.size());
+                for (int previous = 0; previous < index; previous++) {
+                    updated.add(chunks.get(previous));
+                }
+                updated.add(materialized);
+            }
+        }
+        return updated == null ? sourceReport : sourceReport.withChunks(updated);
     }
 
-    private PerfReportData.ChunkEntry materializeChunk(PerfReportData.ChunkEntry chunk) {
-        ChunkKey key = key(chunk);
+    private PerfReportData.ChunkEntry materializeChunk(
+            PerfReportData.ChunkEntry chunk, ChunkKey key) {
         if (key == null || (!currentRedKeys.contains(key) && !forcedCurrentKeys.contains(key))) {
             return chunk;
         }
@@ -168,32 +204,60 @@ final class PerfChunkEntityScanQueue {
         }).toList();
     }
 
-    private static Set<ChunkKey> indexKeys(PerfReportData report) {
+    private static Set<ChunkKey> indexKeys(ChunkKey[] chunkKeys) {
         Set<ChunkKey> result = new HashSet<>();
-        report.chunks().forEach(chunk -> addKey(result, chunk));
-        return Set.copyOf(result);
-    }
-
-    private static Set<ChunkKey> indexRedKeys(PerfReportData report) {
-        Set<ChunkKey> result = new LinkedHashSet<>();
-        report.chunks().stream()
-                .filter(chunk -> ChunkPerformanceRisk.isRedOrHotter(chunk.metric()))
-                .forEach(chunk -> addKey(result, chunk));
-        return Set.copyOf(result);
-    }
-
-    private static void addKey(Set<ChunkKey> target, PerfReportData.ChunkEntry chunk) {
-        ChunkKey key = key(chunk);
-        if (key != null) {
-            target.add(key);
+        for (ChunkKey key : chunkKeys) {
+            if (key != null) {
+                result.add(key);
+            }
         }
+        return Set.copyOf(result);
     }
 
-    private static ChunkKey key(PerfReportData.ChunkEntry chunk) {
-        ResourceLocation id = ResourceLocation.tryParse(chunk.dimension());
-        return id == null ? null : new ChunkKey(
-                ResourceKey.create(Registries.DIMENSION, id),
-                ChunkPos.asLong(chunk.chunkX(), chunk.chunkZ()));
+    private static Set<ChunkKey> indexRedKeys(
+            PerfReportData report, ChunkKey[] chunkKeys) {
+        Set<ChunkKey> result = new LinkedHashSet<>();
+        List<PerfReportData.ChunkEntry> chunks = report.chunks();
+        for (int index = 0; index < chunks.size(); index++) {
+            ChunkKey key = chunkKeys[index];
+            if (key != null && ChunkPerformanceRisk.isRedOrHotter(chunks.get(index).metric())) {
+                result.add(key);
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    private ChunkKey[] indexChunkKeys(PerfReportData report) {
+        List<PerfReportData.ChunkEntry> chunks = report.chunks();
+        if (chunks.isEmpty()) {
+            return EMPTY_CHUNK_KEYS;
+        }
+        ChunkKey[] result = new ChunkKey[chunks.size()];
+        for (int index = 0; index < chunks.size(); index++) {
+            result[index] = key(chunks.get(index));
+        }
+        return result;
+    }
+
+    private ChunkKey key(PerfReportData.ChunkEntry chunk) {
+        ResourceKey<Level> dimension = dimensionKey(chunk.dimension());
+        return dimension == null ? null : new ChunkKey(
+                dimension, ChunkPos.asLong(chunk.chunkX(), chunk.chunkZ()));
+    }
+
+    private ResourceKey<Level> dimensionKey(String value) {
+        ResourceKey<Level> cached = dimensionKeys.get(value);
+        if (cached != null || invalidDimensions.contains(value)) {
+            return cached;
+        }
+        ResourceLocation id = ResourceLocation.tryParse(value);
+        if (id == null) {
+            invalidDimensions.add(value);
+            return null;
+        }
+        ResourceKey<Level> resolved = ResourceKey.create(Registries.DIMENSION, id);
+        dimensionKeys.put(value, resolved);
+        return resolved;
     }
 
     private void retainCurrentCache() {

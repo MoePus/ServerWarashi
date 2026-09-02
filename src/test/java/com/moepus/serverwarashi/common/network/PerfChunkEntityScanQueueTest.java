@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 class PerfChunkEntityScanQueueTest {
     private static final WeakEntityType COW =
@@ -103,6 +104,25 @@ class PerfChunkEntityScanQueueTest {
 
         assertEquals(0, batch.scannedChunks());
         assertNull(batch.reportUpdate());
+    }
+
+    @Test
+    void emptyScansReuseTheAllocationFreeResult() {
+        var queue = new PerfChunkEntityScanQueue();
+        queue.accept(report(20L, List.of(chunk(1, 2, 300, 0,
+                new PerfReportData.Metric(1.0D, 1.0D, 10L)))));
+
+        PerfChunkEntityScanQueue.ScanBatch first = queue.scan((key, deletion) -> {
+            throw new AssertionError("An empty queue must not invoke the scanner");
+        });
+        PerfChunkEntityScanQueue.ScanBatch second = queue.scan((key, deletion) -> {
+            throw new AssertionError("An empty queue must not invoke the scanner");
+        });
+
+        assertSame(first, second);
+        assertEquals(0, first.scannedChunks());
+        assertEquals(List.of(), first.trackedCorrections());
+        assertNull(first.reportUpdate());
     }
 
     @Test
