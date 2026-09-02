@@ -29,7 +29,14 @@ public abstract class LevelBlockEntityTickMixin {
         PerfWorkTracker.enterBlockEntity(blockEntity);
     }
 
-    @InjectLite(method = "tick()V", at = @At("RETURN"))
+    @InjectLite(
+            method = "tick()V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/level/block/entity/BlockEntityTicker;tick(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;)V",
+                    shift = At.Shift.AFTER
+            )
+    )
     private void serverWarashi$afterBlockEntityTick() {
         if (!PerfWorkTracker.isProfiling) {
             return;
