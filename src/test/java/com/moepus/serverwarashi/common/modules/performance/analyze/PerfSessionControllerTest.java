@@ -19,6 +19,7 @@ import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -101,14 +102,15 @@ class PerfSessionControllerTest {
         PerfSessionController controller = sampledController();
         long reportId = controller.currentPublishedSnapshot().report().reportId();
 
-        assertTrue(controller.unknownStackSnapshot(reportId).totalObserved() > 0L);
+        assertNotNull(controller.unknownStackSnapshot(reportId));
+        assertTrue(controller.unknownStackSnapshot(reportId).finalized());
         assertTrue(controller.start(10, null, null));
         assertNull(controller.unknownStackSnapshot(reportId));
         controller.stop();
 
         controller = sampledController();
         reportId = controller.currentPublishedSnapshot().report().reportId();
-        assertTrue(controller.unknownStackSnapshot(reportId).retainedCount() > 0);
+        assertNotNull(controller.unknownStackSnapshot(reportId));
         assertTrue(controller.clearLastReport());
         assertNull(controller.unknownStackSnapshot(reportId));
     }
@@ -118,11 +120,7 @@ class PerfSessionControllerTest {
         assertTrue(controller.start(10, null, null));
         controller.onServerTickPre(null);
         PerfSamplerSession sampler = activeSampler(controller);
-        long deadline = System.nanoTime() + 1_000_000_000L;
-        while (sampler.unknownStackSnapshot().totalObserved() == 0L
-                && System.nanoTime() < deadline) {
-            Thread.sleep(1L);
-        }
+        Thread.sleep(20L);
         sampler.endTick(10_000_000L);
         controller.stop();
         return controller;

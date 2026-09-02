@@ -17,22 +17,28 @@ public final class PerfReportTextRenderer {
 
     public static Component render(PerfReportData report) {
         MutableComponent output = Component.literal(String.format(Locale.ROOT,
-                "Performance profile: %.2f MSPT | %.1fs | %d ticks | %d samples | %dus",
+                "Performance profile: %.2f MSPT | %.1fs | %d ticks | %d samples | %dus | %s | %s confidence",
                 report.serverMspt(), report.elapsedMillis() / 1000.0D, report.tickCount(),
-                report.totalSamples(), report.intervalMicros())).withStyle(ChatFormatting.AQUA);
+                report.totalSamples(), report.intervalMicros(), report.sampling().backend(),
+                report.sampling().confidence().name().toLowerCase(Locale.ROOT)))
+                .withStyle(ChatFormatting.AQUA);
+        if (!report.sampling().degradationReason().isEmpty()) {
+            output.append(Component.literal("\nSampling degraded: "
+                    + report.sampling().degradationReason()).withStyle(ChatFormatting.YELLOW));
+        }
         appendTop(output, new Section("Chunks", report.chunks().stream()
-                .sorted(byMspt(PerfReportData.ChunkEntry::metric))
+                .sorted(bySamples(PerfReportData.ChunkEntry::metric))
                 .limit(ENTRY_LIMIT)
                 .map(entry -> entry.dimension() + " [" + entry.chunkX() + ", " + entry.chunkZ() + "] "
                         + metric(entry.metric())).toList(),
                 omittedAfterTextLimit(report.chunks().size(), report.omittedChunks())));
         appendTop(output, new Section("Tickables", report.tickables().stream()
-                .sorted(byMspt(PerfReportData.TickableEntry::metric))
+                .sorted(bySamples(PerfReportData.TickableEntry::metric))
                 .limit(ENTRY_LIMIT)
                 .map(entry -> tickableIdentity(entry) + " " + metric(entry.metric())).toList(),
                 omittedAfterTextLimit(report.tickables().size(), report.omittedTickables())));
         appendTop(output, new Section("Owners", report.owners().stream()
-                .sorted(byMspt(PerfReportData.OwnerEntry::metric))
+                .sorted(bySamples(PerfReportData.OwnerEntry::metric))
                 .limit(ENTRY_LIMIT)
                 .map(entry -> entry.name() + " " + metric(entry.metric())).toList(),
                 omittedAfterTextLimit(report.owners().size(), 0)));
@@ -61,7 +67,8 @@ public final class PerfReportTextRenderer {
     }
 
     private static String tickableIdentity(PerfReportData.TickableEntry entry) {
-        String id = entry.type() + " " + entry.className();
+        String id = entry.type() + " " + entry.className() + " ["
+                + entry.attributionSource() + "/" + entry.confidence() + "]";
         if (entry.type() == TickType.ENTITY) {
             id += "#" + entry.entityId();
         }
@@ -83,8 +90,10 @@ public final class PerfReportTextRenderer {
         return id + " @ " + entry.dimension() + " " + position;
     }
 
-    private static <T> Comparator<T> byMspt(Function<T, PerfReportData.Metric> metric) {
-        return Comparator.comparingDouble((T value) -> metric.apply(value).mspt()).reversed();
+    private static <T> Comparator<T> bySamples(Function<T, PerfReportData.Metric> metric) {
+        return Comparator.comparingLong((T value) -> metric.apply(value).samples()).reversed()
+                .thenComparing(Comparator.comparingDouble(
+                        (T value) -> metric.apply(value).mspt()).reversed());
     }
 
     private static int omittedAfterTextLimit(int retained, int upstreamOmitted) {

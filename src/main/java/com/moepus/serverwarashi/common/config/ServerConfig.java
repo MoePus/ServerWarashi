@@ -17,7 +17,7 @@ public final class ServerConfig {
                     TicketPerfConfig.MAX_ANALYZE_SECONDS);
     static final ModConfigSpec.ConfigValue<Integer> PERF_SAMPLE_INTERVAL_US = BUILDER
             .comment("Profiler sampling interval in microseconds.")
-            .defineInRange("perf_sample_interval_us", 1000, 100, 100_000);
+            .defineInRange("perf_sample_interval_us", 1000, 1_000, 100_000);
     static final ModConfigSpec.ConfigValue<Integer> PERF_WORLD_HOTSPOT_LIMIT = BUILDER
             .comment("Maximum nearby entity and block-entity hotspots sent to each player.")
             .defineInRange("perf_world_hotspot_limit", 2048, 256,

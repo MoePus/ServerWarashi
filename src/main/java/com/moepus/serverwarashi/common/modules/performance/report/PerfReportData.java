@@ -15,6 +15,7 @@ public record PerfReportData(long reportId,
                              long tickCount,
                              long totalSamples,
                              int intervalMicros,
+                             SamplingMetadata sampling,
                              int omittedChunks,
                              int omittedTickables,
                              int omittedOwnerSources,
@@ -31,10 +32,32 @@ public record PerfReportData(long reportId,
                 || omittedOwnerSources < 0 || omittedLoaderSources < 0) {
             throw new IllegalArgumentException("Omitted report counts must be non-negative");
         }
+        sampling = Objects.requireNonNull(sampling, "sampling");
         chunks = List.copyOf(chunks);
         tickables = List.copyOf(tickables);
         owners = List.copyOf(owners);
         loaderSources = List.copyOf(loaderSources);
+    }
+
+    public PerfReportData(long reportId,
+                          double serverMspt,
+                          long elapsedMillis,
+                          long generatedAtEpochMillis,
+                          long tickCount,
+                          long totalSamples,
+                          int intervalMicros,
+                          int omittedChunks,
+                          int omittedTickables,
+                          int omittedOwnerSources,
+                          int omittedLoaderSources,
+                          List<ChunkEntry> chunks,
+                          List<TickableEntry> tickables,
+                          List<OwnerEntry> owners,
+                          List<LoaderSourceEntry> loaderSources) {
+        this(reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount,
+                totalSamples, intervalMicros, SamplingMetadata.notStarted(), omittedChunks,
+                omittedTickables, omittedOwnerSources, omittedLoaderSources,
+                chunks, tickables, owners, loaderSources);
     }
 
     public PerfReportData(double serverMspt,
@@ -52,7 +75,7 @@ public record PerfReportData(long reportId,
                           List<OwnerEntry> owners,
                           List<LoaderSourceEntry> loaderSources) {
         this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
-                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
+                intervalMicros, SamplingMetadata.notStarted(), omittedChunks, omittedTickables, omittedOwnerSources,
                 omittedLoaderSources, chunks, tickables, owners, loaderSources);
     }
 
@@ -69,30 +92,59 @@ public record PerfReportData(long reportId,
                           List<TickableEntry> tickables,
                           List<OwnerEntry> owners) {
         this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples, intervalMicros,
-                omittedChunks, omittedTickables, omittedOwnerSources, 0,
+                SamplingMetadata.notStarted(), omittedChunks, omittedTickables, omittedOwnerSources, 0,
                 chunks, tickables, owners, List.of());
     }
 
     public static PerfReportData empty(int intervalMicros) {
         return new PerfReportData(0L, 0.0D, 0L, 0L, 0L, 0L, intervalMicros,
+                SamplingMetadata.notStarted(),
                 0, 0, 0, 0, List.of(), List.of(), List.of(), List.of());
     }
 
     public PerfReportData withLoaderSources(List<LoaderSourceEntry> nextLoaderSources) {
         return loaderSources.equals(nextLoaderSources) ? this : new PerfReportData(
                 reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
-                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
+                intervalMicros, sampling, omittedChunks, omittedTickables, omittedOwnerSources,
                 omittedLoaderSources, chunks, tickables, owners, nextLoaderSources);
     }
 
     public PerfReportData withChunks(List<ChunkEntry> nextChunks) {
         return chunks.equals(nextChunks) ? this : new PerfReportData(
                 reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
-                intervalMicros, omittedChunks, omittedTickables, omittedOwnerSources,
+                intervalMicros, sampling, omittedChunks, omittedTickables, omittedOwnerSources,
                 omittedLoaderSources, nextChunks, tickables, owners, loaderSources);
     }
 
+    public PerfReportData withSampling(SamplingMetadata nextSampling) {
+        return sampling.equals(nextSampling) ? this : new PerfReportData(
+                reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
+                intervalMicros, nextSampling, omittedChunks, omittedTickables, omittedOwnerSources,
+                omittedLoaderSources, chunks, tickables, owners, loaderSources);
+    }
+
     public record Metric(double mspt, double max, long samples) {
+    }
+
+    public record SamplingMetadata(String backend,
+                                   DurationSemantics durationSemantics,
+                                   Confidence confidence,
+                                   long droppedSamples,
+                                   String degradationReason) {
+        public SamplingMetadata {
+            backend = Objects.requireNonNull(backend, "backend");
+            durationSemantics = Objects.requireNonNull(durationSemantics, "durationSemantics");
+            confidence = Objects.requireNonNull(confidence, "confidence");
+            degradationReason = degradationReason == null ? "" : degradationReason;
+            if (droppedSamples < 0L) {
+                throw new IllegalArgumentException("Dropped sample count must be non-negative");
+            }
+        }
+
+        public static SamplingMetadata notStarted() {
+            return new SamplingMetadata("Not started", DurationSemantics.PRIMARY_SAMPLE_DENSITY,
+                    Confidence.LOW, 0L, "Sampling has not started");
+        }
     }
 
     public record Position(String dimension, int x, int y, int z) {
@@ -195,10 +247,23 @@ public record PerfReportData(long reportId,
                                 int z,
                                 boolean chunkPosition,
                                 String eventLoop,
+                                AttributionSource attributionSource,
+                                Confidence confidence,
                                 Metric metric) {
         public TickableEntry {
             detailId = detailId == null ? "" : detailId;
             eventLoop = eventLoop == null ? "" : eventLoop;
+            attributionSource = Objects.requireNonNull(attributionSource, "attributionSource");
+            confidence = Objects.requireNonNull(confidence, "confidence");
+        }
+
+        public TickableEntry(TickType type, String dimension, String className,
+                             String detailId, TickDetailKind detailKind, int entityId,
+                             boolean positioned, int x, int y, int z, boolean chunkPosition,
+                             String eventLoop, Metric metric) {
+            this(type, dimension, className, detailId, detailKind, entityId, positioned,
+                    x, y, z, chunkPosition, eventLoop, AttributionSource.TASK_CONTEXT,
+                    Confidence.HIGH, metric);
         }
     }
 
@@ -228,5 +293,22 @@ public record PerfReportData(long reportId,
         LOADER,
         SYSTEM,
         UNKNOWN
+    }
+
+    public enum AttributionSource {
+        TASK_CONTEXT,
+        ASYNC_STACK,
+        FALLBACK_UNKNOWN,
+        JVM_METRIC
+    }
+
+    public enum Confidence {
+        HIGH,
+        MEDIUM,
+        LOW
+    }
+
+    public enum DurationSemantics {
+        PRIMARY_SAMPLE_DENSITY
     }
 }

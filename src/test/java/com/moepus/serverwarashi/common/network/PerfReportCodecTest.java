@@ -36,7 +36,9 @@ class PerfReportCodecTest {
                         new PerfReportData.TickableEntry(TickType.HANDLER, "",
                                 "ServerEvents#onTick(ServerTickEvent.Pre)", "", TickDetailKind.NONE,
                                 -1, false, 0, 0, 0, false,
-                                "com.example.ServerEvents#onTick(ServerTickEvent.Pre)", metric),
+                                "com.example.ServerEvents#onTick(ServerTickEvent.Pre)",
+                                PerfReportData.AttributionSource.ASYNC_STACK,
+                                PerfReportData.Confidence.MEDIUM, metric),
                         new PerfReportData.TickableEntry(TickType.GC, "", "Rolling 1s", "",
                                 TickDetailKind.NONE, -1, false, 0, 0, 0, false, "",
                                 new PerfReportData.Metric(2.5D, 12.0D, 20L))),
@@ -53,7 +55,9 @@ class PerfReportCodecTest {
                         List.of(new PerfReportData.LoaderRegion(2, -3, 7, 7)),
                         new PerfReportData.LoaderControl(
                                 ResourceLocation.parse("test:loader"), new BlockPos(40, 63, -40), true, false)))
-        );
+        ).withSampling(new PerfReportData.SamplingMetadata(
+                "JFR AsyncGetCallTrace", PerfReportData.DurationSemantics.PRIMARY_SAMPLE_DENSITY,
+                PerfReportData.Confidence.MEDIUM, 3L, "3 samples dropped"));
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         try {
             PerfReportCodec.STREAM_CODEC.encode(buffer, expected);
@@ -337,6 +341,11 @@ class PerfReportCodecTest {
         buffer.writeVarLong(0L);
         buffer.writeVarLong(0L);
         buffer.writeVarInt(1_000);
+        buffer.writeUtf("test sampler");
+        buffer.writeVarInt(PerfReportData.DurationSemantics.PRIMARY_SAMPLE_DENSITY.ordinal());
+        buffer.writeVarInt(PerfReportData.Confidence.HIGH.ordinal());
+        buffer.writeVarLong(0L);
+        buffer.writeUtf("");
         buffer.writeVarInt(0);
         buffer.writeVarInt(0);
         buffer.writeVarInt(0);

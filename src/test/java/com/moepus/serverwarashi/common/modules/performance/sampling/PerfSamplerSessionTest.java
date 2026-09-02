@@ -5,12 +5,11 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.Test;
 
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadMXBean;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -18,29 +17,31 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfSamplerSessionTest {
-    private static final long CADENCE_WINDOW_MILLIS = 500L;
     private static final long PAUSE_WINDOW_MILLIS = 100L;
-    private static final long MAX_SAMPLER_CPU_NANOS = 100_000_000L;
-    private static final double MIN_ATTEMPTS_PER_SECOND = 700.0D;
-    private static final double MAX_ATTEMPTS_PER_SECOND = 1_300.0D;
 
     @Test
-    void attachesActiveBetweenTickFallbackSamplesToTheNextTick() throws InterruptedException {
-        PerfSamplerSession session = unlimitedSession(12L, null);
+    void recordsTickContextGapsAsUnknownWithoutJfrDetails() throws InterruptedException {
+        FakeAsyncStackSampler sampler = new FakeAsyncStackSampler();
+        PerfSamplerSession session = unlimitedSession(12L, null, sampler);
         boolean stopped = false;
         PerfWorkTracker.activate(Thread.currentThread());
         session.start();
         try {
-            Thread.sleep(50L);
             session.beginTick(null);
+            Thread.sleep(30L);
             session.endTick(1_000_000L);
 
             PerfReportData report = session.stop();
             stopped = true;
             assertTrue(report.tickables().stream().anyMatch(entry ->
                     entry.type() == TickType.TASK && "Unknown".equals(entry.className())));
-            assertTrue(session.unknownStackSnapshot().totalObserved() > 0L);
-            assertEquals(1L, session.unknownStackSnapshot().tickIdAt(0));
+            PerfReportData.TickableEntry unknown = report.tickables().stream()
+                    .filter(entry -> "Unknown".equals(entry.className())).findFirst().orElseThrow();
+            assertEquals(PerfReportData.AttributionSource.FALLBACK_UNKNOWN,
+                    unknown.attributionSource());
+            assertEquals(PerfReportData.Confidence.LOW, unknown.confidence());
+            assertTrue(unknown.metric().samples() > 0L);
+            assertEquals(0L, session.unknownStackSnapshot().totalObserved());
         } finally {
             PerfWorkTracker.deactivate();
             if (!stopped) {
@@ -50,28 +51,21 @@ class PerfSamplerSessionTest {
     }
 
     @Test
-    void samplesOffTickWallTimeAndStopsCompletelyWhilePaused() throws Exception {
-        PerfSamplerSession session = unlimitedSession(9L, null);
+    void stopsBackendAndFreezesMeasurementWhilePaused() throws Exception {
+        FakeAsyncStackSampler sampler = new FakeAsyncStackSampler();
+        PerfSamplerSession session = unlimitedSession(9L, null, sampler);
         boolean stopped = false;
         session.start();
         try {
-            Thread sampler = samplerThread(session);
-            ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
-            long cpuBefore = threadCpuNanos(threadMXBean, sampler);
-            Thread.sleep(CADENCE_WINDOW_MILLIS);
             session.beginTick(null);
+            sampler.emit(frame("com.example.Work", "run"));
+            session.awaitWorkerDrain();
             session.endTick(1_000_000L);
             assertTrue(session.pause());
-            long cpuAfter = threadCpuNanos(threadMXBean, sampler);
 
             PerfReportData paused = session.latestReport();
-            double attemptsPerSecond = paused.totalSamples() * 1_000.0D / paused.elapsedMillis();
-            assertTrue(attemptsPerSecond >= MIN_ATTEMPTS_PER_SECOND, attemptsPerSecond + " attempts/s");
-            assertTrue(attemptsPerSecond <= MAX_ATTEMPTS_PER_SECOND, attemptsPerSecond + " attempts/s");
-            if (cpuBefore >= 0L && cpuAfter >= 0L) {
-                assertTrue(cpuAfter - cpuBefore < MAX_SAMPLER_CPU_NANOS,
-                        (cpuAfter - cpuBefore) + "ns sampler CPU");
-            }
+            assertEquals(1, sampler.starts);
+            assertEquals(1, sampler.stops);
 
             Thread.sleep(PAUSE_WINDOW_MILLIS);
             PerfReportData finished = session.stop();
@@ -88,7 +82,7 @@ class PerfSamplerSessionTest {
     @Test
     void activeDeadlineCapsAPathologicallySlowServerTick() {
         AtomicLong now = new AtomicLong();
-        PerfSamplerSession session = PerfSamplerSession.create(7L, 1_000,
+        PerfSamplerSession session = testSession(7L, 1_000,
                 new PerfSamplerSession.Options(null, 5_000_000L, now::get));
         session.start();
         session.beginTick(null);
@@ -104,7 +98,7 @@ class PerfSamplerSessionTest {
     @Test
     void reportElapsedTimeExcludesPausedIntegratedServerTime() {
         AtomicLong now = new AtomicLong();
-        PerfSamplerSession session = PerfSamplerSession.create(6L, 1_000,
+        PerfSamplerSession session = testSession(6L, 1_000,
                 new PerfSamplerSession.Options(null, Long.MAX_VALUE, now::get));
         session.start();
         session.beginTick(null);
@@ -135,23 +129,18 @@ class PerfSamplerSessionTest {
     }
 
     @Test
-    void refreshRequestStaysWithItsTickWhenClosedTicksBackUp() throws Exception {
+    void refreshRequestStaysWithItsTickWhenClosedTicksBackUp() {
         PerfAttributionSnapshot oldAttribution = loaderAttribution("old");
         PerfAttributionSnapshot nextAttribution = loaderAttribution("next");
         PerfSamplerSession session = unlimitedSession(10L, oldAttribution);
-        Object aggregationLock = aggregationLock(session);
-
         try {
-            synchronized (aggregationLock) {
-                session.start();
-                session.beginTick(oldAttribution);
-                session.endTick(1_000_000L);
-                session.beginTick(oldAttribution);
-                session.updateAttribution(nextAttribution, true);
-                session.endTick(1_000_000L);
-            }
-
-            awaitTickCount(session, 2L);
+            session.start();
+            session.beginTick(oldAttribution);
+            session.endTick(1_000_000L);
+            session.beginTick(oldAttribution);
+            session.updateAttribution(nextAttribution, true);
+            session.endTick(1_000_000L);
+            assertTrue(session.pause());
             PerfReportData report = session.latestReport();
             assertEquals(2L, report.tickCount());
             assertEquals("next", report.loaderSources().getFirst().sourceId());
@@ -165,6 +154,12 @@ class PerfSamplerSessionTest {
         assertThrows(IllegalArgumentException.class,
                 () -> PerfSamplerSession.create(
                         1L, 0, PerfSamplerSession.Options.unlimited(null)));
+        assertThrows(IllegalArgumentException.class,
+                () -> PerfSamplerSession.create(
+                        1L, 999, PerfSamplerSession.Options.unlimited(null)));
+        assertThrows(IllegalArgumentException.class,
+                () -> PerfSamplerSession.create(
+                        1L, 100_001, PerfSamplerSession.Options.unlimited(null)));
     }
 
     @Test
@@ -249,13 +244,102 @@ class PerfSamplerSessionTest {
     }
 
     @Test
-    void jitterCanUseMinimumHalfInterval() {
-        assertEquals(500L, PerfSamplerSession.jitteredDelay(1_000L, 0L));
+    void boundedQueueReportsBackpressureDrops() throws Exception {
+        FakeAsyncStackSampler sampler = new FakeAsyncStackSampler();
+        PerfSamplerSession session = unlimitedSession(14L, null, sampler);
+        session.start();
+        session.beginTick(null);
+        StackTraceElement[] stack = {frame("com.example.QueuedWork", "run")};
+        synchronized (stateLock(session)) {
+            for (int sample = 0; sample < 20_000; sample++) {
+                sampler.emit(stack);
+            }
+        }
+        session.awaitWorkerDrain();
+        session.endTick(1_000_000L);
+
+        PerfReportData report = session.stop();
+
+        assertTrue(report.sampling().droppedSamples() > 0L);
+        assertTrue(report.sampling().degradationReason().contains("backpressure"));
+        assertTrue(report.totalSamples() < 1_000L,
+                "JFR detail events must not become primary samples");
     }
 
     @Test
-    void jitterStaysBelowOneAndAHalfIntervals() {
-        assertEquals(1_499L, PerfSamplerSession.jitteredDelay(1_000L, -1L));
+    void detailStartupFailureDoesNotStopPrimaryUnknownTiming()
+            throws InterruptedException {
+        PerfSamplerSession session = unlimitedSession(
+                17L, null, new FailingAsyncStackSampler());
+        session.start();
+        session.beginTick(null);
+        Thread.sleep(30L);
+        session.endTick(1_000_000L);
+
+        PerfReportData report = session.stop();
+
+        assertTrue(report.totalSamples() > 0L);
+        assertTrue(report.tickables().stream().anyMatch(entry ->
+                entry.type() == TickType.TASK && "Unknown".equals(entry.className())));
+        assertTrue(report.sampling().degradationReason().contains("startup failed"));
+    }
+
+    @Test
+    void detailRuntimeFailureDoesNotStopPrimaryHandlerTiming()
+            throws InterruptedException {
+        RuntimeFailureSampler sampler = new RuntimeFailureSampler();
+        PerfSamplerSession session = unlimitedSession(18L, null, sampler);
+        PerfWorkTracker.activate(Thread.currentThread());
+        session.start();
+        try {
+            session.beginTick(null);
+            assertTrue(PerfWorkTracker.enterHandler());
+            sampler.fail();
+            Thread.sleep(30L);
+            assertTrue(PerfWorkTracker.exit(TickType.HANDLER));
+            session.endTick(1_000_000L);
+
+            PerfReportData report = session.stop();
+            assertTrue(report.tickables().stream().anyMatch(entry ->
+                    entry.type() == TickType.HANDLER && "Handler".equals(entry.className())));
+            assertTrue(report.sampling().degradationReason().contains("runtime failure"));
+        } finally {
+            PerfWorkTracker.deactivate();
+            session.stop();
+        }
+    }
+
+    @Test
+    void handlerScopeOverridesOuterTaskAndJfrOnlyRefinesItsName()
+            throws InterruptedException {
+        FakeAsyncStackSampler sampler = new FakeAsyncStackSampler();
+        PerfSamplerSession session = unlimitedSession(15L, null, sampler);
+        PerfWorkTracker.activate(Thread.currentThread());
+        session.start();
+        try {
+            session.beginTick(null);
+            assertTrue(PerfWorkTracker.enterTask("test-dispatcher", new NamedTask()));
+            assertTrue(PerfWorkTracker.enterHandler());
+            Thread.sleep(30L);
+            long detailTimestamp = System.nanoTime() - 10_000_000L;
+            sampler.emitAt(detailTimestamp, handlerStack());
+            sampler.emitAt(detailTimestamp, handlerStack());
+            session.awaitWorkerDrain();
+            assertTrue(PerfWorkTracker.exit(TickType.HANDLER));
+            assertTrue(PerfWorkTracker.exit(TickType.TASK));
+            session.endTick(1_000_000L);
+
+            PerfReportData.TickableEntry entry = session.stop().tickables().stream()
+                    .filter(candidate -> candidate.type() == TickType.HANDLER)
+                    .findFirst().orElseThrow();
+            assertEquals("ServerEvents#onTick(ServerTickEvent.Pre)", entry.className());
+            assertEquals(PerfReportData.AttributionSource.ASYNC_STACK,
+                    entry.attributionSource());
+            assertEquals(PerfReportData.Confidence.MEDIUM, entry.confidence());
+        } finally {
+            PerfWorkTracker.deactivate();
+            session.stop();
+        }
     }
 
     @Test
@@ -296,14 +380,8 @@ class PerfSamplerSessionTest {
         }
     }
 
-    private static Thread samplerThread(PerfSamplerSession session) throws ReflectiveOperationException {
-        Field field = PerfSamplerSession.class.getDeclaredField("samplerThread");
-        field.setAccessible(true);
-        return (Thread) field.get(session);
-    }
-
-    private static Object aggregationLock(PerfSamplerSession session) throws ReflectiveOperationException {
-        Field field = PerfSamplerSession.class.getDeclaredField("aggregationLock");
+    private static Object stateLock(PerfSamplerSession session) throws ReflectiveOperationException {
+        Field field = PerfSamplerSession.class.getDeclaredField("stateLock");
         field.setAccessible(true);
         return field.get(session);
     }
@@ -316,20 +394,34 @@ class PerfSamplerSessionTest {
         }
     }
 
-    private static long threadCpuNanos(ThreadMXBean threadMXBean, Thread thread) {
-        if (!threadMXBean.isThreadCpuTimeSupported()) {
-            return -1L;
-        }
-        if (!threadMXBean.isThreadCpuTimeEnabled()) {
-            threadMXBean.setThreadCpuTimeEnabled(true);
-        }
-        return threadMXBean.getThreadCpuTime(thread.threadId());
+    private static PerfSamplerSession unlimitedSession(
+            long sessionId, PerfAttributionSnapshot attribution) {
+        return unlimitedSession(sessionId, attribution, new FakeAsyncStackSampler());
     }
 
     private static PerfSamplerSession unlimitedSession(
-            long sessionId, PerfAttributionSnapshot attribution) {
-        return PerfSamplerSession.create(
-                sessionId, 1_000, PerfSamplerSession.Options.unlimited(attribution));
+            long sessionId, PerfAttributionSnapshot attribution, AsyncStackSampler sampler) {
+        return PerfSamplerSession.createForTest(
+                sessionId, 1_000, PerfSamplerSession.Options.unlimited(attribution), sampler);
+    }
+
+    private static PerfSamplerSession testSession(long sessionId, int intervalMicros,
+                                                  PerfSamplerSession.Options options) {
+        return PerfSamplerSession.createForTest(
+                sessionId, intervalMicros, options, new FakeAsyncStackSampler());
+    }
+
+    private static StackTraceElement frame(String className, String methodName) {
+        return new StackTraceElement(className, methodName, "Test.java", 1);
+    }
+
+    private static StackTraceElement[] handlerStack() {
+        return new StackTraceElement[]{
+                frame("com.example.ServerEvents", "onTick"),
+                frame("net.neoforged.bus.ConsumerEventHandler", "invoke"),
+                frame("net.neoforged.bus.EventBus", "post"),
+                frame("net.neoforged.neoforge.event.EventHooks", "fireServerTickPre")
+        };
     }
 
     private static PerfAttributionSnapshot loaderAttribution(String sourceId) {
@@ -339,5 +431,95 @@ class PerfSamplerSessionTest {
         var source = new PerfAttributionSnapshot.Source(sourceId, "Loader " + sourceId, null);
         return PerfAttributionSnapshot.create("minecraft:overworld", Map.of(
                 ChunkPos.asLong(3, 4), List.of(new PerfAttributionSnapshot.Bucket(owner, source, 0, 0))));
+    }
+
+    private static class FakeAsyncStackSampler implements AsyncStackSampler {
+        Consumer<AsyncStackSample> sink;
+        boolean running;
+        int starts;
+        int stops;
+
+        @Override
+        public void start(Thread target, int intervalMicros, Consumer<AsyncStackSample> sink) {
+            this.sink = sink;
+            running = true;
+            starts++;
+        }
+
+        @Override
+        public void stop() {
+            running = false;
+            stops++;
+        }
+
+        @Override
+        public String backendName() {
+            return "Test async sampler";
+        }
+
+        @Override
+        public String degradationReason() {
+            return "";
+        }
+
+        @Override
+        public long settlingNanos() {
+            return 0L;
+        }
+
+        void emit(StackTraceElement... stack) {
+            emitAt(System.nanoTime(), stack);
+        }
+
+        void emitAt(long timestampNanos, StackTraceElement... stack) {
+            if (running) {
+                sink.accept(new AsyncStackSample(timestampNanos, stack));
+            }
+        }
+    }
+
+    private static final class NamedTask implements Runnable {
+        @Override
+        public void run() {
+        }
+    }
+
+    private static final class FailingAsyncStackSampler implements AsyncStackSampler {
+        @Override
+        public void start(Thread target, int intervalMicros, Consumer<AsyncStackSample> sink) {
+            throw new IllegalStateException("Unavailable for test");
+        }
+
+        @Override
+        public void stop() {
+        }
+
+        @Override
+        public String backendName() {
+            return "Failing test sampler";
+        }
+
+        @Override
+        public String degradationReason() {
+            return "";
+        }
+
+        @Override
+        public long settlingNanos() {
+            return 0L;
+        }
+    }
+
+    private static final class RuntimeFailureSampler extends FakeAsyncStackSampler {
+        private String failure = "";
+
+        void fail() {
+            failure = "JFR detail runtime failure";
+        }
+
+        @Override
+        public String degradationReason() {
+            return failure;
+        }
     }
 }

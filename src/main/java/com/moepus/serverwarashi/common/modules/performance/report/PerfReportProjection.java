@@ -20,7 +20,7 @@ public final class PerfReportProjection {
             boolean includeLoaderOmissions) {
         return new PerfReportData(report.reportId(), report.serverMspt(), report.elapsedMillis(),
                 report.generatedAtEpochMillis(), report.tickCount(), report.totalSamples(),
-                report.intervalMicros(), report.omittedChunks(), 0, 0,
+                report.intervalMicros(), report.sampling(), report.omittedChunks(), 0, 0,
                 includeLoaderOmissions ? report.omittedLoaderSources() : 0,
                 report.chunks(), List.of(), List.of(), loaders);
     }

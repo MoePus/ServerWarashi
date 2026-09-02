@@ -14,6 +14,9 @@ import net.minecraft.world.level.chunk.LevelChunk;
 public final class PerfWorkTracker {
     private static final int MAX_DEPTH = 32;
     private static final Slot[] SLOTS = createSlots();
+    private static final Snapshot UNKNOWN = new Snapshot(
+            TickType.TASK, null, UnknownWork.class, null, TickDetailKind.NONE,
+            -1, false, 0, 0, 0, false, "", "Unknown", -1);
 
     public static volatile boolean isProfiling;
     private static volatile Slot current;
@@ -39,8 +42,8 @@ public final class PerfWorkTracker {
     }
 
     public static void clearCurrent() {
-        for (int i = 0; i < depth; i++) {
-            SLOTS[i].deactivate();
+        for (int index = 0; index < depth; index++) {
+            SLOTS[index].deactivate();
         }
         depth = 0;
         overflowDepth = 0;
@@ -48,9 +51,6 @@ public final class PerfWorkTracker {
     }
 
     public static boolean enterChunk(ServerLevel level, LevelChunk chunk) {
-        if (!canPublish()) {
-            return false;
-        }
         Slot slot = claimSlot();
         if (slot != null) {
             slot.publishChunk(level.dimension().location(), chunk);
@@ -60,9 +60,6 @@ public final class PerfWorkTracker {
     }
 
     public static boolean enterEntity(ServerLevel level, Entity entity) {
-        if (!canPublish()) {
-            return false;
-        }
         Slot slot = claimSlot();
         if (slot != null) {
             slot.publishEntity(level.dimension().location(), entity);
@@ -72,7 +69,7 @@ public final class PerfWorkTracker {
     }
 
     public static boolean enterBlockEntity(BlockEntity blockEntity) {
-        if (!canPublish() || !(blockEntity.getLevel() instanceof ServerLevel level)) {
+        if (!(blockEntity.getLevel() instanceof ServerLevel level)) {
             return false;
         }
         Slot slot = claimSlot();
@@ -84,20 +81,31 @@ public final class PerfWorkTracker {
     }
 
     public static boolean enterTask(BlockableEventLoop<?> eventLoop, Runnable task) {
-        if (!canPublish()) {
-            return false;
-        }
+        return enterTask(eventLoop.name(), task);
+    }
+
+    public static boolean enterTask(String dispatcher, Runnable task) {
         Slot slot = claimSlot();
         if (slot != null) {
-            slot.publishTask(eventLoop.name(), unwrap(task));
+            slot.publishTask(dispatcher, unwrap(task));
+            current = slot;
+        }
+        return true;
+    }
+
+    public static boolean enterHandler() {
+        Slot slot = claimSlot();
+        if (slot != null) {
+            slot.publishHandler();
             current = slot;
         }
         return true;
     }
 
     public static boolean exit(TickType expectedType) {
-        if (Thread.currentThread() != serverThread || overflowDepth > 0) {
-            return exitOverflow();
+        if (overflowDepth > 0) {
+            overflowDepth--;
+            return true;
         }
         Slot slot = current;
         if (slot == null || slot.type != expectedType) {
@@ -123,12 +131,12 @@ public final class PerfWorkTracker {
         return null;
     }
 
-    static Thread profiledThread() {
-        return isProfiling ? serverThread : null;
+    static Snapshot unknownSnapshot() {
+        return UNKNOWN;
     }
 
-    private static boolean canPublish() {
-        return isProfiling && Thread.currentThread() == serverThread;
+    static Thread profiledThread() {
+        return isProfiling ? serverThread : null;
     }
 
     private static Slot claimSlot() {
@@ -139,25 +147,15 @@ public final class PerfWorkTracker {
         return SLOTS[depth++];
     }
 
-    private static boolean exitOverflow() {
-        if (Thread.currentThread() != serverThread || overflowDepth == 0) {
-            return false;
-        }
-        overflowDepth--;
-        return true;
-    }
-
     private static Runnable unwrap(Runnable task) {
-        if (task instanceof TickTask) {
-            return ((TickTaskAccessor) task).serverWarashi$getRunnable();
-        }
-        return task;
+        return task instanceof TickTask
+                ? ((TickTaskAccessor) task).serverWarashi$getRunnable() : task;
     }
 
     private static Slot[] createSlots() {
         Slot[] slots = new Slot[MAX_DEPTH];
-        for (int i = 0; i < slots.length; i++) {
-            slots[i] = new Slot();
+        for (int index = 0; index < slots.length; index++) {
+            slots[index] = new Slot();
         }
         return slots;
     }
@@ -176,37 +174,20 @@ public final class PerfWorkTracker {
                            String eventLoop,
                            String displayName,
                            int entityAgeTicks) {
-        public Snapshot(TickType type,
-                        ResourceLocation dimension,
-                        Class<?> workClass,
-                        ResourceLocation detailId,
-                        TickDetailKind detailKind,
-                        int entityId,
-                        boolean positioned,
-                        int x,
-                        int y,
-                        int z,
-                        boolean chunkPosition,
-                        String eventLoop,
-                        String displayName) {
-            this(type, dimension, workClass, detailId, detailKind, entityId,
-                    positioned, x, y, z, chunkPosition, eventLoop, displayName, -1);
+        public Snapshot(TickType type, ResourceLocation dimension, Class<?> workClass,
+                        ResourceLocation detailId, TickDetailKind detailKind, int entityId,
+                        boolean positioned, int x, int y, int z, boolean chunkPosition,
+                        String eventLoop, String displayName) {
+            this(type, dimension, workClass, detailId, detailKind, entityId, positioned,
+                    x, y, z, chunkPosition, eventLoop, displayName, -1);
         }
 
-        public Snapshot(TickType type,
-                        ResourceLocation dimension,
-                        Class<?> workClass,
-                        ResourceLocation detailId,
-                        TickDetailKind detailKind,
-                        int entityId,
-                        boolean positioned,
-                        int x,
-                        int y,
-                        int z,
-                        boolean chunkPosition,
+        public Snapshot(TickType type, ResourceLocation dimension, Class<?> workClass,
+                        ResourceLocation detailId, TickDetailKind detailKind, int entityId,
+                        boolean positioned, int x, int y, int z, boolean chunkPosition,
                         String eventLoop) {
-            this(type, dimension, workClass, detailId, detailKind, entityId,
-                    positioned, x, y, z, chunkPosition, eventLoop, "", -1);
+            this(type, dimension, workClass, detailId, detailKind, entityId, positioned,
+                    x, y, z, chunkPosition, eventLoop, "", -1);
         }
     }
 
@@ -231,16 +212,8 @@ public final class PerfWorkTracker {
         void publishChunk(ResourceLocation dimension, LevelChunk chunk) {
             var pos = chunk.getPos();
             beginPublish(TickType.CHUNK, chunk.getClass());
-            this.dimension = dimension;
-            detailId = null;
-            detailKind = TickDetailKind.NONE;
-            entityId = -1;
-            positioned = true;
-            x = pos.x;
-            y = 0;
-            z = pos.z;
-            chunkPosition = true;
-            eventLoop = null;
+            setCommon(dimension, null, TickDetailKind.NONE, -1);
+            setPosition(pos.x, 0, pos.z, true);
             entityAgeTicks = -1;
             finishPublish();
         }
@@ -256,11 +229,7 @@ public final class PerfWorkTracker {
                 detailKind = TickDetailKind.ENTITY;
             }
             entityId = entity.getId();
-            positioned = true;
-            x = entity.getBlockX();
-            y = entity.getBlockY();
-            z = entity.getBlockZ();
-            chunkPosition = false;
+            setPosition(entity.getBlockX(), entity.getBlockY(), entity.getBlockZ(), false);
             eventLoop = null;
             entityAgeTicks = Math.max(1, entity.tickCount + 1);
             finishPublish();
@@ -269,32 +238,28 @@ public final class PerfWorkTracker {
         void publishBlockEntity(ResourceLocation dimension, BlockEntity blockEntity) {
             var pos = blockEntity.getBlockPos();
             beginPublish(TickType.BLOCK_ENTITY, blockEntity.getClass());
-            this.dimension = dimension;
-            detailId = BuiltInRegistries.BLOCK.getKey(blockEntity.getBlockState().getBlock());
-            detailKind = TickDetailKind.BLOCK;
-            entityId = -1;
-            positioned = true;
-            x = pos.getX();
-            y = pos.getY();
-            z = pos.getZ();
-            chunkPosition = false;
-            eventLoop = null;
+            setCommon(dimension, BuiltInRegistries.BLOCK.getKey(blockEntity.getBlockState().getBlock()),
+                    TickDetailKind.BLOCK, -1);
+            setPosition(pos.getX(), pos.getY(), pos.getZ(), false);
             entityAgeTicks = -1;
             finishPublish();
         }
 
         void publishTask(String eventLoop, Runnable task) {
             beginPublish(TickType.TASK, task.getClass());
-            dimension = null;
-            detailId = null;
-            detailKind = TickDetailKind.NONE;
-            entityId = -1;
-            positioned = false;
-            x = 0;
-            y = 0;
-            z = 0;
-            chunkPosition = false;
+            setCommon(null, null, TickDetailKind.NONE, -1);
+            clearPosition();
             this.eventLoop = eventLoop;
+            entityAgeTicks = -1;
+            finishPublish();
+        }
+
+        void publishHandler() {
+            beginPublish(TickType.HANDLER, HandlerWork.class);
+            setCommon(null, null, TickDetailKind.NONE, -1);
+            clearPosition();
+            eventLoop = "";
+            displayName = "Handler";
             entityAgeTicks = -1;
             finishPublish();
         }
@@ -304,6 +269,31 @@ public final class PerfWorkTracker {
             this.type = type;
             this.workClass = workClass;
             displayName = "";
+        }
+
+        private void setCommon(ResourceLocation dimension, ResourceLocation detailId,
+                               TickDetailKind detailKind, int entityId) {
+            this.dimension = dimension;
+            this.detailId = detailId;
+            this.detailKind = detailKind;
+            this.entityId = entityId;
+            eventLoop = null;
+        }
+
+        private void setPosition(int x, int y, int z, boolean chunkPosition) {
+            positioned = true;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.chunkPosition = chunkPosition;
+        }
+
+        private void clearPosition() {
+            positioned = false;
+            x = 0;
+            y = 0;
+            z = 0;
+            chunkPosition = false;
         }
 
         private void finishPublish() {
@@ -323,9 +313,15 @@ public final class PerfWorkTracker {
                 return null;
             }
             Snapshot result = new Snapshot(type, dimension, workClass, detailId, detailKind,
-                    entityId, positioned,
-                    x, y, z, chunkPosition, eventLoop, displayName, entityAgeTicks);
+                    entityId, positioned, x, y, z, chunkPosition,
+                    eventLoop, displayName, entityAgeTicks);
             return before == version ? result : null;
         }
+    }
+
+    private static final class HandlerWork {
+    }
+
+    private static final class UnknownWork {
     }
 }

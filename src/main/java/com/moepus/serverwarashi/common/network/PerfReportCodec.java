@@ -26,6 +26,7 @@ public final class PerfReportCodec {
         buffer.writeVarLong(report.tickCount());
         buffer.writeVarLong(report.totalSamples());
         buffer.writeVarInt(report.intervalMicros());
+        writeSampling(buffer, report.sampling(), budget);
         buffer.writeVarInt(report.omittedChunks());
         buffer.writeVarInt(report.omittedTickables());
         buffer.writeVarInt(report.omittedOwnerSources());
@@ -45,6 +46,7 @@ public final class PerfReportCodec {
         long tickCount = buffer.readVarLong();
         long totalSamples = buffer.readVarLong();
         int intervalMicros = buffer.readVarInt();
+        PerfReportData.SamplingMetadata sampling = readSampling(buffer, budget);
         int omittedChunks = buffer.readVarInt();
         int omittedTickables = buffer.readVarInt();
         int omittedOwnerSources = buffer.readVarInt();
@@ -54,7 +56,7 @@ public final class PerfReportCodec {
         List<PerfReportData.OwnerEntry> owners = readList(buffer, PerfReportCodec::readOwner, budget);
         List<PerfReportData.LoaderSourceEntry> loaders = PerfLoaderReportCodec.read(buffer, budget);
         return new PerfReportData(reportId, serverMspt, elapsedMillis, generatedAtEpochMillis,
-                tickCount, totalSamples, intervalMicros, omittedChunks, omittedTickables,
+                tickCount, totalSamples, intervalMicros, sampling, omittedChunks, omittedTickables,
                 omittedOwnerSources, omittedLoaderSources, chunks, tickables, owners, loaders);
     }
 
@@ -112,6 +114,8 @@ public final class PerfReportCodec {
         buffer.writeInt(entry.z());
         buffer.writeBoolean(entry.chunkPosition());
         writeString(buffer, entry.eventLoop(), budget);
+        buffer.writeVarInt(entry.attributionSource().ordinal());
+        buffer.writeVarInt(entry.confidence().ordinal());
         writeMetric(buffer, entry.metric());
     }
 
@@ -129,9 +133,33 @@ public final class PerfReportCodec {
         int z = buffer.readInt();
         boolean chunkPosition = buffer.readBoolean();
         String eventLoop = readString(buffer, budget);
+        var source = readEnum(buffer, PerfReportData.AttributionSource.values(), "attribution source");
+        var confidence = readEnum(buffer, PerfReportData.Confidence.values(), "confidence");
         return new PerfReportData.TickableEntry(type, dimension, className, detailId, detailKind,
                 entityId, positioned,
-                x, y, z, chunkPosition, eventLoop, readMetric(buffer));
+                x, y, z, chunkPosition, eventLoop, source, confidence, readMetric(buffer));
+    }
+
+    private static void writeSampling(RegistryFriendlyByteBuf buffer,
+                                      PerfReportData.SamplingMetadata sampling,
+                                      EntryBudget budget) {
+        writeString(buffer, sampling.backend(), budget);
+        buffer.writeVarInt(sampling.durationSemantics().ordinal());
+        buffer.writeVarInt(sampling.confidence().ordinal());
+        buffer.writeVarLong(sampling.droppedSamples());
+        writeString(buffer, sampling.degradationReason(), budget);
+    }
+
+    private static PerfReportData.SamplingMetadata readSampling(
+            RegistryFriendlyByteBuf buffer, EntryBudget budget) {
+        String backend = readString(buffer, budget);
+        var semantics = readEnum(buffer, PerfReportData.DurationSemantics.values(),
+                "duration semantics");
+        var confidence = readEnum(buffer, PerfReportData.Confidence.values(), "confidence");
+        long droppedSamples = buffer.readVarLong();
+        String degradationReason = readString(buffer, budget);
+        return new PerfReportData.SamplingMetadata(backend, semantics, confidence,
+                droppedSamples, degradationReason);
     }
 
     private static void writeOwner(RegistryFriendlyByteBuf buffer,

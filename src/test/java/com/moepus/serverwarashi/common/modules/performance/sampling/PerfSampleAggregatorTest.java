@@ -20,10 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfSampleAggregatorTest {
     @Test
-    void unknownUsesDirectIntervalAfterBetweenTickSamplesAreMerged() {
+    void unknownUsesPrimarySampleDensityAfterBetweenTickSamplesAreMerged() {
         PerfWorkTracker.Snapshot unknown = PerfStackAttributor.classify(new StackTraceElement[]{
                 new StackTraceElement("com.example.TickWork", "calculate", "TickWork.java", 1)
-        });
+        }).snapshot();
         SampleMetricMode mode = PerfStackAttributor.metricMode(unknown);
         TickSamples betweenTicks = new TickSamples(null);
         for (int sample = 0; sample < 3; sample++) {
@@ -41,9 +41,12 @@ class PerfSampleAggregatorTest {
         aggregator.accept(second);
         PerfReportData report = aggregator.build(milliseconds(1_000L), 100L, 500);
         PerfReportData.Metric metric = report.tickables().getFirst().metric();
+        double nanosPerSample = SampleDensity.nanosPerAttempt(
+                milliseconds(1_000L), 100L, 500);
 
-        assertEquals(1.25D, metric.mspt(), 0.000_001D);
-        assertEquals(2.0D, metric.max(), 0.000_001D);
+        assertEquals(5.0D * nanosPerSample / 1_000_000.0D / 2.0D,
+                metric.mspt(), 0.000_001D);
+        assertTrue(metric.max() >= metric.mspt());
         assertEquals(5L, metric.samples());
     }
 

@@ -71,7 +71,7 @@ class PerfReportRowsTest {
 
         assertEquals("ServerEvents#onTick(ServerTickEvent.Pre)", row.label());
         assertEquals("screen.serverwarashi.profiler.type.handler", row.auxiliary().type());
-        assertEquals(fullName, tooltip(row));
+        assertEquals(fullName + "\nscreen.serverwarashi.profiler.attribution_quality", tooltip(row));
         assertEquals("", row.content().coordinate());
         assertTrue(row.capabilities().coordinateAction().isEmpty());
         assertTrue(row.capabilities().expansion().isEmpty());
@@ -89,8 +89,10 @@ class PerfReportRowsTest {
 
         assertEquals("screen.serverwarashi.profiler.tickable.unknown", row.label());
         assertEquals("screen.serverwarashi.profiler.type.task", row.auxiliary().type());
-        assertNull(tooltip(row));
-        assertEquals(PerfReportRow.Capabilities.none(), row.capabilities());
+        assertEquals("screen.serverwarashi.profiler.attribution_quality", tooltip(row));
+        assertTrue(row.capabilities().labelAction().isEmpty());
+        assertTrue(row.capabilities().coordinateAction().isEmpty());
+        assertTrue(row.capabilities().expansion().isEmpty());
     }
 
     @Test
@@ -103,7 +105,8 @@ class PerfReportRowsTest {
                 report(List.of(), List.of(unknown), List.of()),
                 PerfReportRows.SortKey.MSPT, Map.of(), true).getFirst();
 
-        assertEquals("screen.serverwarashi.profiler.unknown.click", tooltip(row));
+        assertEquals("screen.serverwarashi.profiler.unknown.click\n"
+                + "screen.serverwarashi.profiler.attribution_quality", tooltip(row));
         assertTrue(row.capabilities().labelAction().isPresent());
         assertTrue(row.capabilities().coordinateAction().isEmpty());
         assertTrue(row.capabilities().expansion().isEmpty());
@@ -122,7 +125,7 @@ class PerfReportRowsTest {
         assertEquals("screen.serverwarashi.profiler.tickable.gc", row.label());
         assertEquals("screen.serverwarashi.profiler.type.gc", row.auxiliary().type());
         assertEquals(new PerfReportData.Metric(5.0D, 100.0D, 20L), row.metric());
-        assertNull(tooltip(row));
+        assertEquals("screen.serverwarashi.profiler.attribution_quality", tooltip(row));
     }
 
     @Test
@@ -191,13 +194,13 @@ class PerfReportRowsTest {
         PerfReportGeometry geometry = new PerfReportGeometry(0, 0, 760, 400, 12, 730, 100, 380);
 
         assertEquals(List.of(PerfReportRows.SortKey.ENTITIES, PerfReportRows.SortKey.BLOCK_ENTITIES,
-                        PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX, PerfReportRows.SortKey.SAMPLES),
+                        PerfReportRows.SortKey.SAMPLES, PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.CHUNKS));
-        assertEquals(List.of(PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX,
-                        PerfReportRows.SortKey.SAMPLES),
+        assertEquals(List.of(PerfReportRows.SortKey.SAMPLES, PerfReportRows.SortKey.MSPT,
+                        PerfReportRows.SortKey.MAX),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.TICKABLES));
-        assertEquals(List.of(PerfReportRows.SortKey.CHUNKS, PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX,
-                        PerfReportRows.SortKey.SAMPLES),
+        assertEquals(List.of(PerfReportRows.SortKey.CHUNKS, PerfReportRows.SortKey.SAMPLES,
+                        PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.PLAYERS));
     }
 

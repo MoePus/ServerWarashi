@@ -19,7 +19,14 @@ final class PerfTimeText {
                 : relative(report.generatedAtEpochMillis(), nowMillis,
                 "screen.serverwarashi.profiler.status.no_sample");
         String samples = String.format(Locale.ROOT, "%,d", report.totalSamples());
-        return Component.translatable("screen.serverwarashi.profiler.status.session", time, samples);
+        String confidence = report.sampling().confidence().name().toLowerCase(Locale.ROOT);
+        if (!report.sampling().degradationReason().isEmpty()) {
+            return Component.translatable("screen.serverwarashi.profiler.status.session_degraded",
+                    time, samples, report.sampling().backend(), confidence,
+                    report.sampling().degradationReason());
+        }
+        return Component.translatable("screen.serverwarashi.profiler.status.session",
+                time, samples, report.sampling().backend(), confidence);
     }
 
     static Component player(boolean online, long lastLoginMillis, long nowMillis) {

@@ -46,11 +46,11 @@ final class PerfReportTableRenderer {
             x += geometry.countWidth();
             x += geometry.lastLoginWidth();
         }
+        headers.add(header(PerfReportRows.SortKey.SAMPLES, x, y, geometry.samplesWidth()));
+        x += geometry.samplesWidth();
         headers.add(header(PerfReportRows.SortKey.MSPT, x, y, geometry.msptWidth()));
         x += geometry.msptWidth();
         headers.add(header(PerfReportRows.SortKey.MAX, x, y, geometry.maxWidth()));
-        x += geometry.maxWidth();
-        headers.add(header(PerfReportRows.SortKey.SAMPLES, x, y, geometry.samplesWidth()));
         return List.copyOf(headers);
     }
 
@@ -174,15 +174,15 @@ final class PerfReportTableRenderer {
 
     private static void renderMetricHeader(GuiGraphics graphics, Font font,
                                            PerfReportGeometry geometry, int x, int y, HeaderState state) {
+        drawHeaderCell(graphics, font, PerfDisplayText.translated("screen.serverwarashi.profiler.header.samples"),
+                PerfReportRows.SortKey.SAMPLES,
+                x, y, geometry.samplesWidth(), state);
+        x += geometry.samplesWidth();
         drawHeaderCell(graphics, font, "MSPT", PerfReportRows.SortKey.MSPT,
                 x, y, geometry.msptWidth(), state);
         x += geometry.msptWidth();
         drawHeaderCell(graphics, font, "MAX", PerfReportRows.SortKey.MAX,
                 x, y, geometry.maxWidth(), state);
-        x += geometry.maxWidth();
-        drawHeaderCell(graphics, font, PerfDisplayText.translated("screen.serverwarashi.profiler.header.samples"),
-                PerfReportRows.SortKey.SAMPLES,
-                x, y, geometry.samplesWidth(), state);
     }
 
     private static void drawHeaderCell(GuiGraphics graphics, Font font, String value,
@@ -204,14 +204,14 @@ final class PerfReportTableRenderer {
         if (!row.showsMetric()) {
             return;
         }
+        drawCell(graphics, font, String.format(Locale.ROOT, "%,d", row.metric().samples()), x, y,
+                geometry.samplesWidth(), true, TEXT);
+        x += geometry.samplesWidth();
         drawCell(graphics, font, PerfReportRows.metric(row.metric().mspt()), x, y,
                 geometry.msptWidth(), true, TEXT);
         x += geometry.msptWidth();
         drawCell(graphics, font, PerfReportRows.metric(row.metric().max()), x, y,
                 geometry.maxWidth(), true, TEXT);
-        x += geometry.maxWidth();
-        drawCell(graphics, font, String.format(Locale.ROOT, "%,d", row.metric().samples()), x, y,
-                geometry.samplesWidth(), true, TEXT);
     }
 
     static int labelWidth(TableContext context) {

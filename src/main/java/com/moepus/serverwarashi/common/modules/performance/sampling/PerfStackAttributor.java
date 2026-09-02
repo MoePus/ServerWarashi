@@ -1,18 +1,41 @@
 package com.moepus.serverwarashi.common.modules.performance.sampling;
 
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadInfo;
-import java.lang.management.ThreadMXBean;
 import java.util.Map;
+import java.util.Set;
 
 final class PerfStackAttributor {
-    private static final int MAX_STACK_DEPTH = 96;
     private static final String EVENT_BUS_PACKAGE = "net.neoforged.bus.";
     private static final String EVENT_BUS_CLASS = "net.neoforged.bus.EventBus";
     private static final String EVENT_HOOKS_CLASS = "net.neoforged.neoforge.event.EventHooks";
     private static final String MINECRAFT_SERVER_CLASS = "net.minecraft.server.MinecraftServer";
-    private static final String UNKNOWN_NAME = "Unknown";
-    private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
+    private static final String SERVER_LEVEL_CLASS = "net.minecraft.server.level.ServerLevel";
+    private static final String ENTITY_CLASS = "net.minecraft.world.entity.Entity";
+    private static final String BOUND_BLOCK_ENTITY_CLASS =
+            "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity";
+    private static final String LEVEL_CHUNK_CLASS = "net.minecraft.world.level.chunk.LevelChunk";
+    private static final String BLOCK_ENTITY_CLASS =
+            "net.minecraft.world.level.block.entity.BlockEntity";
+    private static final String BLOCK_ENTITY_TICKER_CLASS =
+            "net.minecraft.world.level.block.entity.BlockEntityTicker";
+    private static final String BLOCKABLE_EVENT_LOOP_CLASS =
+            "net.minecraft.util.thread.BlockableEventLoop";
+    private static final String TICK_TASK_CLASS = "net.minecraft.server.TickTask";
+    private static final String METHOD_SCOPE_SUFFIX = "$mixinlite$scope$";
+    private static final Set<String> ENTITY_WRAPPER_METHODS = Set.of(
+            "setOldPosAndRot", "getType", "getPassengers", "isRemoved",
+            "getVehicle", "stopRiding");
+    private static final Set<String> BLOCK_ENTITY_WRAPPER_METHODS = Set.of(
+            "isRemoved", "hasLevel", "getBlockPos", "getType", "getBlockState");
+    private static final Classification ENTITY_DISPATCH = new Classification(
+            Kind.ENTITY_DISPATCH, snapshot(TickType.TASK, EntityDispatchWork.class,
+            "Entity Dispatch", ""));
+    private static final Classification BLOCK_ENTITY_DISPATCH = new Classification(
+            Kind.BLOCK_ENTITY_DISPATCH, snapshot(TickType.TASK, BlockEntityDispatchWork.class,
+            "Block Entity Dispatch", ""));
+    private static final Classification UNKNOWN = new Classification(
+            Kind.UNKNOWN, PerfWorkTracker.unknownSnapshot());
+    private static final Classification TRACKED = new Classification(Kind.TRACKED, null);
+    private static final Classification IDLE = new Classification(Kind.IDLE, null);
     private static final Map<String, TickEvent> TICK_EVENTS = Map.of(
             "fireServerTickPre", tickEvent("ServerTickEvent.Pre"),
             "fireServerTickPost", tickEvent("ServerTickEvent.Post"),
@@ -27,35 +50,86 @@ final class PerfStackAttributor {
     private PerfStackAttributor() {
     }
 
-    static PerfWorkTracker.Snapshot capture(Thread thread) {
-        StackTraceElement[] stack = captureStack(thread);
-        return stack == null ? null : classify(stack);
-    }
-
-    static PerfWorkTracker.Snapshot captureTickHandler(Thread thread) {
-        StackTraceElement[] stack = captureStack(thread);
-        return stack == null ? null : findTickHandler(stack);
-    }
-
     static SampleMetricMode metricMode(PerfWorkTracker.Snapshot snapshot) {
-        return snapshot != null && snapshot.workClass() == UnknownWork.class
-                ? SampleMetricMode.DIRECT_INTERVAL : SampleMetricMode.STATISTICAL;
+        return SampleMetricMode.STATISTICAL;
     }
 
-    static StackTraceElement[] captureStack(Thread thread) {
-        if (thread == null || !thread.isAlive()) {
-            return null;
+    static Classification classify(StackTraceElement[] stack) {
+        if (stack == null || stack.length == 0) {
+            return IDLE;
         }
-        ThreadInfo info = THREADS.getThreadInfo(thread.threadId(), MAX_STACK_DEPTH);
-        return info == null ? null : info.getStackTrace();
-    }
-
-    static PerfWorkTracker.Snapshot classify(StackTraceElement[] stack) {
         PerfWorkTracker.Snapshot handler = findTickHandler(stack);
         if (handler != null) {
-            return handler;
+            return new Classification(Kind.HANDLER, handler);
         }
-        return isNormalTickIdle(stack) ? null : unknown();
+        Classification dispatch = findDispatch(stack);
+        if (dispatch != null) {
+            return dispatch;
+        }
+        if (isKnownTrackedStack(stack)) {
+            return TRACKED;
+        }
+        return isNormalTickIdle(stack) ? IDLE : UNKNOWN;
+    }
+
+    private static Classification findDispatch(StackTraceElement[] stack) {
+        for (int index = 0; index < stack.length; index++) {
+            StackTraceElement frame = stack[index];
+            if (SERVER_LEVEL_CLASS.equals(frame.getClassName())
+                    && "tickNonPassenger".equals(frame.getMethodName())) {
+                return onlyWrapperInfrastructureAbove(stack, index, Wrapper.ENTITY)
+                        ? ENTITY_DISPATCH : TRACKED;
+            }
+            if (BOUND_BLOCK_ENTITY_CLASS.equals(frame.getClassName())
+                    && "tick".equals(frame.getMethodName())) {
+                return onlyWrapperInfrastructureAbove(stack, index, Wrapper.BLOCK_ENTITY)
+                        ? BLOCK_ENTITY_DISPATCH : TRACKED;
+            }
+        }
+        return null;
+    }
+
+    private static boolean onlyWrapperInfrastructureAbove(
+            StackTraceElement[] stack, int wrapperIndex, Wrapper wrapper) {
+        for (int index = 0; index < wrapperIndex; index++) {
+            if (!isWrapperInfrastructure(stack[index], wrapper)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isWrapperInfrastructure(StackTraceElement frame, Wrapper wrapper) {
+        String className = frame.getClassName();
+        if (className.startsWith("net.minecraft.util.profiling.")
+                || className.startsWith("java.util.")) {
+            return true;
+        }
+        if (wrapper == Wrapper.ENTITY) {
+            return SERVER_LEVEL_CLASS.equals(className)
+                    || ENTITY_CLASS.equals(className)
+                    && ENTITY_WRAPPER_METHODS.contains(frame.getMethodName());
+        }
+        return LEVEL_CHUNK_CLASS.equals(className)
+                || BLOCK_ENTITY_CLASS.equals(className)
+                && BLOCK_ENTITY_WRAPPER_METHODS.contains(frame.getMethodName());
+    }
+
+    private static boolean isKnownTrackedStack(StackTraceElement[] stack) {
+        for (StackTraceElement frame : stack) {
+            String className = frame.getClassName();
+            String methodName = frame.getMethodName();
+            if (TICK_TASK_CLASS.equals(className) && "run".equals(methodName)
+                    || BLOCKABLE_EVENT_LOOP_CLASS.equals(className)
+                    && "doRunTask".equals(methodName)
+                    || SERVER_LEVEL_CLASS.equals(className) && "tickChunk".equals(methodName)
+                    || ENTITY_CLASS.equals(className)
+                    && ("tick".equals(methodName) || "rideTick".equals(methodName))
+                    || BLOCK_ENTITY_TICKER_CLASS.equals(className) && "tick".equals(methodName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static PerfWorkTracker.Snapshot findTickHandler(StackTraceElement[] stack) {
@@ -74,8 +148,12 @@ final class PerfStackAttributor {
     }
 
     private static TickEvent tickEvent(StackTraceElement frame) {
-        return EVENT_HOOKS_CLASS.equals(frame.getClassName())
-                ? TICK_EVENTS.get(frame.getMethodName()) : null;
+        if (!EVENT_HOOKS_CLASS.equals(frame.getClassName())) {
+            return null;
+        }
+        String method = frame.getMethodName();
+        int scopeSuffix = method.indexOf(METHOD_SCOPE_SUFFIX);
+        return TICK_EVENTS.get(scopeSuffix < 0 ? method : method.substring(0, scopeSuffix));
     }
 
     private static StackTraceElement handlerAboveDispatch(StackTraceElement[] stack, int hookIndex) {
@@ -136,10 +214,6 @@ final class PerfStackAttributor {
         return snapshot(TickType.HANDLER, HandlerWork.class, shortName, fullName);
     }
 
-    private static PerfWorkTracker.Snapshot unknown() {
-        return snapshot(TickType.TASK, UnknownWork.class, UNKNOWN_NAME, "");
-    }
-
     private static PerfWorkTracker.Snapshot snapshot(
             TickType type, Class<?> workClass, String displayName, String fullName) {
         return new PerfWorkTracker.Snapshot(type, null, workClass, null, TickDetailKind.NONE,
@@ -165,9 +239,29 @@ final class PerfStackAttributor {
     private record TickEvent(String shortName, String fullName) {
     }
 
+    record Classification(Kind kind, PerfWorkTracker.Snapshot snapshot) {
+    }
+
+    enum Kind {
+        HANDLER,
+        ENTITY_DISPATCH,
+        BLOCK_ENTITY_DISPATCH,
+        UNKNOWN,
+        TRACKED,
+        IDLE
+    }
+
+    private enum Wrapper {
+        ENTITY,
+        BLOCK_ENTITY
+    }
+
     private static final class HandlerWork {
     }
 
-    private static final class UnknownWork {
+    private static final class EntityDispatchWork {
+    }
+
+    private static final class BlockEntityDispatchWork {
     }
 }

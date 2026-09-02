@@ -55,9 +55,11 @@ ServerWarashi 是一款面向 Minecraft 1.21.1 NeoForge 服务端的诊断与治
 
 ## 低开销采样
 
-性能采样使用 **MixinLite** 的无分配回调注入与方法作用域。未进行 profiling 时，采样器不会运行，相关钩子只执行轻量开关检查。空间热点使用有界聚合、增量网络流和按查看者裁剪，不向未订阅玩家广播完整状态。
+主计时由独立线程每约 1ms 读取一次 `PerfWorkTracker` 完成，不读取目标线程栈。tracker 使用预分配 slot 和 version 一致性校验；Entity、乘客 Entity、Block Entity、Chunk、Task 与通用 Handler 的服务线程发布路径不分配对象，也不执行 `nanoTime`。tick 内没有显式上下文时仍记录 `TASK / Unknown`，因此 JFR 不可用时主计时不会消失。
 
-相较传统的 `@Inject` 或 `@Redirect` 采样路径，MixinLite 减少了高频 tick 路径上的对象分配，也更容易与其他 Mixin 调用链共存。
+HotSpot JFR 的 `ExecutionSample` / `NativeMethodSample` 只作为 10ms 低频明细来源，用于把已有的通用 Handler/Unknown 主样本按比例细分为具体监听器、Entity Dispatch、Block Entity Dispatch 和 Unknown 栈明细。JFR 事件按时间戳限流并归入保留约一秒的 closed tick；它们不增加主样本数或时间权重。拆分使用整数配额并严格守恒，证据不足时保留通用条目。
+
+报告的 `sampleAttempts`、MSPT、max、热点与总时间只来自主采样。耗时按主采样的实际尝试密度估算，不是逐任务 stopwatch；JFR 的启动失败、运行故障、丢样和外部 recording 频率不会改变主计时，只会降低明细质量并显示 degradation reason。实现不会回退到 `ThreadMXBean`、`Thread.getStackTrace()` 或 ThreadDump。
 
 ## 命令
 
@@ -79,7 +81,7 @@ ServerWarashi 是一款面向 Minecraft 1.21.1 NeoForge 服务端的诊断与治
 | 配置项 | 默认值 | 范围或说明 |
 | --- | ---: | --- |
 | `perf_auto_stop_seconds` | `900` | 未指定命令时长时的自动停止时间，`1..86400` 秒。 |
-| `perf_sample_interval_us` | `1000` | 性能采样间隔，`100..100000` 微秒；越低采样越密集。 |
+| `perf_sample_interval_us` | `1000` | 性能采样间隔，`1000..100000` 微秒；越低采样越密集。 |
 | `perf_world_hotspot_limit` | `2048` | 向每名玩家发送的附近实体和方块实体热点上限，`256..4096`。 |
 | `perf_allow_non_op_subscriptions` | `false` | 允许非 OP 客户端订阅性能报告和空间数据；不授予管理操作权限。 |
 | `entity_load_guard_enabled` | `true` | 启用实体加载保护。 |

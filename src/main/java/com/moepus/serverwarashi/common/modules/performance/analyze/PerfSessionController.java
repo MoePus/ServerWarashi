@@ -64,7 +64,9 @@ final class PerfSessionController {
     }
 
     void onServerTickPre(MinecraftServer server) {
-        PerfWorkTracker.clearCurrent();
+        if (PerfWorkTracker.isProfiling) {
+            PerfWorkTracker.clearCurrent();
+        }
         try {
             beginTick(server);
         } catch (RuntimeException | Error exception) {
@@ -237,20 +239,25 @@ final class PerfSessionController {
 
     private static boolean startOrResumeSampling(ActiveSession session) {
         if (!session.samplerStarted) {
-            session.sampler.start();
-            session.samplerStarted = true;
             PerfWorkTracker.activate(Thread.currentThread());
+            session.sampler.start(Thread.currentThread());
+            session.samplerStarted = true;
             return true;
         }
-        boolean resumed = session.sampler.resume();
         if (session.sampler.hasReachedDuration()) {
             PerfWorkTracker.deactivate();
             return false;
         }
-        if (resumed) {
+        boolean trackerWasActive = PerfWorkTracker.isProfiling;
+        if (!trackerWasActive) {
             PerfWorkTracker.activate(Thread.currentThread());
         }
-        return true;
+        boolean resumed = session.sampler.resume();
+        if (resumed || trackerWasActive) {
+            return true;
+        }
+        PerfWorkTracker.deactivate();
+        return false;
     }
 
     private static boolean sameLoaderLayout(PerfAttributionSnapshot previous,

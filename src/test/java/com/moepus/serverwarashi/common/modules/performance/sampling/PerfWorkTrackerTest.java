@@ -39,7 +39,7 @@ class PerfWorkTrackerTest {
     void samplerThreadObservesWorkPublishedByServerThread() throws InterruptedException {
         TestEventLoop eventLoop = new TestEventLoop();
         PerfSamplerSession session = PerfSamplerSession.create(
-                2L, 100, PerfSamplerSession.Options.unlimited(null));
+                2L, 1_000, PerfSamplerSession.Options.unlimited(null));
         PerfWorkTracker.activate(Thread.currentThread());
         session.start();
         session.beginTick(null);
@@ -58,6 +58,20 @@ class PerfWorkTrackerTest {
                 session.stop();
             }
         }
+    }
+
+    @Test
+    void handlerTemporarilyOverridesOuterWorkAndRestoresIt() {
+        TestEventLoop eventLoop = new TestEventLoop();
+        PerfWorkTracker.activate(Thread.currentThread());
+
+        assertTrue(PerfWorkTracker.enterTask(eventLoop, new OuterTask()));
+        assertTrue(PerfWorkTracker.enterHandler());
+        assertEquals(TickType.HANDLER, PerfWorkTracker.snapshot().type());
+        assertEquals("Handler", PerfWorkTracker.snapshot().displayName());
+
+        assertTrue(PerfWorkTracker.exit(TickType.HANDLER));
+        assertEquals(OuterTask.class, PerfWorkTracker.snapshot().workClass());
     }
 
     private static final class TestEventLoop extends BlockableEventLoop<Runnable> {
@@ -106,4 +120,5 @@ class PerfWorkTrackerTest {
         public void run() {
         }
     }
+
 }

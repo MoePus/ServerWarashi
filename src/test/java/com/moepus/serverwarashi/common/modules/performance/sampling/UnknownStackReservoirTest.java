@@ -51,7 +51,7 @@ class UnknownStackReservoirTest {
 
     @Test
     void recordingHotPathContainsNoInvokeDynamicInstruction() throws Exception {
-        assertNoInvokeDynamic(PerfSamplerSession.class, "sampleCurrent");
+        assertNoInvokeDynamic(PerfSamplerSession.class, "recordPrimary");
         assertNoInvokeDynamic(UnknownStackReservoir.class, "record");
     }
 

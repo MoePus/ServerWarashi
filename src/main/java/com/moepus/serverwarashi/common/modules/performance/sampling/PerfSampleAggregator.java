@@ -37,7 +37,8 @@ final class PerfSampleAggregator {
             .thenComparingInt(PerfReportData.TickableEntry::x)
             .thenComparingInt(PerfReportData.TickableEntry::y)
             .thenComparingInt(PerfReportData.TickableEntry::z)
-            .thenComparing(PerfReportData.TickableEntry::eventLoop);
+            .thenComparing(PerfReportData.TickableEntry::eventLoop)
+            .thenComparingInt(entry -> entry.attributionSource().ordinal());
     private final long reportId;
     private final PerfOwnerAggregator ownerAggregator = new PerfOwnerAggregator();
     private final Map<TickSamples.TickableKey, TickableAggregate> tickables = new HashMap<>();
@@ -140,6 +141,7 @@ final class PerfSampleAggregator {
         result.addAll(entries);
         result.add(new PerfReportData.TickableEntry(TickType.GC, "", "Rolling 1s", "",
                 TickDetailKind.NONE, -1, false, 0, 0, 0, false, "",
+                PerfReportData.AttributionSource.JVM_METRIC, PerfReportData.Confidence.HIGH,
                 new PerfReportData.Metric(gc.averageMillis(), gc.maxMillis(), gc.ticks())));
         return List.copyOf(result);
     }
@@ -285,6 +287,7 @@ final class PerfSampleAggregator {
             return new PerfReportData.TickableEntry(key.type(), key.dimension(), displayName,
                     nullableId(key.detailId()), key.detailKind(), key.entityId(), positioned,
                     x, y, z, chunkPosition, key.eventLoop(),
+                    key.attributionSource(), key.confidence(),
                     metric);
         }
 
