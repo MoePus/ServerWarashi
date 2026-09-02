@@ -31,7 +31,7 @@ public final class PerfReportScreen extends Screen {
         super(Component.translatable("screen.serverwarashi.profiler.title"));
         this.report = report;
         this.profiling = profiling;
-        unknownStackCopy = UnknownStackCopyController.production(report.reportId(), profiling);
+        unknownStackCopy = UnknownStackCopyController.production(report, profiling);
         for (Tab tab : Tab.values()) {
             states.put(tab, new PerfReportTabState());
         }
@@ -40,7 +40,7 @@ public final class PerfReportScreen extends Screen {
     public void updateReport(PerfReportData report, boolean profiling) {
         this.report = report;
         this.profiling = profiling;
-        unknownStackCopy.updateReport(report.reportId(), profiling);
+        unknownStackCopy.updateReport(report, profiling);
         states.values().forEach(PerfReportTabState::refresh);
     }
 

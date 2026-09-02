@@ -154,16 +154,13 @@ final class PerfReportRows {
         String prefix = coordinate.isEmpty() ? label : label.substring(0, label.length() - coordinate.length());
         PerfReportRow.Capabilities capabilities = PerfReportRow.Capabilities.none()
                 .withCoordinateAction(teleportCommand(entry));
-        String quality = qualityText(entry);
         if (entry.type() == TickType.HANDLER) {
-            capabilities = capabilities.withLabelTooltip(entry.eventLoop() + "\n" + quality);
+            capabilities = capabilities.withLabelTooltip(entry.eventLoop());
         } else if (unknownDetailsAvailable && isUnknownFallback(entry)) {
             capabilities = capabilities
                     .withLabelTooltip(PerfDisplayText.translated(
-                            "screen.serverwarashi.profiler.unknown.click") + "\n" + quality)
+                            "screen.serverwarashi.profiler.unknown.click"))
                     .withLabelAction();
-        } else {
-            capabilities = capabilities.withLabelTooltip(quality);
         }
         return PerfReportRow.metric(tickableKey(entry),
                 new PerfReportRow.Content(prefix, coordinate),
@@ -175,15 +172,6 @@ final class PerfReportRows {
     private static boolean isUnknownFallback(PerfReportData.TickableEntry entry) {
         return entry.type() == TickType.TASK && entry.eventLoop().isEmpty()
                 && "Unknown".equals(entry.className());
-    }
-
-    private static String qualityText(PerfReportData.TickableEntry entry) {
-        String source = PerfDisplayText.translated("screen.serverwarashi.profiler.source."
-                + entry.attributionSource().name().toLowerCase(Locale.ROOT));
-        String confidence = PerfDisplayText.translated("screen.serverwarashi.profiler.confidence."
-                + entry.confidence().name().toLowerCase(Locale.ROOT));
-        return PerfDisplayText.translated("screen.serverwarashi.profiler.attribution_quality",
-                source, confidence);
     }
 
     private static PerfReportRow ownerSourceRow(

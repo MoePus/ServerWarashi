@@ -9,6 +9,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UnknownStackClustererTest {
     @Test
@@ -71,7 +72,7 @@ class UnknownStackClustererTest {
         long[] tickTotals = new long[256];
         java.util.Arrays.fill(tickTotals, 1L);
         var metadata = new UnknownStackSnapshot.Metadata(
-                8L, 2L, 25_600L, 25_600L, 1_000, true);
+                8L, 2L, 25_600L, 25_600L, 25_600L, 1_000, true);
         var samples = new UnknownStackSnapshot.Samples(
                 stacks.toArray(StackTraceElement[][]::new), toLongArray(ticks), tickTotals);
 
@@ -80,6 +81,37 @@ class UnknownStackClustererTest {
 
         assertEquals(1.0D, result.burst().getFirst().estimatedBurstMillis());
         assertEquals(1.0D, result.average().getFirst().estimatedAverageMillis());
+    }
+
+    @Test
+    void reliableJfrSharesDistributeAllPrimaryUnknownWeight() {
+        var metadata = new UnknownStackSnapshot.Metadata(
+                9L, 2L, 2L, 100L, 10L, 1_000, true);
+        var samples = new UnknownStackSnapshot.Samples(
+                new StackTraceElement[][]{alpha("java.lang.reflect.Method", 1), beta(2)},
+                new long[]{1L, 2L}, new long[]{10L, 10L});
+
+        UnknownStackClusterer.Result result = UnknownStackClusterer.cluster(
+                new UnknownStackSnapshot(metadata, samples));
+
+        assertEquals(5.0D, result.average().getFirst().estimatedAverageMillis());
+        assertEquals(10.0D, result.average().stream()
+                .mapToDouble(UnknownStackClusterer.Cluster::estimatedAverageMillis).sum());
+    }
+
+    @Test
+    void singleObservationIsNotExtrapolatedAcrossPrimaryUnknown() {
+        var metadata = new UnknownStackSnapshot.Metadata(
+                10L, 2L, 1L, 100L, 10L, 1_000, true);
+        var samples = new UnknownStackSnapshot.Samples(
+                new StackTraceElement[][]{alpha("java.lang.reflect.Method", 1)},
+                new long[]{1L}, new long[]{10L});
+
+        UnknownStackClusterer.Result result = UnknownStackClusterer.cluster(
+                new UnknownStackSnapshot(metadata, samples));
+
+        assertTrue(result.average().isEmpty());
+        assertTrue(result.burst().isEmpty());
     }
 
     private static StackTraceElement[] alpha(String wrapper, int line) {
@@ -120,7 +152,8 @@ class UnknownStackClustererTest {
             tickTotals[index] = totals.get(tickIds[index]);
         }
         var metadata = new UnknownStackSnapshot.Metadata(
-                reportId, 2L, stacks.size(), tickCount, intervalMicros, true);
+                reportId, 2L, stacks.size(), stacks.size(),
+                tickCount, intervalMicros, true);
         var samples = new UnknownStackSnapshot.Samples(
                 stacks.toArray(StackTraceElement[][]::new), tickIds, tickTotals);
         return new UnknownStackSnapshot(metadata, samples);

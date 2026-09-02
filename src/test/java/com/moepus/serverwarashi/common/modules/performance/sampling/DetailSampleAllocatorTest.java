@@ -32,7 +32,7 @@ class DetailSampleAllocatorTest {
                 .allMatch(key -> key.type() == TickType.TASK));
         assertFalse(tick.tickables.keySet().stream()
                 .anyMatch(key -> key.type().name().contains("DISPATCH")));
-        assertEquals(4L, stacks.snapshot(1L, 1L, 1_000).totalObserved());
+        assertEquals(2L, stacks.snapshot(1L, 1L, 1_000).totalObserved());
     }
 
     @Test
@@ -107,10 +107,10 @@ class DetailSampleAllocatorTest {
     }
 
     @Test
-    void trackedChunkAndTaskStacksCannotEnterUnknownReservoir() {
+    void trackedPrimaryChunkAndTaskStacksCannotEnterUnknownReservoir() {
         TickSamples tick = unknownTick(6);
-        record(tick, 2, chunkExecutionStack(), PrimaryObservationRing.CoarseState.UNKNOWN);
-        record(tick, 2, taskExecutionStack(), PrimaryObservationRing.CoarseState.UNKNOWN);
+        record(tick, 2, chunkExecutionStack(), PrimaryObservationRing.CoarseState.TRACKED);
+        record(tick, 2, taskExecutionStack(), PrimaryObservationRing.CoarseState.TRACKED);
         UnknownStackReservoir stacks = new UnknownStackReservoir(17L);
 
         tick.applyDetails(stacks);
@@ -119,6 +119,28 @@ class DetailSampleAllocatorTest {
         assertEquals(6, attributedSamples(tick));
         assertEquals(6, samples(tick, "Unknown"));
         assertEquals(0L, stacks.snapshot(1L, 1L, 1_000).totalObserved());
+    }
+
+    @Test
+    void unknownPrimaryRetainsMissedTrackedAndHandlerStacks() {
+        TickSamples tick = unknownTick(6);
+        tick.tickId = 1L;
+        record(tick, 1, entityExecutionStack(), PrimaryObservationRing.CoarseState.UNKNOWN);
+        record(tick, 1, blockEntityExecutionStack(), PrimaryObservationRing.CoarseState.UNKNOWN);
+        record(tick, 1, chunkExecutionStack(), PrimaryObservationRing.CoarseState.UNKNOWN);
+        record(tick, 1, taskExecutionStack(), PrimaryObservationRing.CoarseState.UNKNOWN);
+        record(tick, 1, handlerStack("MissedEvents", "tick"),
+                PrimaryObservationRing.CoarseState.UNKNOWN);
+        UnknownStackReservoir stacks = new UnknownStackReservoir(19L);
+
+        tick.applyDetails(stacks);
+        stacks.completeTick(tick.tickId, tick.unknownSamples);
+        UnknownStackSnapshot snapshot = stacks.snapshot(1L, 1L, 1_000);
+
+        assertEquals(6, attributedSamples(tick));
+        assertEquals(6, samples(tick, "Unknown"));
+        assertEquals(5L, snapshot.totalObserved());
+        assertEquals(6L, snapshot.totalPrimarySamples());
     }
 
     private static TickSamples unknownTick(int samples) {

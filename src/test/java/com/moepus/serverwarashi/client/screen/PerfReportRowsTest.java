@@ -71,7 +71,7 @@ class PerfReportRowsTest {
 
         assertEquals("ServerEvents#onTick(ServerTickEvent.Pre)", row.label());
         assertEquals("screen.serverwarashi.profiler.type.handler", row.auxiliary().type());
-        assertEquals(fullName + "\nscreen.serverwarashi.profiler.attribution_quality", tooltip(row));
+        assertEquals(fullName, tooltip(row));
         assertEquals("", row.content().coordinate());
         assertTrue(row.capabilities().coordinateAction().isEmpty());
         assertTrue(row.capabilities().expansion().isEmpty());
@@ -89,7 +89,7 @@ class PerfReportRowsTest {
 
         assertEquals("screen.serverwarashi.profiler.tickable.unknown", row.label());
         assertEquals("screen.serverwarashi.profiler.type.task", row.auxiliary().type());
-        assertEquals("screen.serverwarashi.profiler.attribution_quality", tooltip(row));
+        assertNull(tooltip(row));
         assertTrue(row.capabilities().labelAction().isEmpty());
         assertTrue(row.capabilities().coordinateAction().isEmpty());
         assertTrue(row.capabilities().expansion().isEmpty());
@@ -105,8 +105,7 @@ class PerfReportRowsTest {
                 report(List.of(), List.of(unknown), List.of()),
                 PerfReportRows.SortKey.MSPT, Map.of(), true).getFirst();
 
-        assertEquals("screen.serverwarashi.profiler.unknown.click\n"
-                + "screen.serverwarashi.profiler.attribution_quality", tooltip(row));
+        assertEquals("screen.serverwarashi.profiler.unknown.click", tooltip(row));
         assertTrue(row.capabilities().labelAction().isPresent());
         assertTrue(row.capabilities().coordinateAction().isEmpty());
         assertTrue(row.capabilities().expansion().isEmpty());
@@ -125,7 +124,7 @@ class PerfReportRowsTest {
         assertEquals("screen.serverwarashi.profiler.tickable.gc", row.label());
         assertEquals("screen.serverwarashi.profiler.type.gc", row.auxiliary().type());
         assertEquals(new PerfReportData.Metric(5.0D, 100.0D, 20L), row.metric());
-        assertEquals("screen.serverwarashi.profiler.attribution_quality", tooltip(row));
+        assertNull(tooltip(row));
     }
 
     @Test

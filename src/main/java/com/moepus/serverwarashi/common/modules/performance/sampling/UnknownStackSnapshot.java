@@ -40,6 +40,10 @@ public final class UnknownStackSnapshot {
         return metadata.totalObserved;
     }
 
+    public long totalPrimarySamples() {
+        return metadata.totalPrimarySamples;
+    }
+
     public long tickCount() {
         return metadata.tickCount;
     }
@@ -71,12 +75,13 @@ public final class UnknownStackSnapshot {
     record Metadata(long reportId,
                     long revision,
                     long totalObserved,
+                    long totalPrimarySamples,
                     long tickCount,
                     int intervalMicros,
                     boolean finalized) {
         Metadata {
             if (reportId <= 0L || revision < 0L || totalObserved < 0L
-                    || tickCount < 0L || intervalMicros <= 0) {
+                    || totalPrimarySamples < 0L || tickCount < 0L || intervalMicros <= 0) {
                 throw new IllegalArgumentException("Invalid Unknown stack snapshot metadata");
             }
         }

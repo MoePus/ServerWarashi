@@ -146,6 +146,25 @@ class UnknownStackCopyControllerTest {
         assertTrue(fixture.controller.request());
     }
 
+    @Test
+    void copiedDetailsScaleReliableJfrSharesToPrimaryUnknownTime() {
+        UnknownStackDetailsPayload.Cluster cluster = new UnknownStackDetailsPayload.Cluster(
+                "example.Work#run", 98, 98, 25, 4.6087890625D, 176.5D,
+                List.of("example.Work.run(Work.java:10)"));
+        UnknownStackDetailsPayload payload = new UnknownStackDetailsPayload(
+                1L, 3L, 2L, UnknownStackDetailsPayload.Status.OK,
+                1_822L, 256, List.of(cluster), List.of(cluster));
+        var summary = new UnknownStackCopyController.UnknownSummary(
+                47_194L, 13.703D, 3_920L, 1_000);
+
+        String copied = UnknownStackCopyController.format(payload, summary);
+
+        assertTrue(copied.contains("Primary Unknown: 47,194 samples | 13.703 MSPT"));
+        assertTrue(copied.contains("Reliable JFR observations: 1,822"));
+        assertFalse(copied.contains("Unresolved Unknown"));
+        assertTrue(copied.contains("estimated 5.246 MSPT"));
+    }
+
     private static UnknownStackDetailsPayload response(long requestId, long reportId) {
         UnknownStackDetailsPayload.Cluster cluster = new UnknownStackDetailsPayload.Cluster(
                 "example.Work#run", 4, 3, 2, 1.0D, 2.0D,

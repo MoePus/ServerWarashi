@@ -1,6 +1,8 @@
 package com.moepus.serverwarashi.client.screen;
 
 import com.moepus.serverwarashi.client.network.UnknownStackDetailsClient;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import com.moepus.serverwarashi.common.network.UnknownStackDetailsPayload;
 import com.moepus.serverwarashi.common.network.UnknownStackDetailsRequestPayload;
 import net.minecraft.client.Minecraft;
@@ -22,24 +24,28 @@ public final class UnknownStackCopyController {
     private long deadlineNanos;
     private boolean profiling;
     private boolean open;
+    private UnknownSummary unknownSummary;
     private TooltipState tooltipState = TooltipState.READY;
 
     private UnknownStackCopyController(long reportId,
                                        boolean profiling,
+                                       UnknownSummary unknownSummary,
                                        Dependencies dependencies) {
         this.reportId = reportId;
         this.profiling = profiling;
+        this.unknownSummary = unknownSummary;
         this.dependencies = dependencies;
     }
 
-    static UnknownStackCopyController production(long reportId, boolean profiling) {
-        return new UnknownStackCopyController(reportId, profiling,
+    static UnknownStackCopyController production(PerfReportData report, boolean profiling) {
+        return new UnknownStackCopyController(report.reportId(), profiling,
+                UnknownSummary.from(report),
                 new Dependencies(new ProductionTransport(), new ProductionOutput(), System::nanoTime));
     }
 
     static UnknownStackCopyController createForTest(
             long reportId, boolean profiling, Dependencies dependencies) {
-        return new UnknownStackCopyController(reportId, profiling, dependencies);
+        return new UnknownStackCopyController(reportId, profiling, null, dependencies);
     }
 
     public static void handlePayload(UnknownStackDetailsPayload payload) {
@@ -74,6 +80,16 @@ public final class UnknownStackCopyController {
     }
 
     void updateReport(long nextReportId, boolean nextProfiling) {
+        updateIdentity(nextReportId, nextProfiling);
+        unknownSummary = null;
+    }
+
+    void updateReport(PerfReportData report, boolean nextProfiling) {
+        updateIdentity(report.reportId(), nextProfiling);
+        unknownSummary = UnknownSummary.from(report);
+    }
+
+    private void updateIdentity(long nextReportId, boolean nextProfiling) {
         if (reportId != nextReportId || profiling != nextProfiling) {
             clearPending();
             tooltipState = TooltipState.READY;
@@ -145,7 +161,7 @@ public final class UnknownStackCopyController {
     }
 
     private void copy(UnknownStackDetailsPayload payload) {
-        dependencies.output.copy(format(payload));
+        dependencies.output.copy(format(payload, unknownSummary));
         int copied = payload.average().size() + payload.burst().size();
         dependencies.output.notifyCopied(copied);
         tooltipState = TooltipState.COPIED;
@@ -174,21 +190,42 @@ public final class UnknownStackCopyController {
     }
 
     static String format(UnknownStackDetailsPayload payload) {
+        return format(payload, null);
+    }
+
+    static String format(UnknownStackDetailsPayload payload, UnknownSummary summary) {
         StringBuilder text = new StringBuilder();
         text.append("ServerWarashi Unknown stack details\n")
-                .append("Report ID: ").append(payload.reportId()).append('\n')
-                .append("Unknown observations: ").append(payload.totalObserved()).append('\n')
-                .append("Reservoir samples: ").append(payload.retainedCount()).append('\n');
+                .append("Report ID: ").append(payload.reportId()).append('\n');
+        appendCoverage(text, payload, summary);
+        text.append("Reservoir samples: ").append(payload.retainedCount()).append('\n');
+        double estimateScale = summary == null ? 1.0D : summary.estimateScale();
         appendSection(text, new Section("Average-time Top 3", payload.average(), true),
-                payload.retainedCount());
+                payload.retainedCount(), estimateScale);
         appendSection(text, new Section("Burst-time Top 3", payload.burst(), false),
-                payload.retainedCount());
+                payload.retainedCount(), estimateScale);
         return text.toString();
     }
 
+    private static void appendCoverage(StringBuilder text,
+                                       UnknownStackDetailsPayload payload,
+                                       UnknownSummary summary) {
+        if (summary == null || summary.samples == 0L) {
+            text.append("Reliable JFR observations: ")
+                    .append(payload.totalObserved()).append('\n');
+            return;
+        }
+        text.append("Primary Unknown: ")
+                .append(String.format(Locale.ROOT, "%,d samples | %.3f MSPT%n",
+                        summary.samples, summary.mspt))
+                .append("Reliable JFR observations: ")
+                .append(String.format(Locale.ROOT, "%,d%n", payload.totalObserved()));
+    }
+
     private static void appendSection(StringBuilder text,
-                                      Section section,
-                                      int retainedCount) {
+                                       Section section,
+                                       int retainedCount,
+                                       double estimateScale) {
         text.append('\n').append(section.heading).append('\n');
         if (section.clusters.isEmpty()) {
             text.append("(none)\n");
@@ -202,9 +239,9 @@ public final class UnknownStackCopyController {
                     .append(String.format(Locale.ROOT, "%.2f%%", share)).append(" | ")
                     .append(section.average
                             ? String.format(Locale.ROOT, "estimated %.3f MSPT",
-                            cluster.estimatedAverageMillis())
+                            cluster.estimatedAverageMillis() * estimateScale)
                             : String.format(Locale.ROOT, "estimated %.3f ms peak",
-                            cluster.estimatedBurstMillis()))
+                            cluster.estimatedBurstMillis() * estimateScale))
                     .append("\n   Anchor: ").append(cluster.anchor())
                     .append("\n   Samples: ").append(cluster.sampleCount())
                     .append("; representative path: ").append(cluster.representativeCount())
@@ -216,6 +253,32 @@ public final class UnknownStackCopyController {
     }
 
     record Dependencies(Transport transport, Output output, LongSupplier nanoTime) {
+    }
+
+    record UnknownSummary(long samples,
+                          double mspt,
+                          long tickCount,
+                          int intervalMicros) {
+        static UnknownSummary from(PerfReportData report) {
+            long samples = 0L;
+            double mspt = 0.0D;
+            for (PerfReportData.TickableEntry entry : report.tickables()) {
+                if (entry.type() == TickType.TASK && entry.eventLoop().isEmpty()
+                        && "Unknown".equals(entry.className())) {
+                    samples += entry.metric().samples();
+                    mspt += entry.metric().mspt();
+                }
+            }
+            return new UnknownSummary(samples, mspt, report.tickCount(), report.intervalMicros());
+        }
+
+        double estimateScale() {
+            if (samples == 0L || tickCount == 0L) {
+                return 1.0D;
+            }
+            double baselineMspt = samples * intervalMicros / 1_000.0D / tickCount;
+            return baselineMspt <= 0.0D ? 1.0D : mspt / baselineMspt;
+        }
     }
 
     private record Section(String heading,

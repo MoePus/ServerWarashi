@@ -13,6 +13,7 @@ final class UnknownStackReservoir {
     private final SplittableRandom random;
     private long revision;
     private long totalObserved;
+    private long totalPrimarySamples;
 
     UnknownStackReservoir(long seed) {
         random = new SplittableRandom(seed);
@@ -39,18 +40,17 @@ final class UnknownStackReservoir {
     }
 
     void completeTick(long tickId, long totalSamples) {
-        if (tickId <= 0L || totalSamples <= 0L) {
+        if (tickId <= 0L || totalSamples < 0L) {
             return;
         }
+        totalPrimarySamples += totalSamples;
         int populated = (int) Math.min(totalObserved, CAPACITY);
-        boolean changed = false;
         for (int index = 0; index < populated; index++) {
             if (tickIds[index] == tickId && stacks.get(index) != null) {
                 tickTotals[index] = totalSamples;
-                changed = true;
             }
         }
-        if (changed) {
+        if (totalSamples > 0L) {
             revision++;
         }
     }
@@ -66,7 +66,7 @@ final class UnknownStackReservoir {
         copyRetained(populated, copy, parameters);
         long includedObserved = Math.max(0L, observed - parameters.excludedObserved);
         var metadata = new UnknownStackSnapshot.Metadata(
-                parameters.reportId, revision, includedObserved,
+                parameters.reportId, revision, includedObserved, totalPrimarySamples,
                 parameters.tickCount, parameters.intervalMicros, parameters.finalized);
         var samples = new UnknownStackSnapshot.Samples(
                 copiedStacks, copiedTickIds, copiedTickTotals);

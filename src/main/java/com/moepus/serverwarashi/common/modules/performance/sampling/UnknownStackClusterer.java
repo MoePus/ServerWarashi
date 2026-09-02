@@ -9,6 +9,7 @@ import java.util.Map;
 public final class UnknownStackClusterer {
     public static final int TOP_LIMIT = 3;
     public static final int MAX_FRAME_TEXT_LENGTH = 512;
+    private static final int MIN_RELIABLE_OBSERVATIONS = 2;
     private static final String EMPTY_ANCHOR = "<no business frame>";
     private static final Comparator<AnchorStats> AVERAGE_ORDER =
             Comparator.comparingInt(AnchorStats::sampleCount).reversed()
@@ -22,6 +23,11 @@ public final class UnknownStackClusterer {
     }
 
     public static Result cluster(UnknownStackSnapshot snapshot) {
+        if (snapshot.totalObserved() < MIN_RELIABLE_OBSERVATIONS
+                || snapshot.retainedCount() < MIN_RELIABLE_OBSERVATIONS) {
+            return new Result(snapshot.reportId(), snapshot.revision(), snapshot.totalObserved(),
+                    snapshot.retainedCount(), List.of(), List.of());
+        }
         Map<String, AnchorStats> groups = collect(snapshot);
         Map<Long, TickRetention> retainedTicks = retainedTicks(snapshot);
         List<AnchorStats> values = new ArrayList<>(groups.values());
@@ -206,7 +212,7 @@ public final class UnknownStackClusterer {
             representative = selectRepresentative();
             estimatedBurstSamples = estimateBurstSamples(retainedTicks);
             double scale = snapshot.retainedCount() == 0 ? 0.0D
-                    : snapshot.totalObserved() / (double) snapshot.retainedCount();
+                    : snapshot.totalPrimarySamples() / (double) snapshot.retainedCount();
             double intervalMillis = snapshot.intervalMicros() / 1_000.0D;
             double average = snapshot.tickCount() == 0L ? 0.0D
                     : sampleCount * scale * intervalMillis / snapshot.tickCount();

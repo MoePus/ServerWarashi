@@ -30,14 +30,17 @@ final class DetailSampleAllocator {
         if (detail.kind() == PerfStackAttributor.Kind.ENTITY_DISPATCH
                 || detail.kind() == PerfStackAttributor.Kind.BLOCK_ENTITY_DISPATCH) {
             dispatches.merge(detail.snapshot(), 1, Integer::sum);
-        } else if (detail.kind() == PerfStackAttributor.Kind.UNKNOWN) {
+        } else if (detail.kind() != PerfStackAttributor.Kind.IDLE) {
             unknownStacks.add(sample.stack());
         }
     }
 
     void apply(TickSamples tick, UnknownStackReservoir unknownReservoir) {
         splitHandlers(tick);
-        splitUnknown(tick, unknownReservoir);
+        splitUnknown(tick);
+        if (tick.unknownSamples > 0L) {
+            recordUnknownEvidence(unknownReservoir, tick.tickId);
+        }
     }
 
     private void splitHandlers(TickSamples tick) {
@@ -58,7 +61,7 @@ final class DetailSampleAllocator {
         }
     }
 
-    private void splitUnknown(TickSamples tick, UnknownStackReservoir unknownReservoir) {
+    private void splitUnknown(TickSamples tick) {
         int evidence = evidenceCount(dispatches) + unknownStacks.size();
         if (evidence < MIN_EVIDENCE_SAMPLES) {
             return;
@@ -76,7 +79,6 @@ final class DetailSampleAllocator {
                 PerfReportData.AttributionSource.FALLBACK_UNKNOWN,
                 PerfReportData.Confidence.LOW);
         tick.unknownSamples = unknown.allocated;
-        recordUnknownStacks(unknownReservoir, tick.tickId, unknown.allocated);
     }
 
     private static void addDispatches(TickSamples tick, List<Bucket> buckets) {
@@ -88,14 +90,9 @@ final class DetailSampleAllocator {
         }
     }
 
-    private void recordUnknownStacks(UnknownStackReservoir reservoir,
-                                     long tickId,
-                                     int allocated) {
-        if (unknownStacks.isEmpty()) {
-            return;
-        }
-        for (int index = 0; index < allocated; index++) {
-            reservoir.record(unknownStacks.get(index % unknownStacks.size()), tickId);
+    private void recordUnknownEvidence(UnknownStackReservoir reservoir, long tickId) {
+        for (StackTraceElement[] stack : unknownStacks) {
+            reservoir.record(stack, tickId);
         }
     }
 
