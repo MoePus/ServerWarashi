@@ -1,6 +1,7 @@
 package com.moepus.serverwarashi.common.network;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfWorldHotspotIndex;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
@@ -77,5 +78,24 @@ class PerfWorldHotspotPayloadTest {
                 new PerfWorldHotspotPayload.Entry(
                         PerfWorldHotspotIndex.Key.entity(4),
                         TickDetailKind.BLOCK, 1, 1L, 1L, 256));
+    }
+
+    @Test
+    void permitsStressTestHotspotLimitButRejectsLargerPayloads() {
+        var entry = new PerfWorldHotspotPayload.Entry(
+                PerfWorldHotspotIndex.Key.entity(42), TickDetailKind.ENTITY,
+                7, 1L, 1L, 256);
+        List<PerfWorldHotspotPayload.Entry> maximum = java.util.Collections.nCopies(
+                PerfReportLimits.MAX_WORLD_HOTSPOT_ENTRIES, entry);
+
+        new PerfWorldHotspotPayload(1L, 0L, 1L, 1L, 1_000_000L,
+                ResourceLocation.parse("minecraft:overworld"), true,
+                maximum, List.of());
+        assertThrows(IllegalArgumentException.class, () -> new PerfWorldHotspotPayload(
+                1L, 0L, 1L, 1L, 1_000_000L,
+                ResourceLocation.parse("minecraft:overworld"), true,
+                java.util.Collections.nCopies(
+                        PerfReportLimits.MAX_WORLD_HOTSPOT_ENTRIES + 1, entry),
+                List.of()));
     }
 }

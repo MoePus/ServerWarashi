@@ -1,5 +1,6 @@
 package com.moepus.serverwarashi.common.config;
 
+import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
@@ -19,7 +20,8 @@ public final class ServerConfig {
             .defineInRange("perf_sample_interval_us", 1000, 100, 100_000);
     static final ModConfigSpec.ConfigValue<Integer> PERF_WORLD_HOTSPOT_LIMIT = BUILDER
             .comment("Maximum nearby entity and block-entity hotspots sent to each player.")
-            .defineInRange("perf_world_hotspot_limit", 2048, 256, 4096);
+            .defineInRange("perf_world_hotspot_limit", 2048, 256,
+                    PerfReportLimits.MAX_WORLD_HOTSPOT_ENTRIES);
     static final ModConfigSpec.BooleanValue PERF_ALLOW_NON_OP_SUBSCRIPTIONS = BUILDER
             .comment("Allow non-operator players to subscribe to performance reports.")
             .define("perf_allow_non_op_subscriptions", false);

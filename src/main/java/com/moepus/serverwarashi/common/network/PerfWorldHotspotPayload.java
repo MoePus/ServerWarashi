@@ -136,7 +136,7 @@ public record PerfWorldHotspotPayload(long streamEpoch,
     }
 
     private static void validateSize(int size) {
-        if (size < 0 || size > PerfReportLimits.MAX_ENTRIES) {
+        if (size < 0 || size > PerfReportLimits.MAX_WORLD_HOTSPOT_ENTRIES) {
             throw new IllegalArgumentException("Invalid hotspot entry count: " + size);
         }
     }

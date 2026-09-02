@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 public final class PerfReportLimits {
     public static final int MAX_ENTRIES = 4_096;
+    public static final int MAX_WORLD_HOTSPOT_ENTRIES = 16_384;
     public static final int MAX_LOADER_SOURCES = 4_096;
     public static final int MAX_LOADER_REGIONS = 4_096;
     public static final int MAX_LOADER_REGION_SPAN = 4_096;
