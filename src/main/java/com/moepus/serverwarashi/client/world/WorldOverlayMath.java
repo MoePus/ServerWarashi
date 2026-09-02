@@ -12,6 +12,8 @@ public final class WorldOverlayMath {
     public static final double LABEL_TRANSITION_END = 12.0D;
     public static final double LABEL_FADE_START = 20.0D;
     public static final double LABEL_FADE_END = 40.0D;
+    static final double SPARK_FADE_START = 20.0D;
+    static final double SPARK_FADE_END = 24.0D;
     public static final double MAX_FLAME_VIEWPORT_FRACTION = 0.18D;
     public static final int MAX_DISPLAY_MICROS = 999_999_999;
     public static final int OVERFLOW_MICROS = MAX_DISPLAY_MICROS + 1;

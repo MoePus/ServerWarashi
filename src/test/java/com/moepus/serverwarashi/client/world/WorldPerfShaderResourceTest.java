@@ -43,11 +43,13 @@ class WorldPerfShaderResourceTest {
         assertUniform(root, "MaxFlameStrength", WorldOverlayMath.MAX_PACKED_FLAME_STRENGTH);
         assertUniform(root, "MaxFlameViewportFraction",
                 WorldOverlayMath.MAX_FLAME_VIEWPORT_FRACTION);
+        assertUniform(root, "PartialTick", 0.0D);
         assertUniform(root, "ParticleTime", 0.0D);
         assertUniform(root, "ParticleEpoch", 0.0D);
         assertUniform(root, "RenderPass", 0.0D);
         assertUniform(root, "ParticleStart", 0.0D);
         assertUniform(root, "SlotsPerMarker", 1.0D);
+        assertUniform(root, "MarkerBase", 0.0D);
         assertEquals("Position", root.getAsJsonArray("attributes").get(0).getAsString());
         assertEquals(1, root.getAsJsonArray("attributes").size());
         assertTrue(hasSampler(root, "MarkerData"));
@@ -58,8 +60,14 @@ class WorldPerfShaderResourceTest {
         String vertex = resource("world_perf_object.vsh");
         assertTrue(vertex.contains("uniform samplerBuffer MarkerData;"));
         assertTrue(vertex.contains("texelFetch(MarkerData, base)"));
+        assertTrue(vertex.contains("texelFetch(MarkerData, base + 3)"));
+        assertEquals(4, shaderIntConstant(vertex, "MARKER_TEXELS"));
         assertTrue(vertex.contains("gl_InstanceID / SlotsPerMarker"));
+        assertTrue(vertex.contains("MarkerBase + batchMarkerIndex"));
+        assertTrue(vertex.contains("gl_InstanceID - batchMarkerIndex * SlotsPerMarker"));
         assertTrue(vertex.contains("ParticleStart + slot"));
+        assertTrue(vertex.contains("mix(marker.previousPosition, marker.position"));
+        assertTrue(vertex.contains("clamp(PartialTick, 0.0, 1.0)"));
         assertEquals(WorldFlameParticleLayout.RED_PARTICLE_COUNT,
                 shaderIntConstant(vertex, "RED_PARTICLE_COUNT"));
         assertEquals(WorldFlameParticleLayout.ORANGE_PARTICLE_COUNT,
@@ -80,14 +88,28 @@ class WorldPerfShaderResourceTest {
     void objectShaderAppliesLodEnvelopeAndCoherentPlumeSparks() throws Exception {
         String vertex = resource("world_perf_object.vsh");
         String fragment = resource("world_perf_object.fsh");
-        assertTrue(vertex.contains("const float PARTICLE_LOD_START = 24.0;"));
-        assertTrue(vertex.contains("const float SPARK_FADE_END = 24.0;"));
-        assertTrue(vertex.contains("distanceToCamera >= SPARK_FADE_END"));
+        assertEquals(16.0D, shaderFloatConstant(vertex, "PARTICLE_LOD_START"));
+        assertEquals(32.0D, shaderFloatConstant(vertex, "PARTICLE_LOD_END"));
+        assertEquals(WorldOverlayMath.SPARK_FADE_START,
+                shaderFloatConstant(vertex, "SPARK_FADE_START"));
+        assertEquals(WorldOverlayMath.SPARK_FADE_END,
+                shaderFloatConstant(vertex, "SPARK_FADE_END"));
+        assertEquals(24.0D, shaderFloatConstant(vertex, "SMOKE_FADE_START"));
+        assertEquals(32.0D, shaderFloatConstant(vertex, "SMOKE_FADE_END"));
         assertTrue(vertex.contains("const float MIN_RED_COUNT = 16.0;"));
         assertTrue(vertex.contains("const float MIN_ORANGE_COUNT = 14.0;"));
         assertTrue(vertex.contains("const float MIN_YELLOW_COUNT = 14.0;"));
         assertTrue(vertex.contains("const float MIN_GLOW_COUNT = 10.0;"));
         assertTrue(vertex.contains("const float MIN_SPARK_COUNT = 10.0;"));
+        assertEquals(4.0D, shaderFloatConstant(vertex, "FAR_RED_COUNT"));
+        assertEquals(3.0D, shaderFloatConstant(vertex, "FAR_ORANGE_COUNT"));
+        assertEquals(3.0D, shaderFloatConstant(vertex, "FAR_YELLOW_COUNT"));
+        assertEquals(1.0D, shaderFloatConstant(vertex, "FAR_GLOW_COUNT"));
+        assertTrue(vertex.contains("float fastLod = 1.0 - (1.0 - lodAmount)"));
+        assertTrue(vertex.contains("nearCount * sparkRemaining * sparkRemaining"));
+        assertTrue(vertex.contains("distanceToCamera >= SMOKE_FADE_END"));
+        assertTrue(vertex.indexOf("!selectedParticleSlot")
+                < vertex.indexOf("bool alive = particleState"));
         assertTrue(vertex.contains("const vec2 SPARK_COUNT_RAMP = vec2(3.50, 5.0);"));
         assertTrue(vertex.contains("const float GREEN_BASE_WIDTH = 1.5;"));
         assertTrue(vertex.contains("const float GREEN_TIP_WIDTH = 0.8;"));
@@ -176,6 +198,17 @@ class WorldPerfShaderResourceTest {
         valueStart += prefix.length();
         int valueEnd = shader.indexOf(';', valueStart);
         return Integer.parseInt(shader.substring(valueStart, valueEnd));
+    }
+
+    private static double shaderFloatConstant(String shader, String name) {
+        String prefix = "const float " + name + " = ";
+        int valueStart = shader.indexOf(prefix);
+        if (valueStart < 0) {
+            throw new AssertionError("Missing shader constant " + name);
+        }
+        valueStart += prefix.length();
+        int valueEnd = shader.indexOf(';', valueStart);
+        return Double.parseDouble(shader.substring(valueStart, valueEnd));
     }
 
     private static void assertCompleteDefaults(JsonObject root) {

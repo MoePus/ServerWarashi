@@ -13,7 +13,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -23,20 +22,31 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 final class WorldPerfObjectRenderer {
-    private static final double MAX_DISTANCE_SQUARED =
-            WorldOverlayMath.OBJECT_FADE_END * WorldOverlayMath.OBJECT_FADE_END;
-    private static final double FLAME_FRUSTUM_MARGIN = 1.2D;
-    private static final double FLAME_FRUSTUM_HEIGHT = 4.0D;
+    private static final long STATIC_REFRESH_TICKS = 20L;
+    private static final WorldPerfObjectBuffers.Batch[] DRAW_ORDER = {
+            WorldPerfObjectBuffers.Batch.SMOKE,
+            WorldPerfObjectBuffers.Batch.NORMAL,
+            WorldPerfObjectBuffers.Batch.GLOW,
+            WorldPerfObjectBuffers.Batch.SPARK,
+            WorldPerfObjectBuffers.Batch.LABEL
+    };
     static final float LABEL_PIXELS = 12.0F;
+
     private final WorldPerfObjectBuffers buffers = new WorldPerfObjectBuffers();
-    private List<Candidate> candidates = List.of();
+    private final BlockPos.MutableBlockPos lookupPos = new BlockPos.MutableBlockPos();
+    private final Matrix4f staticModelView = new Matrix4f();
+    private final Matrix4f dynamicModelView = new Matrix4f();
+    private List<Candidate> staticCandidates = List.of();
+    private List<Candidate> dynamicCandidates = List.of();
     private long reportRevision = Long.MIN_VALUE;
+    private long staticRefreshTick = Long.MIN_VALUE;
+    private long dynamicRefreshTick = Long.MIN_VALUE;
     private String dimension;
     private ClientConfig.WorldOverlayFilter filter;
+    private int markerLimit;
 
     void render(RenderLevelStageEvent event,
                 ClientLevel level,
@@ -47,132 +57,166 @@ final class WorldPerfObjectRenderer {
             return;
         }
         String currentDimension = level.dimension().location().toString();
-        refreshCandidates(snapshot, currentDimension);
-        List<WorldPerfObjectBuffers.Entry> flames = resolve(event, level, snapshot.tickCount());
-        if (flames.isEmpty()) {
-            buffers.clear();
+        boolean sourceChanged = refreshCandidates(snapshot, currentDimension);
+        long clientTick = level.getGameTime();
+        Vec3 camera = event.getCamera().getPosition();
+        refreshStaticIfNeeded(level, camera, clientTick, sourceChanged);
+        refreshDynamicIfNeeded(event, level, snapshot.tickCount(), camera,
+                clientTick, sourceChanged);
+        if (buffers.isEmpty()) {
             return;
         }
-        buffers.replace(flames);
         draw(event, shader);
     }
 
-    private void refreshCandidates(ClientPerfWorldState.Snapshot snapshot, String currentDimension) {
+    private boolean refreshCandidates(
+            ClientPerfWorldState.Snapshot snapshot, String currentDimension) {
         ClientConfig.WorldOverlayFilter currentFilter = ClientConfig.worldOverlayFilter();
+        int currentMarkerLimit = ClientConfig.worldOverlayMarkerLimit();
         if (snapshot.clientRevision() == reportRevision && currentDimension.equals(dimension)
-                && currentFilter == filter) {
-            return;
+                && currentFilter == filter && currentMarkerLimit == markerLimit) {
+            return false;
         }
         reportRevision = snapshot.clientRevision();
         dimension = currentDimension;
         filter = currentFilter;
-        List<Candidate> next = new ArrayList<>();
+        markerLimit = currentMarkerLimit;
+        splitCandidates(snapshot, currentDimension, currentFilter, currentMarkerLimit);
+        return true;
+    }
+
+    private void splitCandidates(ClientPerfWorldState.Snapshot snapshot,
+                                 String currentDimension,
+                                 ClientConfig.WorldOverlayFilter currentFilter,
+                                 int currentMarkerLimit) {
         if (!currentDimension.equals(snapshot.dimension())) {
-            candidates = List.of();
+            staticCandidates = List.of();
+            dynamicCandidates = List.of();
             return;
         }
+        int initialCapacity = Math.min(snapshot.hotspots().size(), currentMarkerLimit);
+        List<Candidate> nextStatic = new ArrayList<>(initialCapacity);
+        List<Candidate> nextDynamic = new ArrayList<>();
+        int selected = 0;
         for (ClientPerfWorldState.Hotspot hotspot : snapshot.hotspots()) {
             double flameStrength = ObjectPerformanceScale.averageSamples(
                     hotspot.metric(), hotspot.measurementTicks());
-            if (WorldOverlayMath.shouldRender(flameStrength, currentFilter)) {
-                next.add(new Candidate(hotspot, hotspot.metric(), flameStrength));
-                if (next.size() == WorldPerfObjectBuffers.MAX_MARKER_COUNT) {
-                    break;
-                }
+            if (!WorldOverlayMath.shouldRender(flameStrength, currentFilter)) {
+                continue;
+            }
+            Candidate candidate = new Candidate(hotspot, hotspot.metric(), flameStrength);
+            if (hotspot.key().kind() == PerfWorldHotspotIndex.Kind.ENTITY) {
+                nextDynamic.add(candidate);
+            } else {
+                nextStatic.add(candidate);
+            }
+            selected++;
+            if (selected == currentMarkerLimit) {
+                break;
             }
         }
-        candidates = List.copyOf(next);
+        staticCandidates = nextStatic;
+        dynamicCandidates = nextDynamic;
     }
 
-    private List<WorldPerfObjectBuffers.Entry> resolve(RenderLevelStageEvent event,
-                                                       ClientLevel level,
-                                                       long tickCount) {
-        Vec3 camera = event.getCamera().getPosition();
+    private void refreshStaticIfNeeded(ClientLevel level,
+                                       Vec3 camera,
+                                       long clientTick,
+                                       boolean sourceChanged) {
+        if (!sourceChanged && (staticCandidates.isEmpty()
+                || !staticRefreshDue(staticRefreshTick, clientTick))) {
+            return;
+        }
+        buffers.replace(WorldPerfObjectBuffers.Source.STATIC,
+                resolveBlockEntities(level), camera);
+        staticRefreshTick = clientTick;
+    }
+
+    private void refreshDynamicIfNeeded(RenderLevelStageEvent event,
+                                        ClientLevel level,
+                                        long reportTickCount,
+                                        Vec3 camera,
+                                        long clientTick,
+                                        boolean sourceChanged) {
+        if (!sourceChanged && (dynamicCandidates.isEmpty()
+                || !dynamicRefreshDue(dynamicRefreshTick, clientTick))) {
+            return;
+        }
+        buffers.replace(WorldPerfObjectBuffers.Source.DYNAMIC,
+                resolveEntities(event, level, reportTickCount), camera);
+        dynamicRefreshTick = clientTick;
+    }
+
+    private List<WorldEntityFlameClusters.Marker> resolveBlockEntities(ClientLevel level) {
+        List<WorldEntityFlameClusters.Marker> markers =
+                new ArrayList<>(staticCandidates.size());
+        for (Candidate candidate : staticCandidates) {
+            long packedPosition = candidate.hotspot().key().blockPosition();
+            lookupPos.set(BlockPos.getX(packedPosition), BlockPos.getY(packedPosition),
+                    BlockPos.getZ(packedPosition));
+            if (!level.hasChunkAt(lookupPos)) {
+                continue;
+            }
+            BlockEntity blockEntity = level.getBlockEntity(lookupPos);
+            if (blockEntity != null && !blockEntity.isRemoved()
+                    && matchesBlockEntity(candidate.hotspot(), blockEntity)) {
+                markers.add(blockEntityMarker(candidate, packedPosition));
+            }
+        }
+        return markers;
+    }
+
+    private List<WorldEntityFlameClusters.Marker> resolveEntities(
+            RenderLevelStageEvent event, ClientLevel level, long tickCount) {
         List<WorldEntityFlameClusters.Input> itemEntities = new ArrayList<>();
-        List<WorldEntityFlameClusters.Marker> markers = new ArrayList<>();
-        for (Candidate candidate : candidates) {
-            AABB bounds = candidate.hotspot().key().kind() == PerfWorldHotspotIndex.Kind.ENTITY
-                    ? entityBounds(event, level, candidate.hotspot())
-                    : blockEntityBounds(level, candidate.hotspot());
-            if (bounds == null) {
+        List<WorldEntityFlameClusters.Marker> markers =
+                new ArrayList<>(dynamicCandidates.size());
+        for (Candidate candidate : dynamicCandidates) {
+            Entity entity = level.getEntity(candidate.hotspot().key().entityId());
+            if (!isVisibleEntity(event, candidate.hotspot(), entity)) {
                 continue;
             }
-            double distanceSquared = bounds.distanceToSqr(camera);
-            if (distanceSquared > MAX_DISTANCE_SQUARED
-                    || !event.getFrustum().isVisible(flameBounds(bounds))) {
-                continue;
-            }
-            if (candidate.hotspot().key().kind() == PerfWorldHotspotIndex.Kind.ENTITY) {
-                var input = new WorldEntityFlameClusters.Input(
-                        bounds, candidate.metric(), candidate.hotspot().measurementTicks(),
-                        candidate.hotspot().key().entityId());
-                if (shouldClusterEntity(candidate.hotspot().detailKind())) {
-                    itemEntities.add(input);
-                } else {
-                    markers.add(WorldEntityFlameClusters.single(input, tickCount));
-                }
+            AABB bounds = entity.getBoundingBox();
+            var input = new WorldEntityFlameClusters.Input(
+                    bounds, candidate.metric(), candidate.hotspot().measurementTicks(),
+                    candidate.hotspot().key().entityId(), entity.xo - entity.getX(),
+                    entity.yo - entity.getY(), entity.zo - entity.getZ());
+            if (shouldClusterEntity(candidate.hotspot().detailKind())) {
+                itemEntities.add(input);
             } else {
-                markers.add(blockEntityMarker(candidate, bounds));
+                markers.add(WorldEntityFlameClusters.single(input, tickCount));
             }
         }
         markers.addAll(WorldEntityFlameClusters.cluster(itemEntities, tickCount));
-        List<WorldPerfObjectBuffers.Entry> result = markers.stream()
-                .map(marker -> WorldPerfObjectBuffers.Entry.from(
-                        marker, camera, distanceSquared(marker, camera)))
-                .sorted(Comparator.comparingDouble(
-                        WorldPerfObjectBuffers.Entry::distanceSquared).reversed())
-                .toList();
-        return result;
+        return markers;
     }
 
-    private static AABB flameBounds(AABB bounds) {
-        return new AABB(bounds.minX - FLAME_FRUSTUM_MARGIN, bounds.minY,
-                bounds.minZ - FLAME_FRUSTUM_MARGIN, bounds.maxX + FLAME_FRUSTUM_MARGIN,
-                bounds.maxY + FLAME_FRUSTUM_HEIGHT, bounds.maxZ + FLAME_FRUSTUM_MARGIN);
+    private static boolean isVisibleEntity(RenderLevelStageEvent event,
+                                           ClientPerfWorldState.Hotspot hotspot,
+                                           Entity entity) {
+        return entity != null && !entity.isRemoved() && matchesEntity(hotspot, entity)
+                && (event.getCamera().isDetached() || entity != event.getCamera().getEntity());
     }
 
     private static WorldEntityFlameClusters.Marker blockEntityMarker(
-            Candidate candidate, AABB bounds) {
-        int phase = PackedPositionHash.hash(
-                candidate.hotspot().key().blockPosition()) & 0x7FFF;
+            Candidate candidate, long packedPosition) {
+        int phase = PackedPositionHash.hash(packedPosition) & 0x7FFF;
         var anchor = new WorldEntityFlameClusters.Anchor(
-                (bounds.minX + bounds.maxX) * 0.5D, bounds.maxY,
-                (bounds.minZ + bounds.maxZ) * 0.5D);
+                BlockPos.getX(packedPosition) + 0.5D,
+                BlockPos.getY(packedPosition) + 1.0D,
+                BlockPos.getZ(packedPosition) + 0.5D);
         var visual = new WorldEntityFlameClusters.Visual(
                 candidate.flameStrength(), phase, 1);
         return new WorldEntityFlameClusters.Marker(anchor, candidate.metric(), visual);
     }
 
-    private static double distanceSquared(WorldEntityFlameClusters.Marker marker, Vec3 camera) {
-        double dx = marker.x() - camera.x;
-        double dy = marker.y() - camera.y;
-        double dz = marker.z() - camera.z;
-        return dx * dx + dy * dy + dz * dz;
+    static boolean staticRefreshDue(long previousTick, long currentTick) {
+        return previousTick == Long.MIN_VALUE || currentTick < previousTick
+                || currentTick - previousTick >= STATIC_REFRESH_TICKS;
     }
 
-    private static AABB entityBounds(RenderLevelStageEvent event,
-                                     ClientLevel level,
-                                     ClientPerfWorldState.Hotspot hotspot) {
-        Entity entity = level.getEntity(hotspot.key().entityId());
-        if (entity == null || entity.isRemoved() || !matchesEntity(hotspot, entity)
-                || (!event.getCamera().isDetached() && entity == event.getCamera().getEntity())) {
-            return null;
-        }
-        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
-        double x = Mth.lerp(partialTick, entity.xo, entity.getX());
-        double y = Mth.lerp(partialTick, entity.yo, entity.getY());
-        double z = Mth.lerp(partialTick, entity.zo, entity.getZ());
-        return entity.getBoundingBox().move(x - entity.getX(), y - entity.getY(), z - entity.getZ());
-    }
-
-    private static AABB blockEntityBounds(ClientLevel level, ClientPerfWorldState.Hotspot hotspot) {
-        BlockPos pos = BlockPos.of(hotspot.key().blockPosition());
-        if (!level.hasChunkAt(pos)) {
-            return null;
-        }
-        BlockEntity blockEntity = level.getBlockEntity(pos);
-        return blockEntity != null && !blockEntity.isRemoved() && matchesBlockEntity(hotspot, blockEntity)
-                ? new AABB(pos) : null;
+    static boolean dynamicRefreshDue(long previousTick, long currentTick) {
+        return previousTick != currentTick;
     }
 
     static boolean shouldClusterEntity(TickDetailKind detailKind) {
@@ -204,9 +248,29 @@ final class WorldPerfObjectRenderer {
         int previousNoiseTexture = RenderSystem.getShaderTexture(1);
         RenderSystem.setShaderTexture(0, WorldGlyphAtlas.textureId());
         RenderSystem.setShaderTexture(1, WorldFlameNoiseTexture.textureId());
+        setFrameUniforms(event, shader, minecraft);
+        RenderSystem.enableBlend();
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+        RenderSystem.enableCull();
+        try {
+            drawBuffers(event, shader);
+        } finally {
+            RenderSystem.depthMask(true);
+            RenderSystem.enableDepthTest();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableBlend();
+            RenderSystem.setShaderTexture(0, previousGlyphTexture);
+            RenderSystem.setShaderTexture(1, previousNoiseTexture);
+        }
+    }
+
+    private static void setFrameUniforms(
+            RenderLevelStageEvent event, ShaderInstance shader, Minecraft minecraft) {
         shader.safeGetUniform("ScreenSize").set(
                 (float) minecraft.getWindow().getWidth(), (float) minecraft.getWindow().getHeight());
-        shader.safeGetUniform("LabelPixels").set(LABEL_PIXELS * (float) minecraft.getWindow().getGuiScale());
+        shader.safeGetUniform("LabelPixels").set(
+                LABEL_PIXELS * (float) minecraft.getWindow().getGuiScale());
         shader.safeGetUniform("FadeDistances").set(
                 (float) WorldOverlayMath.OBJECT_FADE_START,
                 (float) WorldOverlayMath.OBJECT_FADE_END);
@@ -216,6 +280,13 @@ final class WorldPerfObjectRenderer {
         shader.safeGetUniform("LabelFadeDistances").set(
                 (float) WorldOverlayMath.LABEL_FADE_START,
                 (float) WorldOverlayMath.LABEL_FADE_END);
+        shader.safeGetUniform("PartialTick").set(
+                event.getPartialTick().getGameTimeDeltaPartialTick(false));
+        setPackedDataUniforms(shader);
+        setAnimationUniforms(event, shader, minecraft);
+    }
+
+    private static void setPackedDataUniforms(ShaderInstance shader) {
         shader.safeGetUniform("OverflowValue").set(WorldOverlayMath.OVERFLOW_MICROS);
         shader.safeGetUniform("LabelWordBase").set(WorldOverlayMath.LABEL_WORD_BASE);
         shader.safeGetUniform("GlyphCount").set((float) WorldGlyphAtlas.GLYPH_COUNT);
@@ -225,33 +296,53 @@ final class WorldPerfObjectRenderer {
                 (float) WorldOverlayMath.MAX_PACKED_FLAME_STRENGTH);
         shader.safeGetUniform("MaxFlameViewportFraction").set(
                 (float) WorldOverlayMath.MAX_FLAME_VIEWPORT_FRACTION);
+    }
+
+    private static void setAnimationUniforms(
+            RenderLevelStageEvent event, ShaderInstance shader, Minecraft minecraft) {
         long gameTime = minecraft.level == null ? 0L : minecraft.level.getGameTime();
         WorldFlameAnimationClock.Snapshot clock = WorldFlameAnimationClock.sample(
                 gameTime, event.getPartialTick().getGameTimeDeltaPartialTick(false));
         shader.safeGetUniform("AnimationTime").set(clock.noiseSeconds());
         shader.safeGetUniform("ParticleTime").set(clock.particleSeconds());
         shader.safeGetUniform("ParticleEpoch").set(clock.particleEpoch());
-        Matrix4f modelView = viewRotationMatrix(event);
-        var drawContext = new WorldPerfObjectBuffers.DrawContext(
-                shader, modelView, event.getProjectionMatrix());
-        RenderSystem.enableBlend();
-        RenderSystem.disableDepthTest();
-        RenderSystem.depthMask(false);
-        RenderSystem.enableCull();
-        try {
-            buffers.draw(WorldPerfObjectBuffers.Batch.SMOKE, drawContext);
-            buffers.draw(WorldPerfObjectBuffers.Batch.NORMAL, drawContext);
-            buffers.draw(WorldPerfObjectBuffers.Batch.GLOW, drawContext);
-            buffers.draw(WorldPerfObjectBuffers.Batch.SPARK, drawContext);
-            buffers.draw(WorldPerfObjectBuffers.Batch.LABEL, drawContext);
-        } finally {
-            RenderSystem.depthMask(true);
-            RenderSystem.enableDepthTest();
-            RenderSystem.defaultBlendFunc();
-            RenderSystem.disableBlend();
-            RenderSystem.setShaderTexture(0, previousGlyphTexture);
-            RenderSystem.setShaderTexture(1, previousNoiseTexture);
+    }
+
+    private void drawBuffers(RenderLevelStageEvent event, ShaderInstance shader) {
+        WorldPerfObjectBuffers.DrawContext staticContext = drawContext(
+                event, shader, WorldPerfObjectBuffers.Source.STATIC);
+        WorldPerfObjectBuffers.DrawContext dynamicContext = drawContext(
+                event, shader, WorldPerfObjectBuffers.Source.DYNAMIC);
+        for (WorldPerfObjectBuffers.Batch batch : DRAW_ORDER) {
+            if (staticContext != null) {
+                buffers.draw(WorldPerfObjectBuffers.Source.STATIC, batch, staticContext);
+            }
+            if (dynamicContext != null) {
+                buffers.draw(WorldPerfObjectBuffers.Source.DYNAMIC, batch, dynamicContext);
+            }
         }
+    }
+
+    private WorldPerfObjectBuffers.DrawContext drawContext(
+            RenderLevelStageEvent event,
+            ShaderInstance shader,
+            WorldPerfObjectBuffers.Source source) {
+        if (buffers.isEmpty(source)) {
+            return null;
+        }
+        return new WorldPerfObjectBuffers.DrawContext(
+                shader, sourceModelView(event, source), event.getProjectionMatrix());
+    }
+
+    private Matrix4f sourceModelView(
+            RenderLevelStageEvent event, WorldPerfObjectBuffers.Source source) {
+        Vec3 camera = event.getCamera().getPosition();
+        Matrix4f target = source == WorldPerfObjectBuffers.Source.STATIC
+                ? staticModelView : dynamicModelView;
+        return target.set(event.getModelViewMatrix()).translate(
+                (float) (buffers.originX(source) - camera.x),
+                (float) -camera.y,
+                (float) (buffers.originZ(source) - camera.z));
     }
 
     static Matrix4f cameraRelativeMatrix(
@@ -269,10 +360,14 @@ final class WorldPerfObjectRenderer {
 
     void close() {
         buffers.close();
-        candidates = List.of();
+        staticCandidates = List.of();
+        dynamicCandidates = List.of();
         reportRevision = Long.MIN_VALUE;
+        staticRefreshTick = Long.MIN_VALUE;
+        dynamicRefreshTick = Long.MIN_VALUE;
         dimension = null;
         filter = null;
+        markerLimit = 0;
     }
 
     private record Candidate(ClientPerfWorldState.Hotspot hotspot,

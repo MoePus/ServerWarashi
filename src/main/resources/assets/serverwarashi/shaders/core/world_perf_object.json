@@ -22,11 +22,13 @@
     {"name": "ParticlePhaseBase", "type": "int", "count": 1, "values": [512]},
     {"name": "MaxFlameStrength", "type": "float", "count": 1, "values": [31.9990234375]},
     {"name": "MaxFlameViewportFraction", "type": "float", "count": 1, "values": [0.18]},
+    {"name": "PartialTick", "type": "float", "count": 1, "values": [0]},
     {"name": "AnimationTime", "type": "float", "count": 1, "values": [0]},
     {"name": "ParticleTime", "type": "float", "count": 1, "values": [0]},
     {"name": "ParticleEpoch", "type": "int", "count": 1, "values": [0]},
     {"name": "RenderPass", "type": "int", "count": 1, "values": [0]},
     {"name": "ParticleStart", "type": "int", "count": 1, "values": [0]},
-    {"name": "SlotsPerMarker", "type": "int", "count": 1, "values": [1]}
+    {"name": "SlotsPerMarker", "type": "int", "count": 1, "values": [1]},
+    {"name": "MarkerBase", "type": "int", "count": 1, "values": [0]}
   ]
 }

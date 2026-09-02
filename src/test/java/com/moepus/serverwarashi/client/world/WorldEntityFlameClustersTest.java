@@ -93,6 +93,24 @@ class WorldEntityFlameClustersTest {
     }
 
     @Test
+    void combinesPreviousAndCurrentAnchorsForTickInterpolation() {
+        var first = new WorldEntityFlameClusters.Input(
+                bounds(new Point(0.0D, 0.0D)), metric(1.0D, 1.0D, 1L),
+                1L, 1, -1.0D, 0.0D, 0.5D);
+        var second = new WorldEntityFlameClusters.Input(
+                bounds(new Point(0.5D, 0.0D)), metric(1.0D, 1.0D, 1L),
+                1L, 2, -1.5D, -0.5D, 0.5D);
+
+        WorldEntityFlameClusters.Marker marker =
+                WorldEntityFlameClusters.cluster(List.of(first, second), 1L).get(0);
+
+        assertEquals(0.25D, marker.x(), 0.000_001D);
+        assertEquals(-1.0D, marker.previousX(), 0.000_001D);
+        assertEquals(0.5D, marker.previousZ(), 0.000_001D);
+        assertEquals(65.8D, marker.previousY(), 0.000_001D);
+    }
+
+    @Test
     void clustersTheMaximumCoincidentInputBudgetWithoutPairMaterialization() {
         List<WorldEntityFlameClusters.Input> inputs = new ArrayList<>();
         for (int id = 0; id < WorldEntityFlameClusters.MAX_CLUSTER_INPUTS + 1; id++) {

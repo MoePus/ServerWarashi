@@ -1,11 +1,13 @@
 package com.moepus.serverwarashi.client.world;
 
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
+import com.moepus.serverwarashi.common.modules.performance.report.PerfReportLimits;
 import com.moepus.serverwarashi.common.modules.performance.sampling.TickDetailKind;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.nio.FloatBuffer;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,8 +24,10 @@ class WorldPerfObjectRendererTest {
 
     @Test
     void drawsGpuParticlesInFiveBatchesWithOrangeReusedForSmoke() {
-        assertEquals(4_096, WorldPerfObjectBuffers.MAX_MARKER_COUNT);
-        assertEquals(5, WorldPerfObjectBuffers.Batch.values().length);
+        assertEquals(PerfReportLimits.MAX_WORLD_HOTSPOT_ENTRIES,
+                WorldPerfObjectBuffers.MAX_MARKER_COUNT);
+        assertEquals(4, WorldPerfObjectBuffers.TEXELS_PER_MARKER);
+        assertEquals(2, WorldPerfObjectBuffers.Source.values().length);
         assertArrayEquals(new WorldPerfObjectBuffers.Batch[]{
                         WorldPerfObjectBuffers.Batch.SMOKE,
                         WorldPerfObjectBuffers.Batch.NORMAL,
@@ -39,11 +43,6 @@ class WorldPerfObjectRendererTest {
         assertEquals(24, WorldPerfObjectBuffers.Batch.SMOKE.particleStart());
         assertEquals(64, WorldPerfObjectBuffers.Batch.GLOW.particleStart());
         assertEquals(80, WorldPerfObjectBuffers.Batch.SPARK.particleStart());
-        assertEquals(0, WorldPerfObjectBuffers.Batch.NORMAL.renderPass());
-        assertEquals(1, WorldPerfObjectBuffers.Batch.GLOW.renderPass());
-        assertEquals(2, WorldPerfObjectBuffers.Batch.SMOKE.renderPass());
-        assertEquals(3, WorldPerfObjectBuffers.Batch.LABEL.renderPass());
-        assertEquals(4, WorldPerfObjectBuffers.Batch.SPARK.renderPass());
     }
 
     @Test
@@ -61,46 +60,87 @@ class WorldPerfObjectRendererTest {
     }
 
     @Test
-    void convertsWorldAnchorsToCameraRelativeDoublesBeforeUpload() {
-        var marker = new WorldEntityFlameClusters.Marker(
-                new WorldEntityFlameClusters.Anchor(30_000_000.25D, 70.5D, -29_999_999.75D),
-                new PerfReportData.Metric(1.0D, 1.0D, 1L),
-                new WorldEntityFlameClusters.Visual(1.0D, 0, 1));
-        WorldPerfObjectBuffers.Entry entry = WorldPerfObjectBuffers.Entry.from(
-                marker, new Vec3(30_000_000.0D, 64.0D, -30_000_000.0D), 42.0D);
+    void ordersMarkersByStableEightBlockBuckets() {
+        List<WorldEntityFlameClusters.Marker> markers = List.of(
+                markerAtDistance(1.0D, 1),
+                markerAtDistance(20.0D, 2),
+                markerAtDistance(9.0D, 3),
+                markerAtDistance(90.0D, 4),
+                markerAtDistance(23.0D, 5),
+                markerAtDistance(24.0D, 6),
+                markerAtDistance(40.0D, 7),
+                markerAtDistance(96.0D, 8),
+                markerAtDistance(97.0D, 9));
 
-        assertEquals(0.25D, entry.x());
-        assertEquals(6.5D, entry.y());
-        assertEquals(0.25D, entry.z());
-        assertEquals(42.0D, entry.distanceSquared());
+        WorldPerfMarkerBuckets.Batch batch = WorldPerfMarkerBuckets.order(
+                markers, new Vec3(0.0D, 64.0D, 0.0D));
+
+        assertEquals(8, batch.size());
+        assertEquals(4, batch.sparkBase());
+        assertEquals(3, batch.labelBase());
+        assertArrayEquals(new int[]{4, 8, 7, 6, 2, 5, 3, 1}, phases(batch));
     }
 
     @Test
-    void encodesOneCompactMarkerRecordWithoutParticleVertices() {
+    void keepsDistanceBoundariesStrictForLimitedBatches() {
+        assertEquals(0, WorldPerfMarkerBuckets.bucketForDistanceSquared(0.0D));
+        assertEquals(0, WorldPerfMarkerBuckets.bucketForDistanceSquared(63.99D));
+        assertEquals(1, WorldPerfMarkerBuckets.bucketForDistanceSquared(64.0D));
+        assertEquals(3, WorldPerfMarkerBuckets.bucketForDistanceSquared(24.0D * 24.0D));
+        assertEquals(5, WorldPerfMarkerBuckets.bucketForDistanceSquared(40.0D * 40.0D));
+        assertEquals(11, WorldPerfMarkerBuckets.bucketForDistanceSquared(96.0D * 96.0D));
+        assertEquals(-1, WorldPerfMarkerBuckets.bucketForDistanceSquared(96.01D * 96.01D));
+        assertEquals(-1, WorldPerfMarkerBuckets.bucketForDistanceSquared(Double.NaN));
+    }
+
+    @Test
+    void encodesCurrentAndPreviousAnchorsRelativeToStableOrigin() {
         var marker = new WorldEntityFlameClusters.Marker(
+                new WorldEntityFlameClusters.Anchor(9.25D, 70.0D, -5.25D),
                 new WorldEntityFlameClusters.Anchor(10.25D, 70.5D, -4.75D),
                 new PerfReportData.Metric(1.0D, 1.0D, 1L),
                 new WorldEntityFlameClusters.Visual(1.0D, 0x7FFF, 1));
-        WorldPerfObjectBuffers.Entry entry = WorldPerfObjectBuffers.Entry.from(
-                marker, new Vec3(10.0D, 64.0D, -5.0D), 1.0D);
         FloatBuffer encoded = FloatBuffer.allocate(WorldPerfObjectBuffers.FLOATS_PER_MARKER);
 
-        WorldPerfObjectBuffers.encodeMarker(entry, encoded);
+        WorldPerfObjectBuffers.encodeMarker(marker,
+                new WorldPerfObjectBuffers.UploadOrigin(10.0D, -5.0D), encoded);
         encoded.flip();
 
-        assertEquals(12, encoded.remaining());
+        assertEquals(16, encoded.remaining());
         assertEquals(0.25F, encoded.get(), 0.0F);
-        assertEquals(6.54F, encoded.get(), 0.0001F);
+        assertEquals(70.54F, encoded.get(), 0.0001F);
         assertEquals(0.25F, encoded.get(), 0.0F);
         assertEquals(1_024.0F, encoded.get(), 0.0F);
-        assertEquals(0x40 / 255.0F, encoded.get(), 0.0001F);
-        assertEquals(0xDC / 255.0F, encoded.get(), 0.0001F);
-        assertEquals(0x78 / 255.0F, encoded.get(), 0.0001F);
-        assertEquals(511.0F, encoded.get(), 0.0F);
-        assertEquals(1_000.0F, encoded.get(), 0.0F);
-        assertEquals(-1.0F, encoded.get(), 0.0F);
-        assertEquals(WorldOverlayMath.packLabelStrength(1.0D) / 255.0F,
-                encoded.get(), 0.0001F);
+        encoded.position(12);
+        assertEquals(-0.75F, encoded.get(), 0.0F);
+        assertEquals(70.04F, encoded.get(), 0.0001F);
+        assertEquals(-0.25F, encoded.get(), 0.0F);
         assertEquals(0.0F, encoded.get(), 0.0F);
+    }
+
+    @Test
+    void refreshesStaticAtOneSecondAndDynamicOncePerTick() {
+        assertTrue(WorldPerfObjectRenderer.staticRefreshDue(Long.MIN_VALUE, 100L));
+        assertFalse(WorldPerfObjectRenderer.staticRefreshDue(100L, 119L));
+        assertTrue(WorldPerfObjectRenderer.staticRefreshDue(100L, 120L));
+        assertTrue(WorldPerfObjectRenderer.staticRefreshDue(120L, 5L));
+        assertFalse(WorldPerfObjectRenderer.dynamicRefreshDue(100L, 100L));
+        assertTrue(WorldPerfObjectRenderer.dynamicRefreshDue(100L, 101L));
+    }
+
+    private static int[] phases(WorldPerfMarkerBuckets.Batch batch) {
+        int[] phases = new int[batch.size()];
+        for (int index = 0; index < phases.length; index++) {
+            phases[index] = batch.markers()[index].phase();
+        }
+        return phases;
+    }
+
+    private static WorldEntityFlameClusters.Marker markerAtDistance(
+            double distance, int phase) {
+        return new WorldEntityFlameClusters.Marker(
+                new WorldEntityFlameClusters.Anchor(distance, 64.0D, 0.0D),
+                new PerfReportData.Metric(1.0D, 1.0D, 1L),
+                new WorldEntityFlameClusters.Visual(1.0D, phase, 1));
     }
 }

@@ -44,10 +44,14 @@ final class WorldEntityFlameClusters {
                 mspt, Math.max(mspt, maximum), samples);
         var anchor = new Anchor(centerX(input.bounds()), input.bounds().maxY,
                 centerZ(input.bounds()));
+        var previousAnchor = new Anchor(
+                anchor.x() + input.previousOffsetX(),
+                anchor.y() + input.previousOffsetY(),
+                anchor.z() + input.previousOffsetZ());
         var visual = new Visual(ObjectPerformanceScale.averageSamples(
                 metric, measurementTicks(input, tickCount)),
                 updatePhase(0x811C9DC5, input.stableId()) & 0x7FFF, 1);
-        return new Marker(anchor, metric, visual);
+        return new Marker(previousAnchor, anchor, metric, visual);
     }
 
     private static Marker marker(List<Input> group, long tickCount) {
@@ -60,6 +64,9 @@ final class WorldEntityFlameClusters {
         double x = 0.0D;
         double z = 0.0D;
         double y = -Double.MAX_VALUE;
+        double previousX = 0.0D;
+        double previousZ = 0.0D;
+        double previousY = -Double.MAX_VALUE;
         int phase = 0x811C9DC5;
         for (Input input : group) {
             double mspt = positiveFinite(input.metric().mspt());
@@ -71,14 +78,23 @@ final class WorldEntityFlameClusters {
             long inputTicks = measurementTicks(input, tickCount);
             averageSamples += ObjectPerformanceScale.averageSamples(input.metric(), inputTicks);
             totalWeight += weight;
-            x += centerX(input.bounds()) * weight;
-            z += centerZ(input.bounds()) * weight;
+            double inputX = centerX(input.bounds());
+            double inputZ = centerZ(input.bounds());
+            x += inputX * weight;
+            z += inputZ * weight;
             y = Math.max(y, input.bounds().maxY);
+            previousX += (inputX + input.previousOffsetX()) * weight;
+            previousZ += (inputZ + input.previousOffsetZ()) * weight;
+            previousY = Math.max(previousY,
+                    input.bounds().maxY + input.previousOffsetY());
             phase = updatePhase(phase, input.stableId());
         }
         PerfReportData.Metric metric = new PerfReportData.Metric(
                 totalMspt, Math.max(totalMspt, totalMax), totalSamples);
-        return new Marker(new Anchor(x / totalWeight, y, z / totalWeight), metric,
+        var previousAnchor = new Anchor(
+                previousX / totalWeight, previousY, previousZ / totalWeight);
+        var anchor = new Anchor(x / totalWeight, y, z / totalWeight);
+        return new Marker(previousAnchor, anchor, metric,
                 new Visual(averageSamples, phase & 0x7FFF, group.size()));
     }
 
@@ -111,9 +127,15 @@ final class WorldEntityFlameClusters {
     }
 
     record Input(AABB bounds, PerfReportData.Metric metric,
-                 long measurementTicks, int stableId) {
+                 long measurementTicks, int stableId,
+                 double previousOffsetX, double previousOffsetY, double previousOffsetZ) {
         Input(AABB bounds, PerfReportData.Metric metric, int stableId) {
-            this(bounds, metric, 0L, stableId);
+            this(bounds, metric, 0L, stableId, 0.0D, 0.0D, 0.0D);
+        }
+
+        Input(AABB bounds, PerfReportData.Metric metric,
+              long measurementTicks, int stableId) {
+            this(bounds, metric, measurementTicks, stableId, 0.0D, 0.0D, 0.0D);
         }
     }
 
@@ -123,7 +145,12 @@ final class WorldEntityFlameClusters {
     record Visual(double flameStrength, int phase, int memberCount) {
     }
 
-    record Marker(Anchor anchor, PerfReportData.Metric metric, Visual visual) {
+    record Marker(Anchor previousAnchor, Anchor anchor,
+                  PerfReportData.Metric metric, Visual visual) {
+        Marker(Anchor anchor, PerfReportData.Metric metric, Visual visual) {
+            this(anchor, anchor, metric, visual);
+        }
+
         double x() {
             return anchor.x();
         }
@@ -146,6 +173,18 @@ final class WorldEntityFlameClusters {
 
         int memberCount() {
             return visual.memberCount();
+        }
+
+        double previousX() {
+            return previousAnchor.x();
+        }
+
+        double previousY() {
+            return previousAnchor.y();
+        }
+
+        double previousZ() {
+            return previousAnchor.z();
         }
     }
 

@@ -14,11 +14,13 @@ uniform float StrengthWordScale;
 uniform int ParticlePhaseBase;
 uniform float MaxFlameStrength;
 uniform float MaxFlameViewportFraction;
+uniform float PartialTick;
 uniform float ParticleTime;
 uniform int ParticleEpoch;
 uniform int RenderPass;
 uniform int ParticleStart;
 uniform int SlotsPerMarker;
+uniform int MarkerBase;
 const int RED_PARTICLE_COUNT = 24;
 const int ORANGE_PARTICLE_COUNT = 20;
 const int YELLOW_PARTICLE_COUNT = 20;
@@ -31,7 +33,7 @@ const int SPARK_PARTICLE_START = GLOW_PARTICLE_START + GLOW_PARTICLE_COUNT;
 const int SPARK_LAYER = 4;
 const int LABEL_PASS = 3;
 const int SPARK_PASS = 4;
-const int MARKER_TEXELS = 3;
+const int MARKER_TEXELS = 4;
 // Flame shape tuning. Higher severity widens the full tapered envelope.
 const float GREEN_BASE_WIDTH = 1.5;
 const float GREEN_TIP_WIDTH = 0.8;
@@ -39,18 +41,22 @@ const float PURPLE_BASE_WIDTH = 2.4;
 const float PURPLE_TIP_WIDTH = 1.0;
 const float WIDTH_TAPER_START = 0.0;
 const float WIDTH_TAPER_END = 0.88;
-// Distance LOD tuning. Sparks disappear before the core particle LOD starts.
-const float PARTICLE_LOD_START = 24.0;
-const float PARTICLE_LOD_END = 96.0;
-const float FIRE_LOD_MIN_SCALE = 0.28;
-const float GLOW_LOD_MIN_SCALE = 0.16;
+// Distance LOD tuning. Particle density drops after 16 blocks and settles at 32.
+const float PARTICLE_LOD_START = 16.0;
+const float PARTICLE_LOD_END = 32.0;
 const float SPARK_FADE_START = 20.0;
 const float SPARK_FADE_END = 24.0;
+const float SMOKE_FADE_START = 24.0;
+const float SMOKE_FADE_END = 32.0;
 const float MIN_RED_COUNT = 16.0;
 const float MIN_ORANGE_COUNT = 14.0;
 const float MIN_YELLOW_COUNT = 14.0;
 const float MIN_GLOW_COUNT = 10.0;
 const float MIN_SPARK_COUNT = 10.0;
+const float FAR_RED_COUNT = 4.0;
+const float FAR_ORANGE_COUNT = 3.0;
+const float FAR_YELLOW_COUNT = 3.0;
+const float FAR_GLOW_COUNT = 1.0;
 const vec2 SPARK_COUNT_RAMP = vec2(3.50, 5.0);
 // Spark motion tuning. Sparks deliberately do not use the flame width envelope.
 const vec2 SPARK_ASPECT = vec2(1.0, 1.0);
@@ -95,6 +101,7 @@ flat out float particleOpacity;
 flat out float particleLife;
 struct FlameMarker {
     vec3 position;
+    vec3 previousPosition;
     float packedStrength;
     vec3 color;
     int phaseWord;
@@ -107,7 +114,8 @@ FlameMarker markerAt(int markerIndex) {
     vec4 positionStrength = texelFetch(MarkerData, base);
     vec4 colorPhase = texelFetch(MarkerData, base + 1);
     vec4 label = texelFetch(MarkerData, base + 2);
-    return FlameMarker(positionStrength.xyz, positionStrength.w,
+    vec4 previousPosition = texelFetch(MarkerData, base + 3);
+    return FlameMarker(positionStrength.xyz, previousPosition.xyz, positionStrength.w,
             colorPhase.rgb, int(colorPhase.w), int(label.x), int(label.y), label.z);
 }
 int decimalDigits(int value) {
@@ -185,19 +193,27 @@ float minimumParticles(int layer) {
     if (layer == 3) return MIN_GLOW_COUNT;
     return MIN_SPARK_COUNT;
 }
+float farParticles(int layer) {
+    if (layer == 0) return FAR_RED_COUNT;
+    if (layer == 1) return FAR_ORANGE_COUNT;
+    if (layer == 2) return FAR_YELLOW_COUNT;
+    return FAR_GLOW_COUNT;
+}
 int visibleParticles(int layer, float strength, float distanceToCamera) {
     float countAmount = layer == SPARK_LAYER ? smoothRange(
             SPARK_COUNT_RAMP.x, SPARK_COUNT_RAMP.y, strength)
             : severity(strength);
     float nearCount = mix(minimumParticles(layer), float(layerCapacity(layer)), countAmount);
     if (layer == SPARK_LAYER) {
-        return distanceToCamera >= SPARK_FADE_END
-                ? 0 : int(floor(nearCount + 0.5));
+        float sparkLod = smoothRange(PARTICLE_LOD_START, SPARK_FADE_END,
+                distanceToCamera);
+        float sparkRemaining = 1.0 - sparkLod;
+        return int(floor(nearCount * sparkRemaining * sparkRemaining + 0.5));
     }
     float lodAmount = smoothRange(PARTICLE_LOD_START, PARTICLE_LOD_END,
             distanceToCamera);
-    float minimumScale = layer == 3 ? GLOW_LOD_MIN_SCALE : FIRE_LOD_MIN_SCALE;
-    return max(1, int(floor(nearCount * mix(1.0, minimumScale, lodAmount) + 0.5)));
+    float fastLod = 1.0 - (1.0 - lodAmount) * (1.0 - lodAmount);
+    return int(floor(mix(nearCount, farParticles(layer), fastLod) + 0.5));
 }
 bool selectedSlot(int slot, int count, int capacity) {
     int previous = int(floor(float(slot * count) / float(capacity)));
@@ -325,13 +341,17 @@ void renderParticleVertex(vec4 viewPosition, float distanceToCamera, int particl
     int expectedPass = particleLayer == 3 ? 1 : (spark ? SPARK_PASS : 0);
     int slot = particleIndex - layerStart(particleLayer);
     int count = visibleParticles(particleLayer, flameStrength, distanceToCamera);
+    if ((smokePass && (particleLayer != 1 || distanceToCamera >= SMOKE_FADE_END))
+            || (!smokePass && RenderPass != expectedPass)
+            || !selectedParticleSlot(particleLayer, slot, count)) {
+        hidePrimitive();
+        return;
+    }
     float elapsed;
     int generation;
     bool alive = particleState(particleLayer, slot, phaseWord,
             particleLife, elapsed, generation);
-    if ((smokePass && particleLayer != 1)
-            || (!smokePass && RenderPass != expectedPass)
-            || !selectedParticleSlot(particleLayer, slot, count) || !alive) {
+    if (!alive) {
         hidePrimitive();
         return;
     }
@@ -378,15 +398,20 @@ void renderParticleVertex(vec4 viewPosition, float distanceToCamera, int particl
     viewPosition.xy += (offset + quadOffset) * viewportScale;
     particleOpacity = spark
             ? 1.0 - smoothRange(SPARK_FADE_START, SPARK_FADE_END, distanceToCamera)
-            : 1.0;
+            : (smokePass
+            ? 1.0 - smoothRange(SMOKE_FADE_START, SMOKE_FADE_END, distanceToCamera)
+            : 1.0);
     gl_Position = ProjMat * viewPosition;
 }
 void main() {
     bool label = RenderPass == LABEL_PASS;
-    int markerIndex = label ? gl_InstanceID : gl_InstanceID / SlotsPerMarker;
-    int slot = label ? 0 : gl_InstanceID - markerIndex * SlotsPerMarker;
+    int batchMarkerIndex = label ? gl_InstanceID : gl_InstanceID / SlotsPerMarker;
+    int markerIndex = MarkerBase + batchMarkerIndex;
+    int slot = label ? 0 : gl_InstanceID - batchMarkerIndex * SlotsPerMarker;
     FlameMarker marker = markerAt(markerIndex);
-    vec4 viewPosition = ModelViewMat * vec4(marker.position, 1.0);
+    vec3 markerPosition = mix(marker.previousPosition, marker.position,
+            clamp(PartialTick, 0.0, 1.0));
+    vec4 viewPosition = ModelViewMat * vec4(markerPosition, 1.0);
     float distanceToCamera = length(viewPosition.xyz);
     localCoord = label ? vec2(Position.x, 1.0 - Position.y) : Position.xy;
     vertexColor = vec4(label ? vec3(1.0) : marker.color,
