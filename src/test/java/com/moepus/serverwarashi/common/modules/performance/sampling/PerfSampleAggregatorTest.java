@@ -185,8 +185,40 @@ class PerfSampleAggregatorTest {
     }
 
     @Test
+    void limitsBlockEntityAverageToItsObservedLifetime() {
+        PerfSampleAggregator aggregator = new PerfSampleAggregator(24L);
+        for (int tick = 1; tick <= 90; tick++) {
+            aggregator.accept(new TickSamples(null));
+        }
+        TickSamples added = new TickSamples(null);
+        added.sample(new PerfWorkTracker.Snapshot(TickType.BLOCK_ENTITY,
+                ResourceLocation.parse("test:level"), Furnace.class,
+                ResourceLocation.parse("minecraft:furnace"), TickDetailKind.BLOCK, -1,
+                true, 8, 64, 8, false, null));
+        aggregator.accept(added);
+        for (int tick = 92; tick <= 100; tick++) {
+            aggregator.accept(new TickSamples(null));
+        }
+
+        PerfSampleAggregator.BuildSnapshot build =
+                aggregator.buildSnapshot(milliseconds(100L), 1L, 1_000);
+        double sampleMillis = observedMillis(100L, 1);
+        PerfReportData.TickableEntry blockEntity = build.report().tickables().getFirst();
+        PerfWorldHotspotIndex.Entry hotspot = build.hotspots().entries().getFirst();
+
+        assertEquals(sampleMillis / 10.0D, blockEntity.metric().mspt(), 0.000_001D);
+        assertEquals(sampleMillis / 100.0D,
+                build.report().chunks().getFirst().metric().mspt(), 0.000_001D);
+        assertEquals(91L, hotspot.measurementStartTick());
+        assertEquals(10L, hotspot.measurementTicks(build.hotspots().tickCount()));
+    }
+
+    @Test
     void capturesRareMultiSampleEntityTickAsBurstMax() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(8L);
+        for (int tick = 0; tick < 400; tick++) {
+            aggregator.accept(new TickSamples(null));
+        }
         TickSamples burst = new TickSamples(null);
         PerfWorkTracker.Snapshot entity = snapshot(
                 new TestWork(TickType.ENTITY, Cow.class, 1), new BlockPos(8, 64, 8));
@@ -236,11 +268,6 @@ class PerfSampleAggregatorTest {
         assertEquals(2, chunk.topEntities().getFirst().count());
         assertEquals("Furnace", chunk.topBlockEntities().getFirst().className());
         assertEquals(1, chunk.topBlockEntities().getFirst().count());
-        double nanosPerSample = observedMillis(50L, 3) * 1_000_000.0D;
-        assertEquals(2.5D * nanosPerSample / 1_000_000.0D, chunk.metric().max(), 0.000_001D);
-        assertEquals((1.0D + 2.0D * Math.sqrt(2.0D) + 1.0D) / 20.0D
-                        * nanosPerSample / 1_000_000.0D,
-                report.tickables().getFirst().metric().max(), 0.002D);
     }
 
     @Test
@@ -294,6 +321,9 @@ class PerfSampleAggregatorTest {
     @Test
     void keepsLowAverageObjectWhenItsBurstMaximumIsHot() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(15L);
+        for (int tick = 0; tick < 400; tick++) {
+            aggregator.accept(new TickSamples(null));
+        }
         for (int tick = 0; tick < 20; tick++) {
             TickSamples sampled = new TickSamples(null);
             for (int id = 0; id < 32; id++) {

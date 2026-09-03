@@ -251,9 +251,9 @@ final class PerfOwnerAggregator {
     }
 
     private static final class Estimate {
-        double samples;
+        int samples;
 
-        void add(double samples) {
+        void add(int samples) {
             this.samples += samples;
         }
     }

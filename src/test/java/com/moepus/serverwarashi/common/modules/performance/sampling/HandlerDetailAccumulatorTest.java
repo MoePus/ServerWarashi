@@ -41,6 +41,9 @@ class HandlerDetailAccumulatorTest {
     @Test
     void crossTickRatiosPreserveHandlerWeightAndOriginalTickMaximums() {
         PerfSampleAggregator aggregator = new PerfSampleAggregator(3L);
+        for (int tick = 0; tick < 400; tick++) {
+            accept(aggregator, new TickSamples(null));
+        }
         accept(aggregator, handlerTick(4, handlerStack("FirstEvents", "run")));
         accept(aggregator, handlerTick(8,
                 handlerStack("SecondEvents", "run"),

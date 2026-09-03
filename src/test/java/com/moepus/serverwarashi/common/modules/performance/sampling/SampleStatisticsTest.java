@@ -3,34 +3,20 @@ package com.moepus.serverwarashi.common.modules.performance.sampling;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SampleStatisticsTest {
+    private static final long FIRST_MEASURED_TICK = 401L;
     private static final double ONE_MILLISECOND = 1_000_000.0D;
 
     @Test
-    void directIntervalDoesNotApplyTheStatisticalUpperBound() {
+    void directIntervalUsesRawSingleTickMaximum() {
         SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 1L; tick <= 20L; tick++) {
-            statistics.record(1.0D, tick);
-        }
+        statistics.record(1, FIRST_MEASURED_TICK);
+        statistics.record(4, FIRST_MEASURED_TICK + 1L);
 
         var metric = statistics.metric(SampleMetricMode.DIRECT_INTERVAL,
-                new SampleMetricContext(20L, 20L, 8_000_000.0D, ONE_MILLISECOND));
-
-        assertEquals(1.0D, metric.mspt(), 0.000_001D);
-        assertEquals(1.0D, metric.max(), 0.000_001D);
-        assertEquals(20L, metric.samples());
-    }
-
-    @Test
-    void directIntervalUsesTheConfiguredDurationAndRawTickMaximum() {
-        SampleStatistics statistics = new SampleStatistics();
-        statistics.record(1.0D, 1L);
-        statistics.record(4.0D, 2L);
-
-        var metric = statistics.metric(SampleMetricMode.DIRECT_INTERVAL,
-                new SampleMetricContext(2L, 2L, 10_000_000.0D, 250_000.0D));
+                new SampleMetricContext(FIRST_MEASURED_TICK + 1L, 2L,
+                        10_000_000.0D, 250_000.0D));
 
         assertEquals(0.625D, metric.mspt(), 0.000_001D);
         assertEquals(1.0D, metric.max(), 0.000_001D);
@@ -38,125 +24,104 @@ class SampleStatisticsTest {
     }
 
     @Test
-    void estimatesMaxFromRepeatedHitProbability() {
+    void statisticalMaximumReusesSingleTickHalfSampleEstimate() {
         SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 1L; tick <= 10L; tick++) {
-            statistics.record(1.0D, tick);
-        }
+        statistics.record(20, FIRST_MEASURED_TICK);
 
-        var metric = statistics.metric(20L, ONE_MILLISECOND);
-
-        assertEquals(0.5D, metric.mspt(), 0.000_001D);
-        assertEquals(0.882D, metric.max(), 0.002D);
-        assertEquals(10L, metric.samples());
-    }
-
-    @Test
-    void completedWindowMaxDoesNotDecayDuringLaterQuietWindows() {
-        SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 1L; tick <= 10L; tick++) {
-            statistics.record(1.0D, tick);
-        }
-
-        var metric = statistics.metric(100L, ONE_MILLISECOND);
-
-        assertEquals(0.1D, metric.mspt(), 0.000_001D);
-        assertEquals(0.882D, metric.max(), 0.002D);
-    }
-
-    @Test
-    void staggeredWindowCapturesWorkAcrossPrimaryBoundary() {
-        SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 16L; tick <= 25L; tick++) {
-            statistics.record(1.0D, tick);
-        }
-
-        var metric = statistics.metric(30L, ONE_MILLISECOND);
-
-        assertEquals(0.882D, metric.max(), 0.002D);
-    }
-
-    @Test
-    void primaryWindowCapturesWorkAcrossStaggeredBoundary() {
-        SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 26L; tick <= 35L; tick++) {
-            statistics.record(1.0D, tick);
-        }
-
-        var metric = statistics.metric(40L, ONE_MILLISECOND);
-
-        assertEquals(0.882D, metric.max(), 0.002D);
-    }
-
-    @Test
-    void staggeredWindowExcludesTheFirstTenTicks() {
-        SampleStatistics beforeBoundary = new SampleStatistics();
-        for (long tick = 1L; tick <= 10L; tick++) {
-            beforeBoundary.record(1.0D, tick);
-        }
-        for (long tick = 21L; tick <= 30L; tick++) {
-            beforeBoundary.record(1.0D, tick);
-        }
-
-        SampleStatistics onBoundary = new SampleStatistics();
-        for (long tick = 11L; tick <= 30L; tick++) {
-            onBoundary.record(1.0D, tick);
-        }
-
-        assertEquals(0.882D, beforeBoundary.metric(30L, ONE_MILLISECOND).max(), 0.002D);
-        assertEquals(1.508D, onBoundary.metric(30L, ONE_MILLISECOND).max(), 0.002D);
-    }
-
-    @Test
-    void handlesTwentyMsptWorkWithoutClampingOrOverflow() {
-        SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 1L; tick <= 20L; tick++) {
-            statistics.record(20.0D, tick);
-        }
-
-        var metric = statistics.metric(20L, ONE_MILLISECOND);
-
-        assertEquals(20.0D, metric.mspt(), 0.000_001D);
-        assertTrue(Double.isFinite(metric.max()));
-        assertEquals(22.052D, metric.max(), 0.002D);
-    }
-
-    @Test
-    void capturesRareMultiSampleBurstWithinOneTick() {
-        SampleStatistics statistics = new SampleStatistics();
-        statistics.record(20.0D, 10L);
-
-        var metric = statistics.metric(20L, ONE_MILLISECOND);
+        var metric = statistics.metric(FIRST_MEASURED_TICK + 19L, 20L, ONE_MILLISECOND);
 
         assertEquals(1.0D, metric.mspt(), 0.000_001D);
         assertEquals(19.5D, metric.max(), 0.000_001D);
     }
 
     @Test
-    void leavesSingleSampleSpikeToWindowEstimator() {
+    void samplesSpreadAcrossTicksDoNotProduceAWindowEstimate() {
         SampleStatistics statistics = new SampleStatistics();
-        statistics.record(1.0D, 10L);
+        for (long tick = FIRST_MEASURED_TICK; tick < FIRST_MEASURED_TICK + 10L; tick++) {
+            statistics.record(1, tick);
+        }
 
-        var metric = statistics.metric(20L, 1_500_000.0D);
+        var metric = statistics.metric(FIRST_MEASURED_TICK + 19L, 20L, ONE_MILLISECOND);
 
-        assertEquals(0.075D, metric.mspt(), 0.000_001D);
-        assertEquals(0.362D, metric.max(), 0.002D);
+        assertEquals(0.5D, metric.mspt(), 0.000_001D);
+        assertEquals(metric.mspt(), metric.max(), 0.000_001D);
     }
 
     @Test
-    void resumesAfterSkippingSeveralEmptyWindows() {
+    void combinesMultipleRecordsInTheSameTickBeforeTrackingTheMaximum() {
         SampleStatistics statistics = new SampleStatistics();
-        for (long tick = 1L; tick <= 10L; tick++) {
-            statistics.record(1.0D, tick);
-        }
-        statistics.metric(100L, ONE_MILLISECOND);
-        for (long tick = 101L; tick <= 105L; tick++) {
-            statistics.record(1.0D, tick);
-        }
+        statistics.record(8, FIRST_MEASURED_TICK);
+        statistics.record(12, FIRST_MEASURED_TICK);
 
-        var metric = statistics.metric(105L, ONE_MILLISECOND);
+        var metric = statistics.metric(FIRST_MEASURED_TICK + 19L, 20L, ONE_MILLISECOND);
 
-        assertEquals(15.0D / 105.0D, metric.mspt(), 0.000_001D);
-        assertEquals(0.882D, metric.max(), 0.002D);
+        assertEquals(1.0D, metric.mspt(), 0.000_001D);
+        assertEquals(19.5D, metric.max(), 0.000_001D);
+    }
+
+    @Test
+    void warmupSamplesNeverBecomeMaximumCandidates() {
+        SampleStatistics statistics = new SampleStatistics();
+        statistics.record(20, FIRST_MEASURED_TICK - 1L);
+
+        var warmup = statistics.metric(FIRST_MEASURED_TICK - 1L, ONE_MILLISECOND);
+        statistics.record(2, FIRST_MEASURED_TICK);
+        var measured = statistics.metric(FIRST_MEASURED_TICK, ONE_MILLISECOND);
+
+        assertEquals(warmup.mspt(), warmup.max(), 0.000_001D);
+        assertEquals(22.0D / FIRST_MEASURED_TICK, measured.mspt(), 0.000_001D);
+        assertEquals(1.5D, measured.max(), 0.000_001D);
+    }
+
+    @Test
+    void singleTickMaximumExpiresAfterTheRollingWindow() {
+        SampleStatistics statistics = new SampleStatistics();
+        statistics.record(20, FIRST_MEASURED_TICK);
+
+        var retained = statistics.metric(1_640L, ONE_MILLISECOND);
+        var expired = statistics.metric(1_641L, ONE_MILLISECOND);
+
+        assertEquals(19.5D, retained.max(), 0.000_001D);
+        assertEquals(20.0D / 1_641.0D, expired.mspt(), 0.000_001D);
+        assertEquals(expired.mspt(), expired.max(), 0.000_001D);
+        assertEquals(20L, expired.samples());
+    }
+
+    @Test
+    void recentMaximumReplacesAnExpiredPeak() {
+        SampleStatistics statistics = new SampleStatistics();
+        statistics.record(20, FIRST_MEASURED_TICK);
+        statistics.record(5, 1_620L);
+
+        var metric = statistics.metric(1_641L, ONE_MILLISECOND);
+
+        assertEquals(25.0D / 1_641.0D, metric.mspt(), 0.000_001D);
+        assertEquals(4.5D, metric.max(), 0.000_001D);
+    }
+
+    @Test
+    void unsignedShortStorageRetainsAndSaturatesLargeTickCounts() {
+        SampleStatistics retained = new SampleStatistics();
+        retained.record(65_535, FIRST_MEASURED_TICK);
+        SampleStatistics saturated = new SampleStatistics();
+        saturated.record(70_000, FIRST_MEASURED_TICK);
+
+        assertEquals(65_534.5D,
+                retained.metric(FIRST_MEASURED_TICK, ONE_MILLISECOND).max(), 0.000_001D);
+        assertEquals(65_534.5D,
+                saturated.metric(FIRST_MEASURED_TICK, ONE_MILLISECOND).max(), 0.000_001D);
+        assertEquals(70_000L,
+                saturated.metric(FIRST_MEASURED_TICK, ONE_MILLISECOND).samples());
+    }
+
+    @Test
+    void oneSampleTickFallsBackToCumulativeAverage() {
+        SampleStatistics statistics = new SampleStatistics();
+        statistics.record(1, FIRST_MEASURED_TICK);
+
+        var metric = statistics.metric(FIRST_MEASURED_TICK + 19L, 20L, 1_500_000.0D);
+
+        assertEquals(0.075D, metric.mspt(), 0.000_001D);
+        assertEquals(metric.mspt(), metric.max(), 0.000_001D);
     }
 }

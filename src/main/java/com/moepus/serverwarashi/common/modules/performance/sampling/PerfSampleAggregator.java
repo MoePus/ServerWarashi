@@ -186,9 +186,14 @@ final class PerfSampleAggregator {
     }
 
     private TickableAggregate addTickable(TickSamples.TickableKey key) {
-        TickableAggregate aggregate = new TickableAggregate();
+        long measurementStartTick = isObject(key.type()) ? tickCount : 1L;
+        TickableAggregate aggregate = new TickableAggregate(measurementStartTick);
         tickables.put(key, aggregate);
         return aggregate;
+    }
+
+    private static boolean isObject(TickType type) {
+        return type == TickType.ENTITY || type == TickType.BLOCK_ENTITY;
     }
 
     private SampleStatistics chunkStatistics(TickSamples.ChunkKey key) {
@@ -260,6 +265,13 @@ final class PerfSampleAggregator {
         int x, y, z;
         long lastSeenTick;
         long measurementStartTick = 1L;
+
+        TickableAggregate() {
+        }
+
+        TickableAggregate(long measurementStartTick) {
+            this.measurementStartTick = measurementStartTick;
+        }
 
         void record(TickSamples.TickCount count, long tick) {
             positioned = count.positioned;
