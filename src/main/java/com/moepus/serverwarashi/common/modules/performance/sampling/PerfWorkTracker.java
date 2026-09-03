@@ -80,6 +80,13 @@ public final class PerfWorkTracker {
         return true;
     }
 
+    public static boolean exitBlockEntity(BlockEntity blockEntity) {
+        if (!(blockEntity.getLevel() instanceof ServerLevel)) {
+            return false;
+        }
+        return exit(TickType.BLOCK_ENTITY);
+    }
+
     public static boolean enterTask(BlockableEventLoop<?> eventLoop, Runnable task) {
         return enterTask(eventLoop.name(), task);
     }

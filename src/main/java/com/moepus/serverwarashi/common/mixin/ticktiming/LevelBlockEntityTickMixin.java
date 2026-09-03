@@ -1,7 +1,6 @@
 package com.moepus.serverwarashi.common.mixin.ticktiming;
 
 import com.moepus.serverwarashi.common.modules.performance.sampling.PerfWorkTracker;
-import com.moepus.serverwarashi.common.modules.performance.sampling.TickType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.mixinlite.injector.InjectLite;
 import org.spongepowered.asm.mixin.Final;
@@ -41,6 +40,6 @@ public abstract class LevelBlockEntityTickMixin {
         if (!PerfWorkTracker.isProfiling) {
             return;
         }
-        PerfWorkTracker.exit(TickType.BLOCK_ENTITY);
+        PerfWorkTracker.exitBlockEntity(blockEntity);
     }
 }

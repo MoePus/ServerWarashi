@@ -21,8 +21,8 @@ class PerfWorkTrackerAllocationTest {
     @Test
     void serverThreadPublicationMethodsContainNoAllocatingBytecode() throws Exception {
         assertAllocationFree(PerfWorkTracker.class, Set.of(
-                "enterChunk", "enterEntity", "enterBlockEntity", "enterTask", "enterHandler",
-                "exit", "claimSlot", "unwrap"));
+                "enterChunk", "enterEntity", "enterBlockEntity", "exitBlockEntity",
+                "enterTask", "enterHandler", "exit", "claimSlot", "unwrap"));
         Class<?> slot = Class.forName(PerfWorkTracker.class.getName() + "$Slot");
         assertAllocationFree(slot, Set.of(
                 "publishChunk", "publishEntity", "publishBlockEntity", "publishTask",

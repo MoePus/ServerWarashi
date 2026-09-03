@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LevelBlockEntityTickMixinTest {
     private static final Path MIXIN_SOURCE = Path.of(
             "src/main/java/com/moepus/serverwarashi/common/mixin/ticktiming/LevelBlockEntityTickMixin.java");
+    private static final Path TRACKER_SOURCE = Path.of(
+            "src/main/java/com/moepus/serverwarashi/common/modules/performance/sampling/PerfWorkTracker.java");
     private static final String TICKER_INVOKE =
             "BlockEntityTicker;tick(Lnet/minecraft/world/level/Level;";
 
@@ -25,6 +27,20 @@ class LevelBlockEntityTickMixinTest {
         assertTrue(exitInjection.contains(TICKER_INVOKE));
         assertTrue(exitInjection.contains("shift = At.Shift.AFTER"));
         assertFalse(source.contains("@At(\"RETURN\")"));
+    }
+
+    @Test
+    void blockEntityLevelChecksBelongToTheTracker() throws IOException {
+        String mixin = Files.readString(MIXIN_SOURCE);
+        String tracker = Files.readString(TRACKER_SOURCE);
+        int callback = mixin.indexOf("private void serverWarashi$afterBlockEntityTick");
+        assertTrue(callback >= 0);
+        String exitCallback = mixin.substring(callback);
+
+        assertTrue(exitCallback.contains("PerfWorkTracker.exitBlockEntity(blockEntity)"));
+        assertFalse(mixin.contains("instanceof ServerLevel"));
+        assertTrue(tracker.contains("public static boolean enterBlockEntity"));
+        assertTrue(tracker.contains("public static boolean exitBlockEntity"));
     }
 
     private static String injectionFor(String source, String callbackName) {
