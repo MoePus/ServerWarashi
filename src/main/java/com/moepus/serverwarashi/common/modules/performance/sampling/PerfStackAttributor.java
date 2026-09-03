@@ -10,8 +10,12 @@ final class PerfStackAttributor {
     private static final String MINECRAFT_SERVER_CLASS = "net.minecraft.server.MinecraftServer";
     private static final String SERVER_LEVEL_CLASS = "net.minecraft.server.level.ServerLevel";
     private static final String ENTITY_CLASS = "net.minecraft.world.entity.Entity";
+    private static final String ENTITY_TICK_LIST_CLASS =
+            "net.minecraft.world.level.entity.EntityTickList";
     private static final String BOUND_BLOCK_ENTITY_CLASS =
             "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity";
+    private static final String REBINDABLE_BLOCK_ENTITY_CLASS =
+            "net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper";
     private static final String LEVEL_CHUNK_CLASS = "net.minecraft.world.level.chunk.LevelChunk";
     private static final String BLOCK_ENTITY_CLASS =
             "net.minecraft.world.level.block.entity.BlockEntity";
@@ -75,18 +79,34 @@ final class PerfStackAttributor {
     private static Classification findDispatch(StackTraceElement[] stack) {
         for (int index = 0; index < stack.length; index++) {
             StackTraceElement frame = stack[index];
-            if (SERVER_LEVEL_CLASS.equals(frame.getClassName())
-                    && "tickNonPassenger".equals(frame.getMethodName())) {
+            if (isEntityTickWrapper(frame)) {
                 return onlyWrapperInfrastructureAbove(stack, index, Wrapper.ENTITY)
                         ? ENTITY_DISPATCH : TRACKED;
             }
-            if (BOUND_BLOCK_ENTITY_CLASS.equals(frame.getClassName())
-                    && "tick".equals(frame.getMethodName())) {
+            if (ENTITY_TICK_LIST_CLASS.equals(frame.getClassName())
+                    && "forEach".equals(frame.getMethodName())) {
+                return ENTITY_DISPATCH;
+            }
+            if (isBlockEntityWrapper(frame)) {
                 return onlyWrapperInfrastructureAbove(stack, index, Wrapper.BLOCK_ENTITY)
                         ? BLOCK_ENTITY_DISPATCH : TRACKED;
             }
         }
         return null;
+    }
+
+    private static boolean isBlockEntityWrapper(StackTraceElement frame) {
+        String className = frame.getClassName();
+        return BOUND_BLOCK_ENTITY_CLASS.equals(className)
+                || REBINDABLE_BLOCK_ENTITY_CLASS.equals(className);
+    }
+
+    private static boolean isEntityTickWrapper(StackTraceElement frame) {
+        if (!SERVER_LEVEL_CLASS.equals(frame.getClassName())) {
+            return false;
+        }
+        return "tickNonPassenger".equals(frame.getMethodName())
+                || "tickPassenger".equals(frame.getMethodName());
     }
 
     private static boolean onlyWrapperInfrastructureAbove(
@@ -107,6 +127,7 @@ final class PerfStackAttributor {
         }
         if (wrapper == Wrapper.ENTITY) {
             return SERVER_LEVEL_CLASS.equals(className)
+                    || ENTITY_TICK_LIST_CLASS.equals(className)
                     || ENTITY_CLASS.equals(className)
                     && ENTITY_WRAPPER_METHODS.contains(frame.getMethodName());
         }

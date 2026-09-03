@@ -162,8 +162,7 @@ public final class UnknownStackCopyController {
 
     private void copy(UnknownStackDetailsPayload payload) {
         dependencies.output.copy(format(payload, unknownSummary));
-        int copied = payload.average().size() + payload.burst().size();
-        dependencies.output.notifyCopied(copied);
+        dependencies.output.notifyCopied(payload.average().size());
         tooltipState = TooltipState.COPIED;
         if (!profiling) {
             recentStopped = payload;
@@ -200,10 +199,7 @@ public final class UnknownStackCopyController {
         appendCoverage(text, payload, summary);
         text.append("Reservoir samples: ").append(payload.retainedCount()).append('\n');
         double estimateScale = summary == null ? 1.0D : summary.estimateScale();
-        appendSection(text, new Section("Average-time Top 3", payload.average(), true),
-                payload.retainedCount(), estimateScale);
-        appendSection(text, new Section("Burst-time Top 3", payload.burst(), false),
-                payload.retainedCount(), estimateScale);
+        appendSection(text, payload.average(), payload.retainedCount(), estimateScale);
         return text.toString();
     }
 
@@ -223,29 +219,26 @@ public final class UnknownStackCopyController {
     }
 
     private static void appendSection(StringBuilder text,
-                                       Section section,
-                                       int retainedCount,
-                                       double estimateScale) {
-        text.append('\n').append(section.heading).append('\n');
-        if (section.clusters.isEmpty()) {
+                                      List<UnknownStackDetailsPayload.Cluster> clusters,
+                                      int retainedCount,
+                                      double estimateScale) {
+        text.append("\nAverage-time Top 3\n");
+        if (clusters.isEmpty()) {
             text.append("(none)\n");
             return;
         }
-        for (int index = 0; index < section.clusters.size(); index++) {
-            UnknownStackDetailsPayload.Cluster cluster = section.clusters.get(index);
+        for (int index = 0; index < clusters.size(); index++) {
+            UnknownStackDetailsPayload.Cluster cluster = clusters.get(index);
             double share = retainedCount == 0 ? 0.0D
                     : cluster.sampleCount() * 100.0D / retainedCount;
             text.append(index + 1).append(". ")
                     .append(String.format(Locale.ROOT, "%.2f%%", share)).append(" | ")
-                    .append(section.average
-                            ? String.format(Locale.ROOT, "estimated %.3f MSPT",
-                            cluster.estimatedAverageMillis() * estimateScale)
-                            : String.format(Locale.ROOT, "estimated %.3f ms peak",
-                            cluster.estimatedBurstMillis() * estimateScale))
+                    .append(String.format(Locale.ROOT, "estimated %.3f MSPT",
+                            cluster.estimatedAverageMillis() * estimateScale))
                     .append("\n   Anchor: ").append(cluster.anchor())
                     .append("\n   Samples: ").append(cluster.sampleCount())
-                    .append("; representative path: ").append(cluster.representativeCount())
-                    .append("; retained tick peak: ").append(cluster.peakSampleCount()).append('\n');
+                    .append("; representative path: ")
+                    .append(cluster.representativeCount()).append('\n');
             for (String frame : cluster.frames()) {
                 text.append("\tat ").append(frame).append('\n');
             }
@@ -279,11 +272,6 @@ public final class UnknownStackCopyController {
             double baselineMspt = samples * intervalMicros / 1_000.0D / tickCount;
             return baselineMspt <= 0.0D ? 1.0D : mspt / baselineMspt;
         }
-    }
-
-    private record Section(String heading,
-                           List<UnknownStackDetailsPayload.Cluster> clusters,
-                           boolean average) {
     }
 
     interface Transport {

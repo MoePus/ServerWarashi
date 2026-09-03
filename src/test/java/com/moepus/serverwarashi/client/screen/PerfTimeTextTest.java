@@ -16,10 +16,11 @@ class PerfTimeTextTest {
                 0, 0, 0, java.util.List.of(), java.util.List.of(), java.util.List.of())
                 .withSampling(new PerfReportData.SamplingMetadata("JFR",
                         PerfReportData.DurationSemantics.PRIMARY_SAMPLE_DENSITY,
-                        PerfReportData.Confidence.HIGH, 0L, ""));
+                        PerfReportData.Confidence.HIGH, 3L, "detail degraded"));
 
         Component session = PerfTimeText.session(report, true, now);
         assertEquals("screen.serverwarashi.profiler.status.session", key(session));
+        assertEquals(2, contents(session).getArgs().length);
         assertEquals("screen.serverwarashi.profiler.status.running",
                 key((Component) contents(session).getArgs()[0]));
         assertEquals("screen.serverwarashi.profiler.status.online",

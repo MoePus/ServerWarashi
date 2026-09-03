@@ -10,7 +10,7 @@ public final class UnknownStackSnapshot {
         Objects.requireNonNull(metadata, "metadata");
         Objects.requireNonNull(samples, "samples");
         int retained = samples.stacks.length;
-        if (retained != samples.tickIds.length || retained != samples.tickTotals.length
+        if (retained != samples.tickIds.length
                 || retained > UnknownStackReservoir.CAPACITY
                 || metadata.totalObserved < retained) {
             throw new IllegalArgumentException("Invalid Unknown stack snapshot size");
@@ -19,9 +19,6 @@ public final class UnknownStackSnapshot {
             Objects.requireNonNull(samples.stacks[index], "stack");
             if (samples.tickIds[index] <= 0L) {
                 throw new IllegalArgumentException("Unknown stack tick IDs must be positive");
-            }
-            if (samples.tickTotals[index] < 0L) {
-                throw new IllegalArgumentException("Unknown stack tick totals cannot be negative");
             }
         }
         this.metadata = metadata;
@@ -68,10 +65,6 @@ public final class UnknownStackSnapshot {
         return samples.tickIds[index];
     }
 
-    long tickTotalAt(int index) {
-        return samples.tickTotals[index];
-    }
-
     record Metadata(long reportId,
                     long revision,
                     long totalObserved,
@@ -87,11 +80,10 @@ public final class UnknownStackSnapshot {
         }
     }
 
-    record Samples(StackTraceElement[][] stacks, long[] tickIds, long[] tickTotals) {
+    record Samples(StackTraceElement[][] stacks, long[] tickIds) {
         Samples {
             Objects.requireNonNull(stacks, "stacks");
             Objects.requireNonNull(tickIds, "tickIds");
-            Objects.requireNonNull(tickTotals, "tickTotals");
         }
     }
 }

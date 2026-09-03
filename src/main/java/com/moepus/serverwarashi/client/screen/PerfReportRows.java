@@ -199,7 +199,9 @@ final class PerfReportRows {
         }
         if (entry.type() == TickType.TASK) {
             if (entry.eventLoop().isEmpty()) {
-                return PerfDisplayText.translated("screen.serverwarashi.profiler.tickable.unknown");
+                return isUnknownFallback(entry)
+                        ? PerfDisplayText.translated("screen.serverwarashi.profiler.tickable.unknown")
+                        : name;
             }
             return name + " @ " + entry.eventLoop();
         }

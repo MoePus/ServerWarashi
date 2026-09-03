@@ -9,7 +9,6 @@ final class UnknownStackReservoir {
     private final AtomicReferenceArray<StackTraceElement[]> stacks =
             new AtomicReferenceArray<>(CAPACITY);
     private final long[] tickIds = new long[CAPACITY];
-    private final long[] tickTotals = new long[CAPACITY];
     private final SplittableRandom random;
     private long revision;
     private long totalObserved;
@@ -26,7 +25,6 @@ final class UnknownStackReservoir {
         long observed = ++totalObserved;
         int slot = replacementSlot(observed);
         if (slot >= 0) {
-            tickTotals[slot] = 0L;
             tickIds[slot] = tickId;
             stacks.lazySet(slot, stack);
         }
@@ -36,7 +34,7 @@ final class UnknownStackReservoir {
     UnknownStackSnapshot snapshot(long reportId, long tickCount, int intervalMicros) {
         return snapshot(new SnapshotParameters(
                 reportId, tickCount, intervalMicros, Long.MAX_VALUE,
-                0L, 0L, 0L, false));
+                0L, false));
     }
 
     void completeTick(long tickId, long totalSamples) {
@@ -44,12 +42,6 @@ final class UnknownStackReservoir {
             return;
         }
         totalPrimarySamples += totalSamples;
-        int populated = (int) Math.min(totalObserved, CAPACITY);
-        for (int index = 0; index < populated; index++) {
-            if (tickIds[index] == tickId && stacks.get(index) != null) {
-                tickTotals[index] = totalSamples;
-            }
-        }
         if (totalSamples > 0L) {
             revision++;
         }
@@ -61,15 +53,13 @@ final class UnknownStackReservoir {
         int retained = retainedCount(populated, parameters.maximumTickId);
         StackTraceElement[][] copiedStacks = new StackTraceElement[retained][];
         long[] copiedTickIds = new long[retained];
-        long[] copiedTickTotals = new long[retained];
-        var copy = new RetainedCopy(copiedStacks, copiedTickIds, copiedTickTotals);
+        var copy = new RetainedCopy(copiedStacks, copiedTickIds);
         copyRetained(populated, copy, parameters);
         long includedObserved = Math.max(0L, observed - parameters.excludedObserved);
         var metadata = new UnknownStackSnapshot.Metadata(
                 parameters.reportId, revision, includedObserved, totalPrimarySamples,
                 parameters.tickCount, parameters.intervalMicros, parameters.finalized);
-        var samples = new UnknownStackSnapshot.Samples(
-                copiedStacks, copiedTickIds, copiedTickTotals);
+        var samples = new UnknownStackSnapshot.Samples(copiedStacks, copiedTickIds);
         return new UnknownStackSnapshot(metadata, samples);
     }
 
@@ -95,9 +85,6 @@ final class UnknownStackReservoir {
             }
             copy.tickIds[target] = tickId;
             copy.stacks[target] = stack;
-            long tickTotal = tickTotals[index];
-            copy.tickTotals[target] = tickId == parameters.activeTickId
-                    ? parameters.activeTickTotal : tickTotal;
             target++;
         }
     }
@@ -115,13 +102,10 @@ final class UnknownStackReservoir {
                               int intervalMicros,
                               long maximumTickId,
                               long excludedObserved,
-                              long activeTickId,
-                              long activeTickTotal,
                               boolean finalized) {
     }
 
     private record RetainedCopy(StackTraceElement[][] stacks,
-                                long[] tickIds,
-                                long[] tickTotals) {
+                                long[] tickIds) {
     }
 }

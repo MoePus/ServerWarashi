@@ -163,7 +163,7 @@ public final class UnknownStackDetailDelivery {
             UnknownStackDetailsRequestPayload request, UnknownStackSnapshot snapshot) {
         return new UnknownStackDetailsPayload(request.requestId(), request.reportId(),
                 snapshot.revision(), UnknownStackDetailsPayload.Status.EMPTY,
-                snapshot.totalObserved(), snapshot.retainedCount(), List.of(), List.of());
+                snapshot.totalObserved(), snapshot.retainedCount(), List.of());
     }
 
     static UnknownStackDetailsPayload response(

@@ -10,8 +10,12 @@ class PerfStackAttributorTest {
     private static final String EVENT_BUS = "net.neoforged.bus.EventBus";
     private static final String EVENT_HOOKS = "net.neoforged.neoforge.event.EventHooks";
     private static final String SERVER_LEVEL = "net.minecraft.server.level.ServerLevel";
+    private static final String ENTITY_TICK_LIST =
+            "net.minecraft.world.level.entity.EntityTickList";
     private static final String BOUND_BLOCK_ENTITY =
             "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity";
+    private static final String REBINDABLE_BLOCK_ENTITY =
+            "net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper";
     private static final String TICK_PACKAGE = "net.neoforged.neoforge.event.tick.";
 
     @Test
@@ -103,6 +107,27 @@ class PerfStackAttributorTest {
     }
 
     @Test
+    void createBlockEntityExecutionIsTrackedRatherThanUnknown() {
+        PerfStackAttributor.Classification detail = PerfStackAttributor.classify(stack(
+                frame("com.simibubi.create.foundation.blockEntity.SmartBlockEntity$$Lambda.0x0",
+                        "accept"),
+                frame("it.unimi.dsi.fastutil.objects.Reference2ObjectArrayMap$ValuesCollection",
+                        "forEach"),
+                frame("com.simibubi.create.foundation.blockEntity.SmartBlockEntity",
+                        "forEachBehaviour"),
+                frame("com.simibubi.create.foundation.blockEntity.SmartBlockEntity", "tick"),
+                frame("com.simibubi.create.content.kinetics.base.KineticBlockEntity", "tick"),
+                frame("com.simibubi.create.foundation.blockEntity.SmartBlockEntityTicker", "tick"),
+                frame(BOUND_BLOCK_ENTITY, "tick"),
+                frame("net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper",
+                        "tick"),
+                frame("net.minecraft.world.level.Level", "tickBlockEntities")
+        ));
+
+        assertEquals(PerfStackAttributor.Kind.TRACKED, detail.kind());
+    }
+
+    @Test
     void wrapperExecutionIsDispatch() {
         assertEquals(PerfStackAttributor.Kind.ENTITY_DISPATCH,
                 PerfStackAttributor.classify(stack(
@@ -114,6 +139,49 @@ class PerfStackAttributorTest {
                 PerfStackAttributor.classify(stack(
                         frame("net.minecraft.util.profiling.ActiveProfiler", "incrementCounter"),
                         frame(SERVER_LEVEL, "tickNonPassenger"))).kind());
+    }
+
+    @Test
+    void blockEntityWrapperPositionLookupIsDispatch() {
+        PerfStackAttributor.Classification detail = PerfStackAttributor.classify(stack(
+                frame(BOUND_BLOCK_ENTITY, "getPos"),
+                frame(REBINDABLE_BLOCK_ENTITY, "getPos"),
+                frame("net.minecraft.world.level.Level", "tickBlockEntities"),
+                frame("net.minecraft.server.level.ServerLevel", "tick")
+        ));
+
+        assertEquals(PerfStackAttributor.Kind.BLOCK_ENTITY_DISPATCH, detail.kind());
+        assertEquals(TickType.TASK, detail.snapshot().type());
+        assertEquals("Block Entity Dispatch", detail.snapshot().displayName());
+    }
+
+    @Test
+    void entityIterationBeforeTickIsDispatch() {
+        PerfStackAttributor.Classification detail = PerfStackAttributor.classify(stack(
+                frame("com.example.SomeEntity", "checkDespawn"),
+                frame(SERVER_LEVEL, "lambda$tick$4"),
+                frame(ENTITY_TICK_LIST, "forEach"),
+                frame(SERVER_LEVEL, "tick")
+        ));
+
+        assertEquals(PerfStackAttributor.Kind.ENTITY_DISPATCH, detail.kind());
+        assertEquals(TickType.TASK, detail.snapshot().type());
+        assertEquals("Entity Dispatch", detail.snapshot().displayName());
+    }
+
+    @Test
+    void passengerWrapperAndActualRideTickAreSeparated() {
+        PerfStackAttributor.Classification wrapper = PerfStackAttributor.classify(stack(
+                frame("net.minecraft.world.entity.Entity", "getVehicle"),
+                frame(SERVER_LEVEL, "tickPassenger")
+        ));
+        PerfStackAttributor.Classification actual = PerfStackAttributor.classify(stack(
+                frame("com.example.SomePassenger", "rideTick"),
+                frame(SERVER_LEVEL, "tickPassenger")
+        ));
+
+        assertEquals(PerfStackAttributor.Kind.ENTITY_DISPATCH, wrapper.kind());
+        assertEquals(PerfStackAttributor.Kind.TRACKED, actual.kind());
     }
 
     @Test

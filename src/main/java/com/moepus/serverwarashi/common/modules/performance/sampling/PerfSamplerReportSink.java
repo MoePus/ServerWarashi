@@ -66,7 +66,7 @@ final class PerfSamplerReportSink {
                                                            boolean stopped) {
         var parameters = new UnknownStackReservoir.SnapshotParameters(
                 reportId, completedTickId, intervalMicros, completedTickId,
-                0L, 0L, 0L, stopped);
+                0L, stopped);
         return unknownStacks.snapshot(parameters);
     }
 

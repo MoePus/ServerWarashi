@@ -41,6 +41,7 @@ final class PerfSampleAggregator {
             .thenComparingInt(entry -> entry.attributionSource().ordinal());
     private final long reportId;
     private final PerfOwnerAggregator ownerAggregator = new PerfOwnerAggregator();
+    private final HandlerDetailAccumulator handlerDetails = new HandlerDetailAccumulator();
     private final Map<TickSamples.TickableKey, TickableAggregate> tickables = new HashMap<>();
     private final Map<TickSamples.ChunkKey, SampleStatistics> chunks = new HashMap<>();
     private final ArrayDeque<GcTick> recentGcTicks = new ArrayDeque<>();
@@ -68,6 +69,7 @@ final class PerfSampleAggregator {
         tickCount++;
         totalTickNanos += tick.durationNanos;
         recordGc(tick);
+        handlerDetails.accept(tick, tickCount);
         if (tick.totalSamples == 0) {
             ownerAggregator.updateMetadata(tick.attribution);
         } else {
@@ -92,8 +94,10 @@ final class PerfSampleAggregator {
                 chunkEntries(objectBuild.chunkCounts(), nanosPerSample), CHUNK_VIEW_LIMIT_PER_METRIC,
                 PerfReportData.ChunkEntry::metric, STABLE_CHUNK_ORDER);
         var sampledTickables = objectBuild.tickables();
+        List<PerfReportData.TickableEntry> candidates = new ArrayList<>(sampledTickables.entries());
+        candidates.addAll(handlerDetails.build(metricContext));
         var limitedTickables = PerfReportLimits.topMetricUnion(
-                sampledTickables.entries(), TICKABLE_VIEW_LIMIT_PER_METRIC,
+                candidates, TICKABLE_VIEW_LIMIT_PER_METRIC,
                 PerfReportData.TickableEntry::metric, STABLE_TICKABLE_ORDER);
         PerfOwnerAggregator.Build ownerBuild = ownerAggregator.build(tickCount, nanosPerSample);
         GcMetric gc = gcMetric();
@@ -269,6 +273,11 @@ final class PerfSampleAggregator {
                 measurementStartTick = Math.max(1L, tick - age + 1L);
             }
             stats.record(count.count, tick);
+        }
+
+        void recordSamples(int samples, long tick) {
+            lastSeenTick = tick;
+            stats.record(samples, tick);
         }
 
         double totalWeight() {

@@ -9,7 +9,6 @@ import java.util.Map;
 
 final class DetailSampleAllocator {
     private static final int MIN_EVIDENCE_SAMPLES = 2;
-    private static final String GENERIC_HANDLER = "Handler";
     private static final String GENERIC_UNKNOWN = "Unknown";
 
     private final Map<PerfWorkTracker.Snapshot, Integer> handlers = new LinkedHashMap<>();
@@ -30,35 +29,20 @@ final class DetailSampleAllocator {
         if (detail.kind() == PerfStackAttributor.Kind.ENTITY_DISPATCH
                 || detail.kind() == PerfStackAttributor.Kind.BLOCK_ENTITY_DISPATCH) {
             dispatches.merge(detail.snapshot(), 1, Integer::sum);
-        } else if (detail.kind() != PerfStackAttributor.Kind.IDLE) {
+        } else if (detail.kind() == PerfStackAttributor.Kind.UNKNOWN) {
             unknownStacks.add(sample.stack());
         }
     }
 
     void apply(TickSamples tick, UnknownStackReservoir unknownReservoir) {
-        splitHandlers(tick);
         splitUnknown(tick);
         if (tick.unknownSamples > 0L) {
             recordUnknownEvidence(unknownReservoir, tick.tickId);
         }
     }
 
-    private void splitHandlers(TickSamples tick) {
-        int evidence = evidenceCount(handlers);
-        if (evidence < MIN_EVIDENCE_SAMPLES) {
-            return;
-        }
-        int coarseSamples = tick.removeGeneric(TickType.HANDLER, GENERIC_HANDLER);
-        if (coarseSamples == 0) {
-            return;
-        }
-        List<Bucket> buckets = buckets(handlers);
-        allocate(coarseSamples, buckets);
-        for (Bucket bucket : buckets) {
-            tick.addDetail(bucket.snapshot, bucket.allocated,
-                    PerfReportData.AttributionSource.ASYNC_STACK,
-                    PerfReportData.Confidence.MEDIUM);
-        }
+    Map<PerfWorkTracker.Snapshot, Integer> handlerEvidence() {
+        return handlers;
     }
 
     private void splitUnknown(TickSamples tick) {

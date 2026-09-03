@@ -15,10 +15,6 @@ public final class UnknownStackClusterer {
             Comparator.comparingInt(AnchorStats::sampleCount).reversed()
                     .thenComparingInt(AnchorStats::representativeDepth)
                     .thenComparing(AnchorStats::anchor);
-    private static final Comparator<AnchorStats> BURST_ORDER =
-            Comparator.comparingDouble(AnchorStats::estimatedBurstSamples).reversed()
-                    .thenComparing(AVERAGE_ORDER);
-
     private UnknownStackClusterer() {
     }
 
@@ -26,18 +22,16 @@ public final class UnknownStackClusterer {
         if (snapshot.totalObserved() < MIN_RELIABLE_OBSERVATIONS
                 || snapshot.retainedCount() < MIN_RELIABLE_OBSERVATIONS) {
             return new Result(snapshot.reportId(), snapshot.revision(), snapshot.totalObserved(),
-                    snapshot.retainedCount(), List.of(), List.of());
+                    snapshot.retainedCount(), List.of());
         }
         Map<String, AnchorStats> groups = collect(snapshot);
-        Map<Long, TickRetention> retainedTicks = retainedTicks(snapshot);
         List<AnchorStats> values = new ArrayList<>(groups.values());
         for (AnchorStats group : values) {
-            group.prepare(snapshot, retainedTicks);
+            group.prepare(snapshot);
         }
         List<Cluster> average = top(values, AVERAGE_ORDER);
-        List<Cluster> burst = top(values, BURST_ORDER);
         return new Result(snapshot.reportId(), snapshot.revision(), snapshot.totalObserved(),
-                snapshot.retainedCount(), average, burst);
+                snapshot.retainedCount(), average);
     }
 
     private static Map<String, AnchorStats> collect(UnknownStackSnapshot snapshot) {
@@ -53,23 +47,9 @@ public final class UnknownStackClusterer {
                 group = new AnchorStats(anchor);
                 groups.put(anchor, group);
             }
-            group.accept(stack, snapshot.tickIdAt(index));
+            group.accept(stack);
         }
         return groups;
-    }
-
-    private static Map<Long, TickRetention> retainedTicks(UnknownStackSnapshot snapshot) {
-        Map<Long, TickRetention> ticks = new HashMap<>();
-        for (int index = 0; index < snapshot.retainedCount(); index++) {
-            long tickId = snapshot.tickIdAt(index);
-            TickRetention retention = ticks.get(tickId);
-            if (retention == null) {
-                retention = new TickRetention();
-                ticks.put(tickId, retention);
-            }
-            retention.retain(snapshot.tickTotalAt(index));
-        }
-        return ticks;
     }
 
     private static List<Cluster> top(List<AnchorStats> groups,
@@ -139,9 +119,16 @@ public final class UnknownStackClusterer {
     private static List<String> rawFrames(StackTraceElement[] stack) {
         List<String> frames = new ArrayList<>(stack.length);
         for (StackTraceElement frame : stack) {
-            frames.add(limit(frame.toString(), MAX_FRAME_TEXT_LENGTH));
+            frames.add(limit(displayFrame(frame), MAX_FRAME_TEXT_LENGTH));
         }
         return List.copyOf(frames);
+    }
+
+    private static String displayFrame(StackTraceElement frame) {
+        if (frame.getFileName() != null || frame.isNativeMethod()) {
+            return frame.toString();
+        }
+        return frame.getClassName() + "." + frame.getMethodName();
     }
 
     private static String rawKey(StackTraceElement[] stack) {
@@ -160,20 +147,16 @@ public final class UnknownStackClusterer {
                          long revision,
                          long totalObserved,
                          int retainedCount,
-                         List<Cluster> average,
-                         List<Cluster> burst) {
+                         List<Cluster> average) {
         public Result {
             average = List.copyOf(average);
-            burst = List.copyOf(burst);
         }
     }
 
     public record Cluster(String anchor,
                           int sampleCount,
                           int representativeCount,
-                          int peakSampleCount,
                           double estimatedAverageMillis,
-                          double estimatedBurstMillis,
                           List<String> frames) {
         public Cluster {
             frames = List.copyOf(frames);
@@ -183,10 +166,7 @@ public final class UnknownStackClusterer {
     private static final class AnchorStats {
         private final String anchor;
         private final Map<String, PathStats> paths = new HashMap<>();
-        private final Map<Long, Integer> tickCounts = new HashMap<>();
         private int sampleCount;
-        private int peakSampleCount;
-        private double estimatedBurstSamples;
         private PathStats representative;
         private Cluster cluster;
 
@@ -194,11 +174,8 @@ public final class UnknownStackClusterer {
             this.anchor = anchor;
         }
 
-        void accept(StackTraceElement[] stack, long tickId) {
+        void accept(StackTraceElement[] stack) {
             sampleCount++;
-            int tickCount = tickCounts.getOrDefault(tickId, 0) + 1;
-            tickCounts.put(tickId, tickCount);
-            peakSampleCount = Math.max(peakSampleCount, tickCount);
             String path = normalizedPath(stack);
             PathStats stats = paths.get(path);
             if (stats == null) {
@@ -208,18 +185,15 @@ public final class UnknownStackClusterer {
             }
         }
 
-        void prepare(UnknownStackSnapshot snapshot, Map<Long, TickRetention> retainedTicks) {
+        void prepare(UnknownStackSnapshot snapshot) {
             representative = selectRepresentative();
-            estimatedBurstSamples = estimateBurstSamples(retainedTicks);
             double scale = snapshot.retainedCount() == 0 ? 0.0D
                     : snapshot.totalPrimarySamples() / (double) snapshot.retainedCount();
             double intervalMillis = snapshot.intervalMicros() / 1_000.0D;
             double average = snapshot.tickCount() == 0L ? 0.0D
                     : sampleCount * scale * intervalMillis / snapshot.tickCount();
-            double burst = estimatedBurstSamples * intervalMillis;
             cluster = new Cluster(limit(anchor, MAX_FRAME_TEXT_LENGTH), sampleCount,
-                    representative.count, peakSampleCount, average, burst,
-                    rawFrames(representative.stack));
+                    representative.count, average, rawFrames(representative.stack));
         }
 
         Cluster toCluster() {
@@ -228,10 +202,6 @@ public final class UnknownStackClusterer {
 
         int sampleCount() {
             return sampleCount;
-        }
-
-        double estimatedBurstSamples() {
-            return estimatedBurstSamples;
         }
 
         int representativeDepth() {
@@ -246,33 +216,6 @@ public final class UnknownStackClusterer {
             return paths.values().stream().sorted(PathStats.ORDER).findFirst().orElseThrow();
         }
 
-        private double estimateBurstSamples(Map<Long, TickRetention> retainedTicks) {
-            double peak = 0.0D;
-            for (Map.Entry<Long, Integer> tick : tickCounts.entrySet()) {
-                TickRetention retention = retainedTicks.get(tick.getKey());
-                if (retention == null) {
-                    continue;
-                }
-                double estimate = tick.getValue() * retention.totalSamples()
-                        / (double) retention.retainedSamples;
-                peak = Math.max(peak, estimate);
-            }
-            return peak;
-        }
-    }
-
-    private static final class TickRetention {
-        private long reportedTotal;
-        private int retainedSamples;
-
-        void retain(long totalSamples) {
-            retainedSamples++;
-            reportedTotal = Math.max(reportedTotal, totalSamples);
-        }
-
-        long totalSamples() {
-            return Math.max(reportedTotal, retainedSamples);
-        }
     }
 
     private static final class PathStats {

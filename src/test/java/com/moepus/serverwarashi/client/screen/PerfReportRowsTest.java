@@ -96,6 +96,23 @@ class PerfReportRowsTest {
     }
 
     @Test
+    void dispatchTaskWithoutEventLoopKeepsItsSyntheticName() {
+        var unknown = new PerfReportData.TickableEntry(
+                TickType.TASK, "", "Unknown", "", TickDetailKind.NONE,
+                -1, false, 0, 0, 0, false, "", metric(4.0, 5.0));
+        var dispatch = new PerfReportData.TickableEntry(
+                TickType.TASK, "", "Block Entity Dispatch", "", TickDetailKind.NONE,
+                -1, false, 0, 0, 0, false, "", metric(2.0, 3.0));
+
+        List<PerfReportRow> rows = PerfReportRows.tickables(
+                report(List.of(), List.of(unknown, dispatch), List.of()),
+                PerfReportRows.SortKey.MSPT, Map.of());
+
+        assertEquals(List.of("screen.serverwarashi.profiler.tickable.unknown",
+                "Block Entity Dispatch"), labels(rows));
+    }
+
+    @Test
     void negotiatedUnknownFallbackHasOnlyLabelTooltipAndAction() {
         var unknown = new PerfReportData.TickableEntry(
                 TickType.TASK, "", "Unknown", "", TickDetailKind.NONE,
@@ -201,6 +218,25 @@ class PerfReportRowsTest {
         assertEquals(List.of(PerfReportRows.SortKey.CHUNKS, PerfReportRows.SortKey.SAMPLES,
                         PerfReportRows.SortKey.MSPT, PerfReportRows.SortKey.MAX),
                 headerSorts(geometry, PerfReportTableRenderer.Layout.PLAYERS));
+    }
+
+    @Test
+    void labelTooltipHitAreaFillsTheTickObjectColumn() {
+        PerfReportGeometry geometry = new PerfReportGeometry(
+                0, 0, 760, 400, 12, 730, 100, 380);
+        PerfReportRow row = PerfReportRows.tickables(
+                report(List.of(), List.of(tickable("Handler", metric(1.0D, 2.0D))), List.of()),
+                PerfReportRows.SortKey.MSPT, Map.of()).getFirst();
+        var table = new PerfReportTableRenderer.TableContext(
+                geometry, PerfReportTableRenderer.Layout.TICKABLES);
+        var context = new PerfReportTableRenderer.RowContext(table, row, 120);
+
+        PerfReportBounds bounds = PerfReportTableRenderer.labelCellBounds(context);
+
+        assertEquals(geometry.contentX(), bounds.x());
+        assertEquals(PerfReportTableRenderer.labelWidth(table), bounds.width());
+        assertEquals(120, bounds.y());
+        assertEquals(PerfReportStyle.ROW_HEIGHT, bounds.height());
     }
 
     @Test

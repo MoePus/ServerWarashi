@@ -39,8 +39,8 @@ class UnknownStackCopyControllerTest {
         UnknownStackCopyController.handlePayload(response(requestId, 9L));
 
         assertTrue(fixture.output.clipboard.contains("Average-time Top 3"));
-        assertTrue(fixture.output.clipboard.contains("Burst-time Top 3"));
-        assertEquals(2, fixture.output.notifiedCount);
+        assertFalse(fixture.output.clipboard.contains("Burst-time Top 3"));
+        assertEquals(1, fixture.output.notifiedCount);
         assertEquals(0L, fixture.controller.pendingRequestId());
     }
 
@@ -149,11 +149,11 @@ class UnknownStackCopyControllerTest {
     @Test
     void copiedDetailsScaleReliableJfrSharesToPrimaryUnknownTime() {
         UnknownStackDetailsPayload.Cluster cluster = new UnknownStackDetailsPayload.Cluster(
-                "example.Work#run", 98, 98, 25, 4.6087890625D, 176.5D,
+                "example.Work#run", 98, 98, 4.6087890625D,
                 List.of("example.Work.run(Work.java:10)"));
         UnknownStackDetailsPayload payload = new UnknownStackDetailsPayload(
                 1L, 3L, 2L, UnknownStackDetailsPayload.Status.OK,
-                1_822L, 256, List.of(cluster), List.of(cluster));
+                1_822L, 256, List.of(cluster));
         var summary = new UnknownStackCopyController.UnknownSummary(
                 47_194L, 13.703D, 3_920L, 1_000);
 
@@ -162,16 +162,18 @@ class UnknownStackCopyControllerTest {
         assertTrue(copied.contains("Primary Unknown: 47,194 samples | 13.703 MSPT"));
         assertTrue(copied.contains("Reliable JFR observations: 1,822"));
         assertFalse(copied.contains("Unresolved Unknown"));
+        assertFalse(copied.contains("Burst-time"));
+        assertFalse(copied.contains("retained tick peak"));
         assertTrue(copied.contains("estimated 5.246 MSPT"));
     }
 
     private static UnknownStackDetailsPayload response(long requestId, long reportId) {
         UnknownStackDetailsPayload.Cluster cluster = new UnknownStackDetailsPayload.Cluster(
-                "example.Work#run", 4, 3, 2, 1.0D, 2.0D,
+                "example.Work#run", 4, 3, 1.0D,
                 List.of("example.Work.run(Work.java:10)"));
         return new UnknownStackDetailsPayload(requestId, reportId, 2L,
                 UnknownStackDetailsPayload.Status.OK, 4L, 4,
-                List.of(cluster), List.of(cluster));
+                List.of(cluster));
     }
 
     private static final class Fixture {

@@ -286,7 +286,7 @@ public final class PerfReportScreen extends Screen {
         PerfReportRow.LabelTooltip tooltip = row.capabilities().labelTooltip().orElse(null);
         PerfReportRow.LabelAction labelAction = row.capabilities().labelAction().orElse(null);
         boolean tooltipHovered = (tooltip != null || labelAction != null)
-                && PerfReportTableRenderer.labelBounds(font, context).contains(mouseX, mouseY);
+                && PerfReportTableRenderer.labelCellBounds(context).contains(mouseX, mouseY);
         boolean hovered = tooltipHovered || rowHits.stream().anyMatch(hit -> hit.contains(mouseX, mouseY));
         if (hovered || index % 2 == 0) {
             graphics.fill(geometry.contentX(), y, geometry.contentRight(), y + ROW_HEIGHT,
@@ -328,7 +328,7 @@ public final class PerfReportScreen extends Screen {
         if (row.capabilities().labelAction().isPresent()) {
             var context = new PerfReportTableRenderer.RowContext(tableContext(geometry), row, y);
             result.add(new Hit(Action.UNKNOWN_DETAILS, null,
-                    PerfReportTableRenderer.labelBounds(font, context)));
+                    PerfReportTableRenderer.labelCellBounds(context)));
         }
         return result;
     }

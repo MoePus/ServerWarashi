@@ -10,10 +10,9 @@ record UnknownStackPreparedDetails(long reportId,
                                    long revision,
                                    long totalObserved,
                                    int retainedCount,
-                                   List<UnknownStackDetailsPayload.Cluster> average,
-                                   List<UnknownStackDetailsPayload.Cluster> burst) {
+                                   List<UnknownStackDetailsPayload.Cluster> average) {
     private static final int MAX_CLUSTER_TEXT_BYTES =
-            UnknownStackDetailsPayload.MAX_TOTAL_TEXT_BYTES / (UnknownStackClusterer.TOP_LIMIT * 2);
+            UnknownStackDetailsPayload.MAX_TOTAL_TEXT_BYTES / UnknownStackClusterer.TOP_LIMIT;
 
     static UnknownStackPreparedDetails prepare(UnknownStackSnapshot snapshot) {
         return from(UnknownStackClusterer.cluster(snapshot));
@@ -21,14 +20,13 @@ record UnknownStackPreparedDetails(long reportId,
 
     static UnknownStackPreparedDetails from(UnknownStackClusterer.Result result) {
         return new UnknownStackPreparedDetails(result.reportId(), result.revision(),
-                result.totalObserved(), result.retainedCount(), clusters(result.average()),
-                clusters(result.burst()));
+                result.totalObserved(), result.retainedCount(), clusters(result.average()));
     }
 
     UnknownStackDetailsPayload payload(long requestId) {
         return new UnknownStackDetailsPayload(requestId, reportId, revision,
                 UnknownStackDetailsPayload.Status.OK, totalObserved, retainedCount,
-                average, burst);
+                average);
     }
 
     private static List<UnknownStackDetailsPayload.Cluster> clusters(
@@ -55,7 +53,6 @@ record UnknownStackPreparedDetails(long reportId,
         }
         return new UnknownStackDetailsPayload.Cluster(
                 cluster.anchor(), cluster.sampleCount(), cluster.representativeCount(),
-                cluster.peakSampleCount(), cluster.estimatedAverageMillis(),
-                cluster.estimatedBurstMillis(), frames);
+                cluster.estimatedAverageMillis(), frames);
     }
 }

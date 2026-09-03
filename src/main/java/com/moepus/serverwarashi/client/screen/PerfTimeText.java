@@ -3,8 +3,6 @@ package com.moepus.serverwarashi.client.screen;
 import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData;
 import net.minecraft.network.chat.Component;
 
-import java.util.Locale;
-
 final class PerfTimeText {
     private static final long MINUTE_MILLIS = 60_000L;
     private static final long HOUR_MILLIS = 60L * MINUTE_MILLIS;
@@ -18,15 +16,8 @@ final class PerfTimeText {
                 ? Component.translatable("screen.serverwarashi.profiler.status.running")
                 : relative(report.generatedAtEpochMillis(), nowMillis,
                 "screen.serverwarashi.profiler.status.no_sample");
-        String samples = String.format(Locale.ROOT, "%,d", report.totalSamples());
-        String confidence = report.sampling().confidence().name().toLowerCase(Locale.ROOT);
-        if (!report.sampling().degradationReason().isEmpty()) {
-            return Component.translatable("screen.serverwarashi.profiler.status.session_degraded",
-                    time, samples, report.sampling().backend(), confidence,
-                    report.sampling().degradationReason());
-        }
         return Component.translatable("screen.serverwarashi.profiler.status.session",
-                time, samples, report.sampling().backend(), confidence);
+                time, String.format(java.util.Locale.ROOT, "%,d", report.totalSamples()));
     }
 
     static Component player(boolean online, long lastLoginMillis, long nowMillis) {

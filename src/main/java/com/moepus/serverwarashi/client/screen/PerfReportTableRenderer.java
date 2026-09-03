@@ -91,14 +91,10 @@ final class PerfReportTableRenderer {
         return new PerfReportBounds(x, context.y, font.width(coordinate), ROW_HEIGHT);
     }
 
-    static PerfReportBounds labelBounds(Font font, RowContext context) {
+    static PerfReportBounds labelCellBounds(RowContext context) {
         int labelWidth = labelWidth(context.table);
-        int depth = context.row.presentation().depth();
-        int x = context.table.geometry.contentX() + depth * INDENT;
-        int width = Math.max(1, labelWidth - depth * INDENT);
-        String label = fit(font, expansionMarker(context.row)
-                + context.row.content().labelPrefix(), width);
-        return new PerfReportBounds(x, context.y, font.width(label), ROW_HEIGHT);
+        return new PerfReportBounds(
+                context.table.geometry.contentX(), context.y, labelWidth, ROW_HEIGHT);
     }
 
     private static void renderLabel(GuiGraphics graphics, Font font, RowContext context, int labelWidth) {

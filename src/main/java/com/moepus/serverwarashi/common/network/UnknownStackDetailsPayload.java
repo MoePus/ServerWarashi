@@ -20,8 +20,7 @@ public record UnknownStackDetailsPayload(long requestId,
                                          Status status,
                                          long totalObserved,
                                          int retainedCount,
-                                         List<Cluster> average,
-                                         List<Cluster> burst)
+                                         List<Cluster> average)
         implements CustomPacketPayload {
     static final int MAX_TOTAL_TEXT_BYTES = 64 * 1_024;
     static final int MAX_STACK_FRAMES = 96;
@@ -34,14 +33,12 @@ public record UnknownStackDetailsPayload(long requestId,
     public UnknownStackDetailsPayload {
         Objects.requireNonNull(status, "status");
         PreparedClusterList preparedAverage = prepared(average);
-        PreparedClusterList preparedBurst = prepared(burst);
-        boolean prevalidated = preparedAverage != null && preparedBurst != null;
+        boolean prevalidated = preparedAverage != null;
         average = prevalidated ? preparedAverage.values : List.copyOf(average);
-        burst = prevalidated ? preparedBurst.values : List.copyOf(burst);
         var metadata = new Metadata(requestId, reportId, reservoirRevision,
                 status, totalObserved, retainedCount);
-        validate(metadata, average, burst, prevalidated,
-                prevalidated ? preparedAverage.textBytes + preparedBurst.textBytes : 0);
+        validate(metadata, average, prevalidated,
+                prevalidated ? preparedAverage.textBytes : 0);
     }
 
     public static UnknownStackDetailsPayload failed(
@@ -50,7 +47,7 @@ public record UnknownStackDetailsPayload(long requestId,
             throw new IllegalArgumentException("OK is not a failure status");
         }
         return new UnknownStackDetailsPayload(requestId, reportId, 0L, status,
-                0L, 0, List.of(), List.of());
+                0L, 0, List.of());
     }
 
     @Override
@@ -66,7 +63,6 @@ public record UnknownStackDetailsPayload(long requestId,
         buffer.writeVarLong(payload.totalObserved);
         buffer.writeVarInt(payload.retainedCount);
         writeClusters(buffer, payload.average);
-        writeClusters(buffer, payload.burst);
     }
 
     private static UnknownStackDetailsPayload read(RegistryFriendlyByteBuf buffer) {
@@ -77,9 +73,8 @@ public record UnknownStackDetailsPayload(long requestId,
         long totalObserved = buffer.readVarLong();
         int retainedCount = buffer.readVarInt();
         List<Cluster> average = readClusters(buffer);
-        List<Cluster> burst = readClusters(buffer);
         return new UnknownStackDetailsPayload(requestId, reportId, revision,
-                status, totalObserved, retainedCount, average, burst);
+                status, totalObserved, retainedCount, average);
     }
 
     private static void writeClusters(RegistryFriendlyByteBuf buffer, List<Cluster> clusters) {
@@ -88,9 +83,7 @@ public record UnknownStackDetailsPayload(long requestId,
             buffer.writeUtf(cluster.anchor, UnknownStackClusterer.MAX_FRAME_TEXT_LENGTH);
             buffer.writeVarInt(cluster.sampleCount);
             buffer.writeVarInt(cluster.representativeCount);
-            buffer.writeVarInt(cluster.peakSampleCount);
             buffer.writeDouble(cluster.estimatedAverageMillis);
-            buffer.writeDouble(cluster.estimatedBurstMillis);
             buffer.writeVarInt(cluster.frames.size());
             for (String frame : cluster.frames) {
                 buffer.writeUtf(frame, UnknownStackClusterer.MAX_FRAME_TEXT_LENGTH);
@@ -105,16 +98,14 @@ public record UnknownStackDetailsPayload(long requestId,
             String anchor = buffer.readUtf(UnknownStackClusterer.MAX_FRAME_TEXT_LENGTH);
             int samples = buffer.readVarInt();
             int representative = buffer.readVarInt();
-            int peak = buffer.readVarInt();
             double averageMillis = buffer.readDouble();
-            double burstMillis = buffer.readDouble();
             int frameCount = readSize(buffer, MAX_STACK_FRAMES, "stack frame list");
             List<String> frames = new ArrayList<>(frameCount);
             for (int frame = 0; frame < frameCount; frame++) {
                 frames.add(buffer.readUtf(UnknownStackClusterer.MAX_FRAME_TEXT_LENGTH));
             }
-            clusters.add(new Cluster(anchor, samples, representative, peak,
-                    averageMillis, burstMillis, frames));
+            clusters.add(new Cluster(anchor, samples, representative,
+                    averageMillis, frames));
         }
         return List.copyOf(clusters);
     }
@@ -149,7 +140,6 @@ public record UnknownStackDetailsPayload(long requestId,
 
     private static void validate(Metadata metadata,
                                  List<Cluster> average,
-                                 List<Cluster> burst,
                                  boolean prevalidated,
                                  int preparedTextBytes) {
         if (metadata.requestId <= 0L || metadata.reportId <= 0L || metadata.revision < 0L
@@ -158,15 +148,14 @@ public record UnknownStackDetailsPayload(long requestId,
                 || metadata.totalObserved < metadata.retainedCount) {
             throw new IllegalArgumentException("Invalid Unknown stack response metadata");
         }
-        if (average.size() > UnknownStackClusterer.TOP_LIMIT
-                || burst.size() > UnknownStackClusterer.TOP_LIMIT) {
+        if (average.size() > UnknownStackClusterer.TOP_LIMIT) {
             throw new IllegalArgumentException("Too many Unknown stack clusters");
         }
-        if (metadata.status != Status.OK && (!average.isEmpty() || !burst.isEmpty())) {
+        if (metadata.status != Status.OK && !average.isEmpty()) {
             throw new IllegalArgumentException("Failure response cannot contain clusters");
         }
         int textBytes = prevalidated ? preparedTextBytes
-                : validateClusters(average) + validateClusters(burst);
+                : validateClusters(average);
         if (textBytes > MAX_TOTAL_TEXT_BYTES) {
             throw new IllegalArgumentException("Unknown stack response text exceeds 64 KiB");
         }
@@ -259,18 +248,14 @@ public record UnknownStackDetailsPayload(long requestId,
     public record Cluster(String anchor,
                           int sampleCount,
                           int representativeCount,
-                          int peakSampleCount,
                           double estimatedAverageMillis,
-                          double estimatedBurstMillis,
                           List<String> frames) {
         public Cluster {
             Objects.requireNonNull(anchor, "anchor");
             frames = List.copyOf(frames);
             if (sampleCount <= 0 || representativeCount <= 0
-                    || representativeCount > sampleCount || peakSampleCount <= 0
-                    || peakSampleCount > sampleCount
-                    || !Double.isFinite(estimatedAverageMillis) || estimatedAverageMillis < 0.0D
-                    || !Double.isFinite(estimatedBurstMillis) || estimatedBurstMillis < 0.0D) {
+                    || representativeCount > sampleCount
+                    || !Double.isFinite(estimatedAverageMillis) || estimatedAverageMillis < 0.0D) {
                 throw new IllegalArgumentException("Invalid Unknown stack cluster");
             }
         }
