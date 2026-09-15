@@ -24,17 +24,16 @@ class PerfSampleAggregatorTest {
         PerfWorkTracker.Snapshot unknown = PerfStackAttributor.classify(new StackTraceElement[]{
                 new StackTraceElement("com.example.TickWork", "calculate", "TickWork.java", 1)
         }).snapshot();
-        SampleMetricMode mode = PerfStackAttributor.metricMode(unknown);
         TickSamples betweenTicks = new TickSamples(null);
         for (int sample = 0; sample < 3; sample++) {
-            betweenTicks.sample(unknown, mode);
+            betweenTicks.sample(unknown);
         }
 
         TickSamples first = new TickSamples(null);
         first.mergeSamples(betweenTicks);
-        first.sample(unknown, mode);
+        first.sample(unknown);
         TickSamples second = new TickSamples(null);
-        second.sample(unknown, mode);
+        second.sample(unknown);
 
         PerfSampleAggregator aggregator = new PerfSampleAggregator(24L);
         aggregator.accept(first);

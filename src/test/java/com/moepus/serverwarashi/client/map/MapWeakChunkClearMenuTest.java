@@ -19,6 +19,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class MapWeakChunkClearMenuTest {
     private static final ResourceLocation OVERWORLD = ResourceLocation.parse("minecraft:overworld");
@@ -159,8 +160,11 @@ class MapWeakChunkClearMenuTest {
         var chunk = new PerfReportData.ChunkEntry(
                 OVERWORLD.toString(), 1, 2, entityCount, 0,
                 List.of(object), List.of(), new PerfReportData.Metric(1.0D, 2.0D, 10L));
-        return new PerfReportData(1.0D, 1_000L, 123_000L, 20L, 100L, 1_000,
-                0, 0, 0, List.of(chunk), List.of(), List.of());
+        return reportBuilder()
+                .serverTiming(1.0D, 1_000L, 123_000L)
+                .sampleWindow(20L, 100L, 1_000)
+                .chunks(List.of(chunk))
+                .build();
     }
 
     private static String key(MapMenuItem item) {

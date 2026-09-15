@@ -57,12 +57,6 @@ final class C2meNoTickAttribution {
         return serverViewDistance + VIEW_DISTANCE_PADDING;
     }
 
-    static boolean covers(ChunkPos source, ChunkPos target, int radius) {
-        long deltaX = Math.abs((long) source.x - target.x);
-        long deltaZ = Math.abs((long) source.z - target.z);
-        return deltaX <= radius && deltaZ <= radius;
-    }
-
     record CaptureTarget(String dimension, Map<ChunkKey, Set<PerfAttributionSnapshot.Bucket>> chunks) {
     }
 

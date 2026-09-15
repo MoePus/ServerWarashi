@@ -6,17 +6,19 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class PerfTimeTextTest {
     @Test
     void returnsTranslationComponentsForSessionAndPlayerStatus() {
         long now = 10_000_000L;
-        PerfReportData report = new PerfReportData(10.0D, 1_000L,
-                now - 60_000L, 20L, 42L, 1_000,
-                0, 0, 0, java.util.List.of(), java.util.List.of(), java.util.List.of())
-                .withSampling(new PerfReportData.SamplingMetadata("JFR",
+        PerfReportData report = reportBuilder()
+                .serverTiming(10.0D, 1_000L, now - 60_000L)
+                .sampleWindow(20L, 42L, 1_000)
+                .sampling(new PerfReportData.SamplingMetadata("JFR",
                         PerfReportData.DurationSemantics.PRIMARY_SAMPLE_DENSITY,
-                        PerfReportData.Confidence.HIGH, 3L, "detail degraded"));
+                        PerfReportData.Confidence.HIGH, 3L, "detail degraded"))
+                .build();
 
         Component session = PerfTimeText.session(report, true, now);
         assertEquals("screen.serverwarashi.profiler.status.session", key(session));

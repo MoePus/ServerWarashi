@@ -16,6 +16,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class MapLoaderFreezeMenuTest {
     private static final long REPORT_ID = 9L;
@@ -117,8 +118,7 @@ class MapLoaderFreezeMenuTest {
 
     private static PerfReportData report(
             long reportId, List<PerfReportData.LoaderSourceEntry> loaders) {
-        return new PerfReportData(reportId, 0.0D, 0L, 0L, 0L, 0L, 1_000,
-                0, 0, 0, 0, List.of(), List.of(), List.of(), loaders);
+        return reportBuilder().reportId(reportId).loaderSources(loaders).build();
     }
 
     private static String key(MapMenuItem item) {

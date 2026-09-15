@@ -17,7 +17,6 @@
     "accessor.PersistentEntitySectionManagerAccessor",
     "accessor.PersistentEntityCallbackAccessor",
     "accessor.ServerLevelAccessor",
-    "accessor.TickTaskAccessor",
     "accessor.TickingTrackerAccessor",
     "entityload.PersistentEntitySectionManagerMixin",
     "loaderfreeze.DistanceManagerForceTicksMixin",

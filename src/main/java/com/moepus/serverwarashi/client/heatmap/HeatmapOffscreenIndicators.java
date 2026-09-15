@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class HeatmapOffscreenIndicators {
-    static final int DANGER_ENTITY_COUNT = WeakChunkSnapshot.ENTITY_PURPLE_THRESHOLD;
     private static final int DIRECTION_BUCKETS = 16;
     private static final int INDICATOR_PASS = 3;
     private static final int EDGE_INSET = 20;

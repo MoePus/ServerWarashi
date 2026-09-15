@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class PerfSessionControllerTest {
     @Test
@@ -82,8 +83,10 @@ class PerfSessionControllerTest {
         var loader = new PerfReportData.LoaderSourceEntry(dimensionId.toString(), "source", "Loader",
                 new PerfReportData.LoaderPosition(8, 64, 8), 0,
                 List.of(new PerfReportData.LoaderRegion(0, 0, 1, 1)), staleControl);
-        var report = new PerfReportData(7L, 0.0D, 0L, 0L, 0L, 0L, 1_000,
-                0, 0, 0, 0, List.of(), List.of(), List.of(), List.of(loader));
+        var report = reportBuilder()
+                .reportId(7L)
+                .loaderSources(List.of(loader))
+                .build();
 
         PerfReportData refreshed = TicketPerfRuntime.withLiveLoaderControls(report, attribution);
 

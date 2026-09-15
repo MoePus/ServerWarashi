@@ -23,13 +23,4 @@ public record TicketOwner(TicketOwnerKey key, String name, BlockPos representati
         return key.hashCode();
     }
 
-    @Override
-    public String toString() {
-        // "名字@(x, y, z)"；无坐标时用 null
-        String position = (representativePos == null)
-                ? "null"
-                : String.format("(%d, %d, %d)",
-                        representativePos.getX(), representativePos.getY(), representativePos.getZ());
-        return name + "@" + position;
-    }
 }

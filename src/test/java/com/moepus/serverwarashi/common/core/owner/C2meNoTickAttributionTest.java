@@ -26,16 +26,6 @@ class C2meNoTickAttributionTest {
     }
 
     @Test
-    void usesAnInclusiveSquareCoverageArea() {
-        ChunkPos source = new ChunkPos(10, -10);
-
-        assertTrue(C2meNoTickAttribution.covers(source, new ChunkPos(23, 3), 13));
-        assertTrue(C2meNoTickAttribution.covers(source, new ChunkPos(-3, -23), 13));
-        assertFalse(C2meNoTickAttribution.covers(source, new ChunkPos(24, 3), 13));
-        assertFalse(C2meNoTickAttribution.covers(source, new ChunkPos(23, 4), 13));
-    }
-
-    @Test
     void captureContextReusesPlayerBucketAndFallsBackToUnknown() {
         var chunks = new HashMap<ChunkKey, java.util.Set<PerfAttributionSnapshot.Bucket>>();
         var target = new C2meNoTickAttribution.CaptureTarget("test:level", chunks);

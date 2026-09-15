@@ -77,15 +77,6 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
         }
     }
 
-    void clear() {
-        staticMarkers.clear();
-        dynamicMarkers.clear();
-    }
-
-    void clear(Source source) {
-        buffer(source).clear();
-    }
-
     boolean isEmpty() {
         return staticMarkers.markerCount == 0 && dynamicMarkers.markerCount == 0;
     }

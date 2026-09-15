@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class PerfReportRowsTest {
     @Test
@@ -389,8 +390,13 @@ class PerfReportRowsTest {
     private static PerfReportData report(List<PerfReportData.ChunkEntry> chunks,
                                          List<PerfReportData.TickableEntry> tickables,
                                          List<PerfReportData.OwnerEntry> owners) {
-        return new PerfReportData(10.0, 1_000, 123_000, 20, 100, 500,
-                0, 0, 0, chunks, tickables, owners);
+        return reportBuilder()
+                .serverTiming(10.0D, 1_000L, 123_000L)
+                .sampleWindow(20L, 100L, 500)
+                .chunks(chunks)
+                .tickables(tickables)
+                .owners(owners)
+                .build();
     }
 
     private static PerfReportData.ChunkEntry chunk(String dimension,

@@ -23,12 +23,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class PerfAttributionSnapshot {
-    private static final Owner SYSTEM_OWNER = new Owner(
-            PerfReportData.AttributionKind.SYSTEM, "system", "System", false, 0L, null);
     private static final Owner UNKNOWN_OWNER = new Owner(
             PerfReportData.AttributionKind.UNKNOWN, "unknown", "Unknown", false, 0L, null);
-    public static final Bucket SYSTEM = new Bucket(SYSTEM_OWNER,
-            new Source("system", "System", null), 0, 0);
     public static final Bucket UNKNOWN = new Bucket(UNKNOWN_OWNER,
             new Source("unknown", "Unknown", null), 0, 0);
     private final Map<ChunkKey, List<Bucket>> byChunk;
@@ -316,11 +312,6 @@ public final class PerfAttributionSnapshot {
                                LoaderControl control) {
         public LoaderSource {
             regions = List.copyOf(regions);
-        }
-
-        public LoaderSource(String dimension, String sourceId, String loaderName,
-                            Position position, int omittedRegions, List<LoaderRegion> regions) {
-            this(dimension, sourceId, loaderName, position, omittedRegions, regions, null, null);
         }
 
         LoaderSource withControl(LoaderControl nextControl) {

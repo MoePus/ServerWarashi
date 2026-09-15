@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class ClientPerfPayloadRouterTest {
     @AfterEach
@@ -21,9 +22,11 @@ class ClientPerfPayloadRouterTest {
 
     @Test
     void authoritativeSpatialStopUpdatesStateAndEndsLiveAnalysis() {
-        PerfReportData report = new PerfReportData(
-                9L, 20.0D, 1_000L, 5_000L, 20L, 10L, 1_000,
-                0, 0, 0, 0, List.of(), List.of(), List.of(), List.of());
+        PerfReportData report = reportBuilder()
+                .reportId(9L)
+                .serverTiming(20.0D, 1_000L, 5_000L)
+                .sampleWindow(20L, 10L, 1_000)
+                .build();
         var payload = new PerfSpatialSnapshotPayload(report, false);
         List<Boolean> liveChanges = new ArrayList<>();
 

@@ -54,10 +54,6 @@ final class PerfStackAttributor {
     private PerfStackAttributor() {
     }
 
-    static SampleMetricMode metricMode(PerfWorkTracker.Snapshot snapshot) {
-        return SampleMetricMode.STATISTICAL;
-    }
-
     static Classification classify(StackTraceElement[] stack) {
         if (stack == null || stack.length == 0) {
             return IDLE;

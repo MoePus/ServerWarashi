@@ -13,6 +13,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class HeatmapOffscreenIndicatorsTest {
     private static final MapViewport VIEWPORT = new MapViewport(
@@ -157,8 +158,11 @@ class HeatmapOffscreenIndicatorsTest {
     }
 
     private static PerfReportData report(PerfReportData.ChunkEntry... chunks) {
-        return new PerfReportData(10.0D, 1_000L, 123L, 20L, 10L, 1_000,
-                0, 0, 0, 0, List.of(chunks), List.of(), List.of(), List.of());
+        return reportBuilder()
+                .serverTiming(10.0D, 1_000L, 123L)
+                .sampleWindow(20L, 10L, 1_000)
+                .chunks(List.of(chunks))
+                .build();
     }
 
     private static PerfReportData.ChunkEntry chunk(int x, int z, PerfReportData.Metric metric) {

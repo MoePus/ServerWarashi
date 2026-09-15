@@ -179,7 +179,7 @@ class DetailSampleAllocatorTest {
     private static TickSamples unknownTick(int samples) {
         TickSamples tick = new TickSamples(null);
         for (int sample = 0; sample < samples; sample++) {
-            tick.sample(PerfWorkTracker.unknownSnapshot(), SampleMetricMode.STATISTICAL,
+            tick.sample(PerfWorkTracker.unknownSnapshot(),
                     PerfReportData.AttributionSource.FALLBACK_UNKNOWN,
                     PerfReportData.Confidence.LOW);
             tick.unknownSamples++;

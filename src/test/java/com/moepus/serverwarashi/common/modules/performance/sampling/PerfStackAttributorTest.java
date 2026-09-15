@@ -43,7 +43,6 @@ class PerfStackAttributorTest {
 
             assertEquals(PerfStackAttributor.Kind.HANDLER, detail.kind());
             assertEquals(TickType.HANDLER, sample.type());
-            assertEquals(SampleMetricMode.STATISTICAL, PerfStackAttributor.metricMode(sample));
             assertEquals("ServerEvents#onTick(" + tickCase.event() + ")", sample.displayName());
             assertEquals("com.example.ServerEvents#onTick(" + TICK_PACKAGE + tickCase.event() + ")",
                     sample.eventLoop());

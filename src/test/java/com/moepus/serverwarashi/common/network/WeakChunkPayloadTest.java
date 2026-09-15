@@ -2,8 +2,6 @@ package com.moepus.serverwarashi.common.network;
 
 import com.moepus.serverwarashi.common.modules.weakload.WeakChunkSnapshot;
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
-import io.netty.buffer.Unpooled;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +11,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static com.moepus.serverwarashi.testsupport.NetworkTestFixtures.buffer;
+import static com.moepus.serverwarashi.testsupport.NetworkTestFixtures.roundTrip;
 
 class WeakChunkPayloadTest {
     private static final WeakEntityType COW = entity("minecraft:cow");
@@ -24,13 +24,7 @@ class WeakChunkPayloadTest {
                 "minecraft:overworld", 123_456L, List.of(
                 new WeakChunkSnapshot.ChunkEntry(2, -3, 80,
                         Map.of(COW, 20, COBBLESTONE, 60)))));
-        RegistryFriendlyByteBuf buffer = buffer();
-        try {
-            WeakChunkPayload.STREAM_CODEC.encode(buffer, expected);
-            assertEquals(expected, WeakChunkPayload.STREAM_CODEC.decode(buffer));
-        } finally {
-            buffer.release();
-        }
+        roundTrip(WeakChunkPayload.STREAM_CODEC, expected);
     }
 
     @Test
@@ -52,13 +46,7 @@ class WeakChunkPayloadTest {
         WeakChunkPayload expected = new WeakChunkPayload(new WeakChunkSnapshot(
                 "minecraft:overworld", 1L, List.of(
                 new WeakChunkSnapshot.ChunkEntry(0, 0, 50, Map.of(item, 20, entity, 30)))));
-        RegistryFriendlyByteBuf buffer = buffer();
-        try {
-            WeakChunkPayload.STREAM_CODEC.encode(buffer, expected);
-            assertEquals(expected, WeakChunkPayload.STREAM_CODEC.decode(buffer));
-        } finally {
-            buffer.release();
-        }
+        roundTrip(WeakChunkPayload.STREAM_CODEC, expected);
     }
 
     @Test
@@ -78,10 +66,6 @@ class WeakChunkPayloadTest {
     @Test
     void networkProtocolIsVersionSeven() {
         assertEquals("7", WarashiNetwork.NETWORK_VERSION);
-    }
-
-    private static RegistryFriendlyByteBuf buffer() {
-        return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     }
 
     private static WeakEntityType item(String id) {

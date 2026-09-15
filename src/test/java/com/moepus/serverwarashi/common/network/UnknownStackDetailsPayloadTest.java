@@ -1,9 +1,6 @@
 package com.moepus.serverwarashi.common.network;
 
 import com.moepus.serverwarashi.common.modules.performance.sampling.UnknownStackClusterer;
-import io.netty.buffer.Unpooled;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -13,6 +10,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static com.moepus.serverwarashi.testsupport.NetworkTestFixtures.roundTrip;
 
 class UnknownStackDetailsPayloadTest {
     @Test
@@ -25,15 +23,8 @@ class UnknownStackDetailsPayloadTest {
         UnknownStackDetailsPayload response = new UnknownStackDetailsPayload(
                 8L, 12L, 14L, UnknownStackDetailsPayload.Status.OK,
                 400L, 256, List.of(cluster));
-        RegistryFriendlyByteBuf buffer = buffer();
-        try {
-            UnknownStackDetailsRequestPayload.STREAM_CODEC.encode(buffer, request);
-            assertEquals(request, UnknownStackDetailsRequestPayload.STREAM_CODEC.decode(buffer));
-            UnknownStackDetailsPayload.STREAM_CODEC.encode(buffer, response);
-            assertEquals(response, UnknownStackDetailsPayload.STREAM_CODEC.decode(buffer));
-        } finally {
-            buffer.release();
-        }
+        roundTrip(UnknownStackDetailsRequestPayload.STREAM_CODEC, request);
+        roundTrip(UnknownStackDetailsPayload.STREAM_CODEC, response);
     }
 
     @Test
@@ -121,7 +112,4 @@ class UnknownStackDetailsPayloadTest {
                 "example.Work#run", 4, 3, 1.25D, frames);
     }
 
-    private static RegistryFriendlyByteBuf buffer() {
-        return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
-    }
 }

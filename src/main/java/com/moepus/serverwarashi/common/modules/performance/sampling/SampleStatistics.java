@@ -48,19 +48,16 @@ final class SampleStatistics {
 
     PerfReportData.Metric metric(long currentTick, long measurementTicks,
                                  double nanosPerSample) {
-        return metric(SampleMetricMode.STATISTICAL, new SampleMetricContext(
-                currentTick, measurementTicks, nanosPerSample, nanosPerSample));
-    }
-
-    PerfReportData.Metric metric(SampleMetricMode mode, SampleMetricContext context) {
-        double nanosPerSample = context.nanosPerSample(mode);
-        double mspt = context.measurementTicks() == 0L ? 0.0D
-                : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / context.measurementTicks();
-        int observedMaximum = recentTickMaximum(context.currentTick());
-        double maximumSamples = mode == SampleMetricMode.DIRECT_INTERVAL
-                ? observedMaximum : statisticalMaximum(observedMaximum);
+        double mspt = measurementTicks == 0L ? 0.0D
+                : totalSamples * nanosPerSample / NANOS_PER_MILLISECOND / measurementTicks;
+        int observedMaximum = recentTickMaximum(currentTick);
+        double maximumSamples = statisticalMaximum(observedMaximum);
         double maximum = maximumSamples * nanosPerSample / NANOS_PER_MILLISECOND;
         return new PerfReportData.Metric(mspt, Math.max(mspt, maximum), totalSamples);
+    }
+
+    PerfReportData.Metric metric(SampleMetricContext context, long measurementTicks) {
+        return metric(context.currentTick(), measurementTicks, context.nanosPerSample());
     }
 
     PerfWorldHotspotIndex.Cost hotspotCost(long totalTicks) {
@@ -144,7 +141,4 @@ final class SampleStatistics {
         return totalSamples;
     }
 
-    double sampleWeight() {
-        return totalSamples;
-    }
 }

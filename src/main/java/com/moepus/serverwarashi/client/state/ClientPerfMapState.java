@@ -4,29 +4,37 @@ import com.moepus.serverwarashi.common.modules.performance.report.PerfReportData
 import com.moepus.serverwarashi.common.network.LoaderControlStatePayload;
 
 public final class ClientPerfMapState {
-    private static final ClientPerfReportStore<Snapshot> STORE =
-            new ClientPerfReportStore<>(Snapshot::new);
+    private static Snapshot state = new Snapshot(null, 0L, false);
 
     private ClientPerfMapState() {
     }
 
     static void update(PerfReportData report, boolean profiling) {
-        STORE.update(report, profiling);
+        state = new Snapshot(report, state.revision() + 1L, profiling);
     }
 
     public static Snapshot snapshot() {
-        return STORE.snapshot();
+        return state;
     }
 
     static boolean applyLoaderControl(LoaderControlStatePayload payload) {
-        return STORE.applyLoaderControl(payload);
+        PerfReportData report = state.report();
+        if (!payload.hasAuthoritativeState() || report == null
+                || report.reportId() != payload.reportId()) {
+            return false;
+        }
+        PerfReportData updated = ClientPerfReportUpdates.applyLoaderControl(report, payload);
+        if (updated == report) {
+            return false;
+        }
+        state = new Snapshot(updated, state.revision() + 1L, state.profiling());
+        return true;
     }
 
     static void clear() {
-        STORE.clear();
+        state = new Snapshot(null, state.revision() + 1L, false);
     }
 
-    public record Snapshot(PerfReportData report, long revision, boolean profiling)
-            implements ClientPerfReportStore.View {
+    public record Snapshot(PerfReportData report, long revision, boolean profiling) {
     }
 }

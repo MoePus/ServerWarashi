@@ -22,7 +22,10 @@ final class JfrAsyncStackSampler implements AsyncStackSampler {
     private static final long SETTLING_NANOS = Duration.ofSeconds(1L).toNanos();
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(5L);
     private static final long START_TIMEOUT_SECONDS = 5L;
+    private static final String UNAVAILABLE_REASON = "JFR detail sampling is unavailable";
+    private static final boolean AVAILABLE = isAvailable();
 
+    private final boolean available;
     private RecordingStream stream;
     private final DetailEventGate eventGate = new DetailEventGate();
     private volatile String degradationReason = "";
@@ -31,6 +34,15 @@ final class JfrAsyncStackSampler implements AsyncStackSampler {
     private Instant baseInstant;
     private Consumer<AsyncStackSample> sink;
     private volatile boolean stopping;
+
+    JfrAsyncStackSampler() {
+        this(AVAILABLE);
+    }
+
+    private JfrAsyncStackSampler(boolean available) {
+        this.available = available;
+        degradationReason = available ? "" : UNAVAILABLE_REASON;
+    }
 
     static boolean isAvailable() {
         try {
@@ -42,6 +54,10 @@ final class JfrAsyncStackSampler implements AsyncStackSampler {
 
     @Override
     public void start(Thread target, int intervalMicros, Consumer<AsyncStackSample> sampleSink) {
+        if (!available) {
+            degradationReason = UNAVAILABLE_REASON;
+            return;
+        }
         targetThreadId = target.threadId();
         sink = sampleSink;
         eventGate.reset(intervalMicros * 1_000L);
@@ -95,7 +111,7 @@ final class JfrAsyncStackSampler implements AsyncStackSampler {
 
     @Override
     public String backendName() {
-        return "JFR AsyncGetCallTrace";
+        return available ? "JFR AsyncGetCallTrace" : "No JFR detail";
     }
 
     @Override
@@ -105,7 +121,7 @@ final class JfrAsyncStackSampler implements AsyncStackSampler {
 
     @Override
     public long settlingNanos() {
-        return SETTLING_NANOS;
+        return available ? SETTLING_NANOS : 0L;
     }
 
     private void configure(RecordingStream recording, int intervalMicros) {

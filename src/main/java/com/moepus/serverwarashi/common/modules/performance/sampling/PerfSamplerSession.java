@@ -38,7 +38,7 @@ public final class PerfSamplerSession {
                                             int intervalMicros,
                                             Options options) {
         return new PerfSamplerSession(sessionId, intervalMicros, options,
-                SamplingPlatform.instance().createSampler());
+                new JfrAsyncStackSampler());
     }
     static PerfSamplerSession createForTest(long sessionId,
                                             int intervalMicros,
@@ -260,8 +260,7 @@ public final class PerfSamplerSession {
     }
     private static void recordPrimary(TickSamples tick, PerfWorkTracker.Snapshot snapshot) {
         boolean unknown = snapshot == PerfWorkTracker.unknownSnapshot();
-        tick.sample(snapshot, SampleMetricMode.STATISTICAL,
-                unknown ? PerfReportData.AttributionSource.FALLBACK_UNKNOWN
+        tick.sample(snapshot, unknown ? PerfReportData.AttributionSource.FALLBACK_UNKNOWN
                         : PerfReportData.AttributionSource.TASK_CONTEXT,
                 unknown ? PerfReportData.Confidence.LOW : PerfReportData.Confidence.HIGH);
         if (unknown) {

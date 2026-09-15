@@ -310,7 +310,7 @@ class PerfSamplerSessionTest {
     }
 
     @Test
-    void handlerScopeOverridesOuterTaskAndJfrOnlyRefinesItsName()
+    void jfrRefinesActiveHandlerNameWithoutChangingItsType()
             throws InterruptedException {
         FakeAsyncStackSampler sampler = new FakeAsyncStackSampler();
         PerfSamplerSession session = unlimitedSession(15L, null, sampler);
@@ -318,7 +318,6 @@ class PerfSamplerSessionTest {
         session.start();
         try {
             session.beginTick(null);
-            assertTrue(PerfWorkTracker.enterTask("test-dispatcher", new NamedTask()));
             assertTrue(PerfWorkTracker.enterHandler());
             Thread.sleep(30L);
             long detailTimestamp = System.nanoTime() - 10_000_000L;
@@ -326,7 +325,6 @@ class PerfSamplerSessionTest {
             sampler.emitAt(detailTimestamp, handlerStack());
             session.awaitWorkerDrain();
             assertTrue(PerfWorkTracker.exit(TickType.HANDLER));
-            assertTrue(PerfWorkTracker.exit(TickType.TASK));
             session.endTick(1_000_000L);
 
             PerfReportData.TickableEntry entry = session.stop().tickables().stream()
@@ -475,12 +473,6 @@ class PerfSamplerSessionTest {
             if (running) {
                 sink.accept(new AsyncStackSample(timestampNanos, stack));
             }
-        }
-    }
-
-    private static final class NamedTask implements Runnable {
-        @Override
-        public void run() {
         }
     }
 

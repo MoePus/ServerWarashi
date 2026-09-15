@@ -12,8 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
-class ClientPerfReportStateTest {
+class ClientPerfMapStateTest {
     private static final long REPORT_ID = 7L;
     private static final ResourceLocation DIMENSION = ResourceLocation.parse("minecraft:overworld");
     private static final ResourceLocation CONTROLLER = ResourceLocation.parse("test:loader");
@@ -21,60 +22,60 @@ class ClientPerfReportStateTest {
 
     @Test
     void patchesOnlyMatchingAuthoritativeState() {
-        ClientPerfReportState.update(report(false, true), false);
-        long before = ClientPerfReportState.snapshot().revision();
+        ClientPerfMapState.update(report(false, true), false);
+        long before = ClientPerfMapState.snapshot().revision();
 
-        boolean changed = ClientPerfReportState.applyLoaderControl(payload(new PayloadSpec(
+        boolean changed = ClientPerfMapState.applyLoaderControl(payload(new PayloadSpec(
                 REPORT_ID, CONTROLLER, OWNER, true, false,
                 LoaderControlStatePayload.Status.APPLIED)));
 
         assertTrue(changed);
-        assertEquals(before + 1L, ClientPerfReportState.snapshot().revision());
+        assertEquals(before + 1L, ClientPerfMapState.snapshot().revision());
         assertEquals(new PerfReportData.LoaderControl(CONTROLLER, OWNER, true, false),
                 control());
     }
 
     @Test
     void rejectsStaleFailedAndWrongIdentityUpdates() {
-        ClientPerfReportState.update(report(false, true), false);
-        long revision = ClientPerfReportState.snapshot().revision();
+        ClientPerfMapState.update(report(false, true), false);
+        long revision = ClientPerfMapState.snapshot().revision();
 
-        assertFalse(ClientPerfReportState.applyLoaderControl(payload(new PayloadSpec(
+        assertFalse(ClientPerfMapState.applyLoaderControl(payload(new PayloadSpec(
                 REPORT_ID - 1L, CONTROLLER, OWNER, true, false,
                 LoaderControlStatePayload.Status.SYNC))));
-        assertFalse(ClientPerfReportState.applyLoaderControl(payload(new PayloadSpec(
+        assertFalse(ClientPerfMapState.applyLoaderControl(payload(new PayloadSpec(
                 REPORT_ID, CONTROLLER, OWNER, false, false,
                 LoaderControlStatePayload.Status.STALE))));
-        assertFalse(ClientPerfReportState.applyLoaderControl(payload(new PayloadSpec(
+        assertFalse(ClientPerfMapState.applyLoaderControl(payload(new PayloadSpec(
                 REPORT_ID, ResourceLocation.parse("test:other"), OWNER, true, false,
                 LoaderControlStatePayload.Status.SYNC))));
 
-        assertEquals(revision, ClientPerfReportState.snapshot().revision());
+        assertEquals(revision, ClientPerfMapState.snapshot().revision());
         assertEquals(new PerfReportData.LoaderControl(CONTROLLER, OWNER, false, true), control());
     }
 
     @Test
     void identicalAuthoritativeStateDoesNotRebuildClientModel() {
-        ClientPerfReportState.update(report(false, true), true);
-        long revision = ClientPerfReportState.snapshot().revision();
+        ClientPerfMapState.update(report(false, true), true);
+        long revision = ClientPerfMapState.snapshot().revision();
 
-        assertFalse(ClientPerfReportState.applyLoaderControl(payload(new PayloadSpec(
+        assertFalse(ClientPerfMapState.applyLoaderControl(payload(new PayloadSpec(
                 REPORT_ID, CONTROLLER, OWNER, false, true,
                 LoaderControlStatePayload.Status.UNCHANGED))));
 
-        assertEquals(revision, ClientPerfReportState.snapshot().revision());
-        assertTrue(ClientPerfReportState.snapshot().profiling());
+        assertEquals(revision, ClientPerfMapState.snapshot().revision());
+        assertTrue(ClientPerfMapState.snapshot().profiling());
     }
 
     @Test
     void authoritativeStopRetainsTheLastReportAsStaleData() {
         PerfReportData completed = report(false, true);
-        ClientPerfReportState.update(completed, true);
+        ClientPerfMapState.update(completed, true);
 
-        ClientPerfReportState.update(completed, false);
+        ClientPerfMapState.update(completed, false);
 
-        assertSame(completed, ClientPerfReportState.snapshot().report());
-        assertFalse(ClientPerfReportState.snapshot().profiling());
+        assertSame(completed, ClientPerfMapState.snapshot().report());
+        assertFalse(ClientPerfMapState.snapshot().profiling());
     }
 
     private static LoaderControlStatePayload payload(PayloadSpec spec) {
@@ -89,12 +90,14 @@ class ClientPerfReportStateTest {
                 DIMENSION.toString(), "source", "Loader",
                 new PerfReportData.LoaderPosition(OWNER.getX(), OWNER.getY(), OWNER.getZ()),
                 0, List.of(new PerfReportData.LoaderRegion(0, -1, 1, 1)), control);
-        return new PerfReportData(REPORT_ID, 0.0D, 0L, 0L, 0L, 0L, 1_000,
-                0, 0, 0, 0, List.of(), List.of(), List.of(), List.of(loader));
+        return reportBuilder()
+                .reportId(REPORT_ID)
+                .loaderSources(List.of(loader))
+                .build();
     }
 
     private static PerfReportData.LoaderControl control() {
-        return ClientPerfReportState.snapshot().report().loaderSources().getFirst().control();
+        return ClientPerfMapState.snapshot().report().loaderSources().getFirst().control();
     }
 
     private record PayloadSpec(long reportId, ResourceLocation controller, BlockPos owner,

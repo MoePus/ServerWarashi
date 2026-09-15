@@ -1,26 +1,20 @@
 package com.moepus.serverwarashi.common.network;
 
 import com.moepus.serverwarashi.common.modules.weakload.WeakEntityType;
-import io.netty.buffer.Unpooled;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static com.moepus.serverwarashi.testsupport.NetworkTestFixtures.buffer;
+import static com.moepus.serverwarashi.testsupport.NetworkTestFixtures.roundTrip;
 
 class WeakChunkClearPayloadTest {
     @Test
     void roundTripsTypedTarget() {
         var expected = new WeakChunkClearPayload("minecraft:overworld", 12, -34,
                 new WeakEntityType(WeakEntityType.Kind.ITEM, "minecraft:cobblestone"));
-        RegistryFriendlyByteBuf buffer = buffer();
-        try {
-            WeakChunkClearPayload.STREAM_CODEC.encode(buffer, expected);
-            assertEquals(expected, WeakChunkClearPayload.STREAM_CODEC.decode(buffer));
-        } finally {
-            buffer.release();
-        }
+        roundTrip(WeakChunkClearPayload.STREAM_CODEC, expected);
     }
 
     @Test
@@ -38,7 +32,4 @@ class WeakChunkClearPayloadTest {
         }
     }
 
-    private static RegistryFriendlyByteBuf buffer() {
-        return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
-    }
 }

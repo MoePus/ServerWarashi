@@ -39,7 +39,7 @@ public final class ServerWatchdogTicketAppender {
     }
 
     private static List<WatchdogTicketFormatter.Owner> activeOwners(ServerLevel level) {
-        var ownerChunks = OwnerChunks.collectBothMaps(level).activeOnly();
+        var ownerChunks = OwnerChunks.collectActive(level);
         WatchdogChunkSnapshot chunks = WatchdogChunkSnapshot.capture(level);
         List<WatchdogTicketFormatter.Owner> owners = new ArrayList<>(ownerChunks.size());
         for (var entry : ownerChunks.entrySet()) {

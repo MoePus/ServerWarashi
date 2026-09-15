@@ -14,6 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.NetworkTestFixtures.roundTrip;
 
 class PerfWorldHotspotPayloadTest {
     @Test
@@ -42,14 +43,7 @@ class PerfWorldHotspotPayloadTest {
     void roundTripsDeltaFromRevisionZero() {
         var expected = new PerfWorldHotspotPayload(8L, 0L, 1L, 1L, 1_000_000L,
                 ResourceLocation.parse("minecraft:overworld"), false, List.of(), List.of());
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
-                Unpooled.buffer(), RegistryAccess.EMPTY);
-        try {
-            PerfWorldHotspotPayload.STREAM_CODEC.encode(buffer, expected);
-            assertEquals(expected, PerfWorldHotspotPayload.STREAM_CODEC.decode(buffer));
-        } finally {
-            buffer.release();
-        }
+        roundTrip(PerfWorldHotspotPayload.STREAM_CODEC, expected);
     }
 
     @Test

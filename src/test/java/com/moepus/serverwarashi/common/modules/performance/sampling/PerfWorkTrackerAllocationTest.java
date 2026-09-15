@@ -10,7 +10,6 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PerfWorkTrackerAllocationTest {
@@ -22,11 +21,11 @@ class PerfWorkTrackerAllocationTest {
     void serverThreadPublicationMethodsContainNoAllocatingBytecode() throws Exception {
         assertAllocationFree(PerfWorkTracker.class, Set.of(
                 "enterChunk", "enterEntity", "enterBlockEntity", "exitBlockEntity",
-                "enterTask", "enterHandler", "exit", "claimSlot", "unwrap"));
+                "enterHandler", "exit", "claimSlot"));
         Class<?> slot = Class.forName(PerfWorkTracker.class.getName() + "$Slot");
         assertAllocationFree(slot, Set.of(
-                "publishChunk", "publishEntity", "publishBlockEntity", "publishTask",
-                "publishHandler", "beginPublish", "setCommon", "setPosition",
+                "publishChunk", "publishEntity", "publishBlockEntity", "publishHandler",
+                "beginPublish", "setCommon", "setPosition",
                 "clearPosition", "finishPublish", "deactivate"));
     }
 
@@ -38,14 +37,6 @@ class PerfWorkTrackerAllocationTest {
     @Test
     void primaryObservationPublicationDoesNotAllocate() throws Exception {
         assertAllocationFree(PrimaryObservationRing.class, Set.of("record", "index"));
-    }
-
-    @Test
-    void transitionTimelineClassesAreRemoved() {
-        assertThrows(ClassNotFoundException.class,
-                () -> Class.forName("com.moepus.serverwarashi.common.modules.performance.sampling.ContextTimeline"));
-        assertThrows(ClassNotFoundException.class,
-                () -> Class.forName("com.moepus.serverwarashi.common.modules.performance.sampling.TaskContext"));
     }
 
     private static void assertAllocationFree(Class<?> type, Set<String> methodNames)

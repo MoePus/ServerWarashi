@@ -39,63 +39,6 @@ public record PerfReportData(long reportId,
         loaderSources = List.copyOf(loaderSources);
     }
 
-    public PerfReportData(long reportId,
-                          double serverMspt,
-                          long elapsedMillis,
-                          long generatedAtEpochMillis,
-                          long tickCount,
-                          long totalSamples,
-                          int intervalMicros,
-                          int omittedChunks,
-                          int omittedTickables,
-                          int omittedOwnerSources,
-                          int omittedLoaderSources,
-                          List<ChunkEntry> chunks,
-                          List<TickableEntry> tickables,
-                          List<OwnerEntry> owners,
-                          List<LoaderSourceEntry> loaderSources) {
-        this(reportId, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount,
-                totalSamples, intervalMicros, SamplingMetadata.notStarted(), omittedChunks,
-                omittedTickables, omittedOwnerSources, omittedLoaderSources,
-                chunks, tickables, owners, loaderSources);
-    }
-
-    public PerfReportData(double serverMspt,
-                          long elapsedMillis,
-                          long generatedAtEpochMillis,
-                          long tickCount,
-                          long totalSamples,
-                          int intervalMicros,
-                          int omittedChunks,
-                          int omittedTickables,
-                          int omittedOwnerSources,
-                          int omittedLoaderSources,
-                          List<ChunkEntry> chunks,
-                          List<TickableEntry> tickables,
-                          List<OwnerEntry> owners,
-                          List<LoaderSourceEntry> loaderSources) {
-        this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples,
-                intervalMicros, SamplingMetadata.notStarted(), omittedChunks, omittedTickables, omittedOwnerSources,
-                omittedLoaderSources, chunks, tickables, owners, loaderSources);
-    }
-
-    public PerfReportData(double serverMspt,
-                          long elapsedMillis,
-                          long generatedAtEpochMillis,
-                          long tickCount,
-                          long totalSamples,
-                          int intervalMicros,
-                          int omittedChunks,
-                          int omittedTickables,
-                          int omittedOwnerSources,
-                          List<ChunkEntry> chunks,
-                          List<TickableEntry> tickables,
-                          List<OwnerEntry> owners) {
-        this(0L, serverMspt, elapsedMillis, generatedAtEpochMillis, tickCount, totalSamples, intervalMicros,
-                SamplingMetadata.notStarted(), omittedChunks, omittedTickables, omittedOwnerSources, 0,
-                chunks, tickables, owners, List.of());
-    }
-
     public static PerfReportData empty(int intervalMicros) {
         return new PerfReportData(0L, 0.0D, 0L, 0L, 0L, 0L, intervalMicros,
                 SamplingMetadata.notStarted(),
@@ -131,6 +74,10 @@ public record PerfReportData(long reportId,
                                    Confidence confidence,
                                    long droppedSamples,
                                    String degradationReason) {
+        private static final SamplingMetadata NOT_STARTED = new SamplingMetadata(
+                "Not started", DurationSemantics.PRIMARY_SAMPLE_DENSITY,
+                Confidence.LOW, 0L, "Sampling has not started");
+
         public SamplingMetadata {
             backend = Objects.requireNonNull(backend, "backend");
             durationSemantics = Objects.requireNonNull(durationSemantics, "durationSemantics");
@@ -142,8 +89,7 @@ public record PerfReportData(long reportId,
         }
 
         public static SamplingMetadata notStarted() {
-            return new SamplingMetadata("Not started", DurationSemantics.PRIMARY_SAMPLE_DENSITY,
-                    Confidence.LOW, 0L, "Sampling has not started");
+            return NOT_STARTED;
         }
     }
 

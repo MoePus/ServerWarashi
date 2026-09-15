@@ -17,8 +17,6 @@ class WorldFlameParticleLayoutTest {
         assertEquals(64, WorldFlameParticleLayout.GLOW_PARTICLE_START);
         assertEquals(80, WorldFlameParticleLayout.SPARK_PARTICLE_START);
         assertEquals(64, WorldFlameParticleLayout.NORMAL_PARTICLE_COUNT);
-        assertEquals(80, WorldFlameParticleLayout.FIRE_PARTICLE_COUNT);
-        assertEquals(144, WorldFlameParticleLayout.PARTICLE_COUNT);
     }
 
     @Test

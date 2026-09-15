@@ -345,19 +345,6 @@ final class WorldPerfObjectRenderer {
                 (float) (buffers.originZ(source) - camera.z));
     }
 
-    static Matrix4f cameraRelativeMatrix(
-            RenderLevelStageEvent event, double originX, double originZ) {
-        Vec3 camera = event.getCamera().getPosition();
-        return viewRotationMatrix(event).translate(
-                (float) (originX - camera.x),
-                (float) -camera.y,
-                (float) (originZ - camera.z));
-    }
-
-    private static Matrix4f viewRotationMatrix(RenderLevelStageEvent event) {
-        return new Matrix4f(event.getModelViewMatrix());
-    }
-
     void close() {
         buffers.close();
         staticCandidates = List.of();

@@ -7,10 +7,6 @@ import net.minecraft.world.level.ChunkPos;
 import java.util.Objects;
 
 public record TicketOwnerKey(String typeName, Object ownerIdentity) {
-    public String stableSortKey() {
-        return typeName + ":" + ownerIdentity;
-    }
-
     @Override
     public int hashCode() {
         return 31 * typeName.hashCode() + identityHash(ownerIdentity);

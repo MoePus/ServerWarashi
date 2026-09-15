@@ -61,7 +61,7 @@ final class PerfSampleAggregator {
     PerfReportData buildLoaderLayoutOnly(PerfAttributionSnapshot attribution, int intervalMicros) {
         PerfOwnerAggregator.LoaderBuild loaders = PerfOwnerAggregator.loaderSources(attribution);
         return new PerfReportData(reportId, 0.0D, 0L, System.currentTimeMillis(),
-                0L, 0L, intervalMicros, 0, 0, 0,
+                0L, 0L, intervalMicros, PerfReportData.SamplingMetadata.notStarted(), 0, 0, 0,
                 loaders.omittedSources(), List.of(), List.of(), List.of(), loaders.sources());
     }
 
@@ -86,8 +86,7 @@ final class PerfSampleAggregator {
     BuildSnapshot buildSnapshot(long elapsedNanos, long totalSamples, int intervalMicros) {
         double nanosPerSample = SampleDensity.nanosPerAttempt(
                 elapsedNanos, totalSamples, intervalMicros);
-        SampleMetricContext metricContext = new SampleMetricContext(
-                tickCount, tickCount, nanosPerSample, intervalMicros * 1_000.0D);
+        SampleMetricContext metricContext = new SampleMetricContext(tickCount, nanosPerSample);
         PerfObjectSnapshotBuilder.Build objectBuild =
                 PerfObjectSnapshotBuilder.build(tickables, metricContext);
         var limitedChunks = PerfReportLimits.topMetricUnion(
@@ -105,7 +104,7 @@ final class PerfSampleAggregator {
         double serverMspt = tickCount == 0 ? 0.0D : totalTickNanos / 1_000_000.0D / tickCount;
         PerfReportData report = new PerfReportData(
                 reportId, serverMspt, elapsedNanos / 1_000_000L, System.currentTimeMillis(),
-                tickCount, totalSamples, intervalMicros,
+                tickCount, totalSamples, intervalMicros, PerfReportData.SamplingMetadata.notStarted(),
                 omitted(limitedChunks.omitted(), droppedChunkHashes),
                 omitted((long) sampledTickables.omitted() + limitedTickables.omitted(), droppedTickableHashes),
                 ownerBuild.omitted(), ownerBuild.omittedLoaderSources(),
@@ -314,8 +313,7 @@ final class PerfSampleAggregator {
 
         PerfReportData.Metric metric(TickSamples.TickableKey key,
                                      SampleMetricContext context) {
-            return stats.metric(key.metricMode(),
-                    context.withMeasurementTicks(measurementTicks(context.currentTick())));
+            return stats.metric(context, measurementTicks(context.currentTick()));
         }
 
         long measurementTicks(long ticks) {

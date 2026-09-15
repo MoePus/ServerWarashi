@@ -2,7 +2,6 @@ package com.moepus.serverwarashi.common.core.ticket;
 
 import com.moepus.serverwarashi.common.mixin.accessor.DistanceManagerAccessor;
 import com.moepus.serverwarashi.common.mixin.accessor.TickingTrackerAccessor;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.Ticket;
@@ -33,23 +32,6 @@ public final class TicketPauseBatch {
         }
         modifiedChunks.add(chunkPos);
         return true;
-    }
-
-    public void applyChunks(Iterable<Long> chunks, boolean paused, int reasonMask) {
-        Long2ObjectMap<SortedArraySet<Ticket<?>>> ticketMap = distanceManager.getTickets();
-        for (Long chunkPosObj : chunks) {
-            long chunkPos = chunkPosObj;
-            SortedArraySet<Ticket<?>> tickets = ticketMap.get(chunkPos);
-            if (tickets == null || tickets.isEmpty()) {
-                continue;
-            }
-            for (Ticket<?> ticket : tickets) {
-                if (TicketUtils.isSystemTicket(ticket)) {
-                    continue;
-                }
-                apply(ticket, chunkPos, paused, reasonMask);
-            }
-        }
     }
 
     public int flush() {

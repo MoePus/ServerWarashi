@@ -31,25 +31,18 @@ final class TickSamples {
     }
 
     void sample(PerfWorkTracker.Snapshot snapshot) {
-        sample(snapshot, SampleMetricMode.STATISTICAL,
-                PerfReportData.AttributionSource.TASK_CONTEXT,
-                PerfReportData.Confidence.HIGH);
-    }
-
-    void sample(PerfWorkTracker.Snapshot snapshot, SampleMetricMode metricMode) {
-        sample(snapshot, metricMode, PerfReportData.AttributionSource.TASK_CONTEXT,
+        sample(snapshot, PerfReportData.AttributionSource.TASK_CONTEXT,
                 PerfReportData.Confidence.HIGH);
     }
 
     void sample(PerfWorkTracker.Snapshot snapshot,
-                SampleMetricMode metricMode,
                 PerfReportData.AttributionSource source,
                 PerfReportData.Confidence confidence) {
         totalSamples++;
         if (snapshot == null) {
             return;
         }
-        TickableKey key = TickableKey.from(snapshot, metricMode, source, confidence);
+        TickableKey key = TickableKey.from(snapshot, source, confidence);
         TickCount count = tickables.get(key);
         if (count == null) {
             count = new TickCount();
@@ -91,8 +84,7 @@ final class TickSamples {
         if (samples <= 0) {
             return;
         }
-        TickableKey key = TickableKey.from(
-                snapshot, SampleMetricMode.STATISTICAL, source, confidence);
+        TickableKey key = TickableKey.from(snapshot, source, confidence);
         TickCount count = tickables.computeIfAbsent(key, ignored -> new TickCount());
         count.record(snapshot, samples);
     }
@@ -140,11 +132,9 @@ final class TickSamples {
                        long fixedPosition,
                        String eventLoop,
                        String displayName,
-                       SampleMetricMode metricMode,
                        PerfReportData.AttributionSource attributionSource,
                        PerfReportData.Confidence confidence) {
         static TickableKey from(PerfWorkTracker.Snapshot snapshot,
-                                SampleMetricMode metricMode,
                                 PerfReportData.AttributionSource source,
                                 PerfReportData.Confidence confidence) {
             String dimension = snapshot.dimension() == null ? "" : snapshot.dimension().toString();
@@ -156,7 +146,7 @@ final class TickSamples {
             return new TickableKey(snapshot.type(), dimension, snapshot.workClass(), snapshot.detailId(),
                     snapshot.detailKind(),
                     snapshot.entityId(), position, snapshot.eventLoop(), snapshot.displayName(),
-                    metricMode, source, confidence);
+                    source, confidence);
         }
 
         @Override
@@ -170,7 +160,6 @@ final class TickSamples {
             result = 31 * result + PackedPositionHash.hash(fixedPosition);
             result = 31 * result + Objects.hashCode(eventLoop);
             result = 31 * result + Objects.hashCode(displayName);
-            result = 31 * result + metricMode.hashCode();
             result = 31 * result + attributionSource.hashCode();
             return 31 * result + confidence.hashCode();
         }

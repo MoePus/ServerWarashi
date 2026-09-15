@@ -241,7 +241,7 @@ final class PerfObjectSnapshotBuilder {
 
         void add(PerfSampleAggregator.TickableAggregate aggregate) {
             count++;
-            double weight = aggregate.stats.sampleWeight();
+            double weight = aggregate.stats.totalWeight();
             if (weight > representativeWeight) {
                 representativeWeight = weight;
                 x = aggregate.x;

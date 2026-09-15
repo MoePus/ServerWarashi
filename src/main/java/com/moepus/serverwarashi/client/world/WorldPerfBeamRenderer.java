@@ -26,6 +26,7 @@ final class WorldPerfBeamRenderer {
     private static final double ORIGIN_GRID_SIZE = 4_096.0D;
     private static final int BEAM_EXTENSION = 1_024;
     private static final long WEAK_REFRESH_INTERVAL_TICKS = 5L;
+    private final Matrix4f modelView = new Matrix4f();
     private VertexBuffer buffer;
     private List<DangerousChunkModel.Chunk> bufferedChunks = List.of();
     private long reportRevision = Long.MIN_VALUE;
@@ -55,8 +56,10 @@ final class WorldPerfBeamRenderer {
                 (float) WorldOverlayMath.BEAM_FADE_END);
         shader.safeGetUniform("CameraOffset").set(
                 (float) (camera.x - originX), (float) (camera.z - originZ));
-        Matrix4f modelView = WorldPerfObjectRenderer.cameraRelativeMatrix(
-                event, originX, originZ);
+        modelView.set(event.getModelViewMatrix()).translate(
+                (float) (originX - camera.x),
+                (float) -camera.y,
+                (float) (originZ - camera.z));
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(false);

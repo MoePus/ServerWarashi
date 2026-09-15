@@ -113,8 +113,7 @@ final class HandlerDetailAccumulator {
     private List<Bucket> detailBuckets() {
         List<Bucket> result = new ArrayList<>(evidence.size() + 1);
         evidence.forEach((snapshot, count) -> result.add(new Bucket(
-                TickSamples.TickableKey.from(snapshot, SampleMetricMode.STATISTICAL,
-                        PerfReportData.AttributionSource.ASYNC_STACK,
+                TickSamples.TickableKey.from(snapshot, PerfReportData.AttributionSource.ASYNC_STACK,
                         PerfReportData.Confidence.MEDIUM), count)));
         if (genericEvidence > 0) {
             result.add(new Bucket(genericKey, genericEvidence));

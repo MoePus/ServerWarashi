@@ -23,10 +23,6 @@ public final class TicketUtils {
         return (PauseableTicket) (Object) ticket;
     }
 
-    public static boolean isSystemTicket(Ticket<?> ticket) {
-        return getOriginLevel(ticket) > MAX_PAUSEABLE_LEVEL || isSystemType(ticket.getType());
-    }
-
     public static boolean isChunkProtectionTicket(Ticket<?> ticket) {
         return isSystemType(ticket.getType());
     }

@@ -17,6 +17,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class PerfChunkEntityScanQueueTest {
     private static final WeakEntityType COW =
@@ -143,8 +144,12 @@ class PerfChunkEntityScanQueueTest {
     }
 
     private static PerfReportData report(long tickCount, List<PerfReportData.ChunkEntry> chunks) {
-        return new PerfReportData(7L, 1.0D, 1_000L, tickCount * 50L, tickCount, 100L, 1_000,
-                0, 0, 0, 0, chunks, List.of(), List.of(), List.of());
+        return reportBuilder()
+                .reportId(7L)
+                .serverTiming(1.0D, 1_000L, tickCount * 50L)
+                .sampleWindow(tickCount, 100L, 1_000)
+                .chunks(chunks)
+                .build();
     }
 
     private static PerfReportData.ChunkEntry chunk(

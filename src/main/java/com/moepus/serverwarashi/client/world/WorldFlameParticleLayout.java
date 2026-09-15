@@ -12,8 +12,6 @@ final class WorldFlameParticleLayout {
     static final int GLOW_PARTICLE_START = YELLOW_PARTICLE_START + YELLOW_PARTICLE_COUNT;
     static final int SPARK_PARTICLE_START = GLOW_PARTICLE_START + GLOW_PARTICLE_COUNT;
     static final int NORMAL_PARTICLE_COUNT = GLOW_PARTICLE_START;
-    static final int FIRE_PARTICLE_COUNT = SPARK_PARTICLE_START;
-    static final int PARTICLE_COUNT = FIRE_PARTICLE_COUNT + SPARK_PARTICLE_COUNT;
 
     static final int PHASE_BASE = 512;
     private static final int PHASE_MASK = PHASE_BASE - 1;

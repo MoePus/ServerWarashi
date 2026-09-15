@@ -55,7 +55,7 @@ ServerWarashi 是一款面向 Minecraft 1.21.1 NeoForge 服务端的诊断与治
 
 ## 低开销采样
 
-主计时由独立线程每约 1ms 读取一次 `PerfWorkTracker` 完成，不读取目标线程栈。tracker 使用预分配 slot 和 version 一致性校验；Entity、乘客 Entity、Block Entity、Chunk、Task 与通用 Handler 的服务线程发布路径不分配对象，也不执行 `nanoTime`。tick 内没有显式上下文时仍记录 `TASK / Unknown`，因此 JFR 不可用时主计时不会消失。
+主计时由独立线程每约 1ms 读取一次 `PerfWorkTracker` 完成，不读取目标线程栈。tracker 使用预分配 slot 和 version 一致性校验；Entity、乘客 Entity、Block Entity、Chunk 与通用 Handler 的服务线程发布路径不分配对象，也不执行 `nanoTime`。tick 内没有显式上下文时仍记录 `TASK / Unknown`，因此 JFR 不可用时主计时不会消失。
 
 HotSpot JFR 的 `ExecutionSample` / `NativeMethodSample` 只作为 10ms 低频明细来源，用于把已有的通用 Handler/Unknown 主样本按比例细分为具体监听器、Entity Dispatch、Block Entity Dispatch 和 Unknown 栈明细。JFR 事件按时间戳限流并归入保留约一秒的 closed tick；它们不增加主样本数或时间权重。拆分使用整数配额并严格守恒，证据不足时保留通用条目。
 

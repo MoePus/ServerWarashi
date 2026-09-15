@@ -12,6 +12,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.moepus.serverwarashi.testsupport.PerfReportFixtures.reportBuilder;
 
 class PerfReportDeliveryTest {
     @Test
@@ -137,8 +138,10 @@ class PerfReportDeliveryTest {
     }
 
     private static PerfReportData reportAtTick(long tickCount) {
-        return new PerfReportData(10.0D, 1_000L, 123_000L, tickCount, 10L, 1_000,
-                0, 0, 0, java.util.List.of(), java.util.List.of(), java.util.List.of());
+        return reportBuilder()
+                .serverTiming(10.0D, 1_000L, 123_000L)
+                .sampleWindow(tickCount, 10L, 1_000)
+                .build();
     }
 
     private static final class RecordingUpdateSender

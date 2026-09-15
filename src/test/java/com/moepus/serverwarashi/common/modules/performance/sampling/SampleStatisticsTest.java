@@ -9,21 +9,6 @@ class SampleStatisticsTest {
     private static final double ONE_MILLISECOND = 1_000_000.0D;
 
     @Test
-    void directIntervalUsesRawSingleTickMaximum() {
-        SampleStatistics statistics = new SampleStatistics();
-        statistics.record(1, FIRST_MEASURED_TICK);
-        statistics.record(4, FIRST_MEASURED_TICK + 1L);
-
-        var metric = statistics.metric(SampleMetricMode.DIRECT_INTERVAL,
-                new SampleMetricContext(FIRST_MEASURED_TICK + 1L, 2L,
-                        10_000_000.0D, 250_000.0D));
-
-        assertEquals(0.625D, metric.mspt(), 0.000_001D);
-        assertEquals(1.0D, metric.max(), 0.000_001D);
-        assertEquals(5L, metric.samples());
-    }
-
-    @Test
     void statisticalMaximumReusesSingleTickHalfSampleEstimate() {
         SampleStatistics statistics = new SampleStatistics();
         statistics.record(20, FIRST_MEASURED_TICK);

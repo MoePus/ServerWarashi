@@ -10,7 +10,6 @@ public final class ClientPerfStateCoordinator {
     }
 
     public static void applyFullReport(PerfReportData report, boolean profiling) {
-        ClientPerfReportState.update(report, profiling);
         ClientPerfMapState.update(PerfReportProjection.forMap(report), profiling);
     }
 
@@ -23,12 +22,10 @@ public final class ClientPerfStateCoordinator {
     }
 
     public static void applyLoaderControl(LoaderControlStatePayload payload) {
-        ClientPerfReportState.applyLoaderControl(payload);
         ClientPerfMapState.applyLoaderControl(payload);
     }
 
     public static void clearAll() {
-        ClientPerfReportState.clear();
         ClientPerfMapState.clear();
         ClientPerfWorldState.clear();
     }

@@ -1,11 +1,8 @@
 package com.moepus.serverwarashi.common.modules.performance.sampling;
 
-import com.moepus.serverwarashi.common.mixin.accessor.TickTaskAccessor;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -87,19 +84,6 @@ public final class PerfWorkTracker {
         return exit(TickType.BLOCK_ENTITY);
     }
 
-    public static boolean enterTask(BlockableEventLoop<?> eventLoop, Runnable task) {
-        return enterTask(eventLoop.name(), task);
-    }
-
-    public static boolean enterTask(String dispatcher, Runnable task) {
-        Slot slot = claimSlot();
-        if (slot != null) {
-            slot.publishTask(dispatcher, unwrap(task));
-            current = slot;
-        }
-        return true;
-    }
-
     public static boolean enterHandler() {
         Slot slot = claimSlot();
         if (slot != null) {
@@ -152,11 +136,6 @@ public final class PerfWorkTracker {
             return null;
         }
         return SLOTS[depth++];
-    }
-
-    private static Runnable unwrap(Runnable task) {
-        return task instanceof TickTask
-                ? ((TickTaskAccessor) task).serverWarashi$getRunnable() : task;
     }
 
     private static Slot[] createSlots() {
@@ -248,15 +227,6 @@ public final class PerfWorkTracker {
             setCommon(dimension, BuiltInRegistries.BLOCK.getKey(blockEntity.getBlockState().getBlock()),
                     TickDetailKind.BLOCK, -1);
             setPosition(pos.getX(), pos.getY(), pos.getZ(), false);
-            entityAgeTicks = -1;
-            finishPublish();
-        }
-
-        void publishTask(String eventLoop, Runnable task) {
-            beginPublish(TickType.TASK, task.getClass());
-            setCommon(null, null, TickDetailKind.NONE, -1);
-            clearPosition();
-            this.eventLoop = eventLoop;
             entityAgeTicks = -1;
             finishPublish();
         }
