@@ -16,6 +16,10 @@ public final class WorldPerfOverlayRenderer {
     }
 
     public static void render(RenderLevelStageEvent event) {
+        if (!ClientConfig.isLoaded()) {
+            close();
+            return;
+        }
         if (!ClientConfig.worldOverlayEnabled()) {
             close();
             return;

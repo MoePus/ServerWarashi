@@ -150,6 +150,9 @@ public final class ClientSetup {
     }
 
     private static void displayPerfReport(Minecraft minecraft, PerfReportData report) {
+        if (!ClientConfig.isLoaded()) {
+            return;
+        }
         switch (ClientConfig.perfOutputMode()) {
             case SCREEN -> minecraft.setScreen(new PerfReportScreen(report, false));
             case CHAT -> sendPerfReportToChat(minecraft, report);

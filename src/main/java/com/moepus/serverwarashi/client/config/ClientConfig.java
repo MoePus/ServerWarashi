@@ -24,6 +24,10 @@ public final class ClientConfig {
     private ClientConfig() {
     }
 
+    public static boolean isLoaded() {
+        return SPEC.isLoaded();
+    }
+
     public static OutputMode perfOutputMode() {
         return PERF_OUTPUT_MODE.get();
     }

@@ -22,6 +22,9 @@ public final class PerfMapSubscriptionClient {
     }
 
     public static boolean refreshWorldOverlayEnabled() {
+        if (!ClientConfig.isLoaded()) {
+            return false;
+        }
         return STATE.setWorldOverlayEnabled(ClientConfig.worldOverlayEnabled());
     }
 

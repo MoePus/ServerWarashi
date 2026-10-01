@@ -5,6 +5,7 @@ import com.moepus.serverwarashi.api.client.map.MapOverlayApi;
 import com.moepus.serverwarashi.api.client.map.MapOverlayControls;
 import com.moepus.serverwarashi.client.map.MapContextMenuService;
 import com.moepus.serverwarashi.client.map.MapOverlayRenderer;
+import com.moepus.serverwarashi.client.config.ClientConfig;
 import com.moepus.serverwarashi.client.network.PerfMapSubscriptionClient;
 import com.moepus.serverwarashi.client.state.ClientPerfMapState;
 import com.moepus.serverwarashi.client.state.ClientPerfStateCoordinator;
@@ -28,6 +29,9 @@ public final class MapOverlayClientEvents {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+        if (!ClientConfig.isLoaded()) {
+            return;
+        }
         PerfMapSubscriptionClient.refreshWorldOverlayEnabled();
         if (minecraft.level != null) {
             ClientWeakChunkState.tick();
