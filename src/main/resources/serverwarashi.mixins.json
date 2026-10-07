@@ -21,6 +21,7 @@
     "entityload.PersistentEntitySectionManagerMixin",
     "loaderfreeze.DistanceManagerForceTicksMixin",
     "loaderfreeze.DistanceManagerTicketInsertionMixin",
+    "loaderfreeze.DistanceManagerTicketRemovalMixin",
     "loaderfreeze.ForcedChunkManagerMixin",
     "loaderfreeze.ServerChunkCacheRegionTicketMixin",
     "runtime.MinecraftServerRuntimeMixin",

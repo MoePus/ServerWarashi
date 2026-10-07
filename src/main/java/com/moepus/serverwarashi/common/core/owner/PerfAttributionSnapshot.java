@@ -29,7 +29,7 @@ public final class PerfAttributionSnapshot {
             new Source("unknown", "Unknown", null), 0, 0);
     private final Map<ChunkKey, List<Bucket>> byChunk;
     private final Map<ChunkKey, List<Bucket>> loaderByChunk;
-    private final Map<BlockLoaderRef, List<LoaderTicketTarget>> loaderTargets;
+    private final LoaderTargetIndex loaderTargets;
     private final Map<BlockLoaderRef, LoaderControl> loaderControls;
     private final List<Bucket> buckets;
     private volatile LoaderPlan reportLoaderPlan;
@@ -41,7 +41,7 @@ public final class PerfAttributionSnapshot {
                                     Map<BlockLoaderRef, LoaderControl> loaderControls) {
         this.byChunk = Collections.unmodifiableMap(byChunk);
         this.loaderByChunk = Collections.unmodifiableMap(loaderByChunk);
-        this.loaderTargets = copyTargets(loaderTargets);
+        this.loaderTargets = new LoaderTargetIndex(loaderTargets);
         this.loaderControls = new ConcurrentHashMap<>(loaderControls);
         Map<SourceIdentity, Bucket> unique = new HashMap<>();
         byChunk.values().forEach(values -> values.forEach(
@@ -83,13 +83,6 @@ public final class PerfAttributionSnapshot {
     private static Map<ChunkKey, List<Bucket>> freezeExpanded(Map<ChunkKey, Set<Bucket>> expanded) {
         Map<ChunkKey, List<Bucket>> result = new HashMap<>();
         expanded.forEach((chunk, buckets) -> result.put(chunk, List.copyOf(buckets)));
-        return result;
-    }
-
-    private static Map<BlockLoaderRef, List<LoaderTicketTarget>> copyTargets(
-            Map<BlockLoaderRef, List<LoaderTicketTarget>> source) {
-        Map<BlockLoaderRef, List<LoaderTicketTarget>> result = new HashMap<>();
-        source.forEach((ref, targets) -> result.put(ref, new java.util.ArrayList<>(targets)));
         return result;
     }
 
@@ -150,7 +143,11 @@ public final class PerfAttributionSnapshot {
     }
 
     public synchronized List<LoaderTicketTarget> loaderTargets(BlockLoaderRef ref) {
-        return List.copyOf(loaderTargets.getOrDefault(ref, List.of()));
+        return loaderTargets.targets(ref);
+    }
+
+    public synchronized boolean removeLoaderTarget(Ticket<?> ticket) {
+        return loaderTargets.remove(ticket);
     }
 
     public Optional<LoaderControl> loaderControl(BlockLoaderRef ref) {
@@ -162,11 +159,9 @@ public final class PerfAttributionSnapshot {
     }
 
     public synchronized boolean appendLoaderTarget(BlockLoaderRef ref, LoaderTicketTarget target) {
-        List<LoaderTicketTarget> targets = loaderTargets.get(ref);
-        if (targets == null || targets.stream().anyMatch(existing -> existing.ticket() == target.ticket())) {
+        if (!loaderTargets.add(ref, target)) {
             return false;
         }
-        targets.add(target);
         LoaderControl control = loaderControls.get(ref);
         if (control != null && !TicketUtils.asPauseable(target.ticket()).serverWarashi$isPaused()) {
             LoaderControl updated = new LoaderControl(ref, control.manuallyFrozen, true);

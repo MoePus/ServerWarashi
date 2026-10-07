@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.Ticket;
 import net.minecraft.world.level.Level;
 
 import java.util.LinkedHashMap;
@@ -186,6 +187,13 @@ public final class TicketPerfRuntime {
         attribution.loaderControl(ref)
                 .map(control -> update(report.reportId(), control))
                 .ifPresent(LOADER_UPDATES::put);
+    }
+
+    public static void onLoaderTicketRemoved(Ticket<?> stored) {
+        PerfAttributionSnapshot attribution = CONTROLLER.currentAttribution();
+        if (attribution != null) {
+            attribution.removeLoaderTarget(stored);
+        }
     }
 
     public static List<LoaderControlUpdate> drainLoaderControlUpdates() {
