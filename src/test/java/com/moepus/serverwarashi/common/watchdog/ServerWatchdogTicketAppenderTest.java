@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class ServerWatchdogTicketAppenderTest {
     @Test
     void skipsDiagnosticsWhenServerConfigIsUnavailable() {
-        // No server config is loaded in this test, matching the unavailable state after shutdown.
+        // 测试中不加载服务端配置，模拟关服卸载后配置不可读取的状态。
         assertThrows(IllegalStateException.class, FeatureConfig::watchdogTicketReportEnabled);
         SharedConstants.tryDetectVersion();
         CrashReport report = new CrashReport("Watchdog during shutdown", new RuntimeException("Server hung"));

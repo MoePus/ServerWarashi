@@ -19,8 +19,9 @@ public final class ServerWatchdogTicketAppender {
 
     public static void appendTicketInfoToReport(CrashReport report, Iterable<ServerLevel> levels) {
         try {
-            // Server configs may already be unloaded when the watchdog fires during shutdown.
-            // Keep the config read inside the guard so diagnostics cannot prevent watchdog exit.
+            // 关服期间看门狗仍可能触发，此时服务端配置可能已经卸载。
+            // 即使先检查加载状态，配置仍可能在实际读取前被并发卸载。
+            // 将配置读取纳入异常保护，避免附加诊断阻断看门狗后续的保存和退出流程。
             if (!FeatureConfig.watchdogTicketReportEnabled()) {
                 return;
             }
