@@ -18,10 +18,12 @@ public final class ServerWatchdogTicketAppender {
     }
 
     public static void appendTicketInfoToReport(CrashReport report, Iterable<ServerLevel> levels) {
-        if (!FeatureConfig.watchdogTicketReportEnabled()) {
-            return;
-        }
         try {
+            // Server configs may already be unloaded when the watchdog fires during shutdown.
+            // Keep the config read inside the guard so diagnostics cannot prevent watchdog exit.
+            if (!FeatureConfig.watchdogTicketReportEnabled()) {
+                return;
+            }
             CrashReportCategory category = report.addCategory("ServerWarashi Ticket Info");
             List<WatchdogTicketFormatter.Dimension> dimensions = new ArrayList<>();
             for (var level : levels) {
