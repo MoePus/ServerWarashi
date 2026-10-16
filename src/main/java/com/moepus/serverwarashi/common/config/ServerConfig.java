@@ -44,7 +44,8 @@ public final class ServerConfig {
             .comment("Enable background scans for entity-dense weak-loaded chunks.")
             .define("weak_chunk_scan_enabled", true);
     static final ModConfigSpec.BooleanValue WATCHDOG_TICKET_REPORT_ENABLED = BUILDER
-            .comment("Append ServerWarashi ticket ownership diagnostics to watchdog crash reports.")
+            .comment("Append ServerWarashi ticket ownership diagnostics to watchdog crash reports.",
+                    "Captured at server startup; changes take effect on the next server start.")
             .define("watchdog_ticket_report_enabled", true);
 
     public static final ModConfigSpec SPEC = BUILDER.build();
