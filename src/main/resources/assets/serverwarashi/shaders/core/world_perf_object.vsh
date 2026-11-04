@@ -21,84 +21,87 @@ uniform int RenderPass;
 uniform int ParticleStart;
 uniform int SlotsPerMarker;
 uniform int MarkerBase;
-const int RED_PARTICLE_COUNT = 24;
-const int ORANGE_PARTICLE_COUNT = 20;
-const int YELLOW_PARTICLE_COUNT = 20;
-const int GLOW_PARTICLE_COUNT = 16;
-const int SPARK_PARTICLE_COUNT = 64;
-const int ORANGE_PARTICLE_START = RED_PARTICLE_COUNT;
-const int YELLOW_PARTICLE_START = ORANGE_PARTICLE_START + ORANGE_PARTICLE_COUNT;
-const int GLOW_PARTICLE_START = YELLOW_PARTICLE_START + YELLOW_PARTICLE_COUNT;
-const int SPARK_PARTICLE_START = GLOW_PARTICLE_START + GLOW_PARTICLE_COUNT;
-const int SPARK_LAYER = 4;
-const int LABEL_PASS = 3;
-const int SPARK_PASS = 4;
+// Particle layout. Keep in sync with WorldFlameParticleLayout.
+const int OUTER_PARTICLE_COUNT = 24;
+const int BODY_PARTICLE_COUNT = 20;
+const int CORE_PARTICLE_COUNT = 20;
+const int SPARK_PARTICLE_COUNT = 12;
+const int BODY_PARTICLE_START = OUTER_PARTICLE_COUNT;
+const int CORE_PARTICLE_START = BODY_PARTICLE_START + BODY_PARTICLE_COUNT;
+const int SPARK_PARTICLE_START = CORE_PARTICLE_START + CORE_PARTICLE_COUNT;
+const int OUTER_LAYER = 0;
+const int BODY_LAYER = 1;
+const int CORE_LAYER = 2;
+const int SPARK_LAYER = 3;
+const int FLAME_PASS = 0;
+const int SPARK_PASS = 1;
+const int LABEL_PASS = 2;
 const int MARKER_TEXELS = 4;
-// Flame shape tuning. Higher severity widens the full tapered envelope.
-const float GREEN_BASE_WIDTH = 1.5;
-const float GREEN_TIP_WIDTH = 0.8;
-const float PURPLE_BASE_WIDTH = 2.4;
-const float PURPLE_TIP_WIDTH = 1.0;
-const float WIDTH_TAPER_START = 0.0;
-const float WIDTH_TAPER_END = 0.88;
-// Distance LOD tuning. Particle density drops after 16 blocks and settles at 32.
+const float TAU = 6.28318530;
+// Every emission cycle divides this period so particles stay continuous when the
+// Java clock wraps ParticleTime and advances ParticleEpoch.
+const float PARTICLE_CLOCK_PERIOD = 7.0;
+const int OUTER_CYCLES_PER_PERIOD = 7;
+const int BODY_CYCLES_PER_PERIOD = 10;
+const int CORE_CYCLES_PER_PERIOD = 14;
+const int SPARK_MIN_CYCLES_PER_PERIOD = 3;
+const int SPARK_CYCLE_VARIANTS = 3;
+// The flame is drawn on its own pixel grid: size in flame pixels, plus the world size of
+// one flame pixel (0.0625 = one block texel). Higher severity grows both.
+const vec2 FLAME_PIXELS_TALL = vec2(12.0, 30.0);
+const vec2 FLAME_PIXELS_WIDE = vec2(8.0, 16.0);
+const vec2 PIXEL_WORLD_SIZE = vec2(0.0625, 0.105);
+// 1 snaps every square onto the flame pixel grid; 0 lets squares float freely.
+const float PIXEL_SNAP = 1.0;
+// Buoyancy: y = rise * (k*s + (1-k)*s^2), so the gas accelerates as it climbs.
+const float RISE_LINEAR = 0.65;
+// Entrainment pulls the flame toward its axis as it rises.
+const float NECKING = 0.45;
+// Shared centerline wave travelling up the flame, in cycles per clock period.
+const int WAVE_CYCLES = 9;
+const int WAVE_CYCLES_SECONDARY = 16;
+const float WAVE_TRAVEL = 2.4;
+const float WAVE_AMPLITUDE = 0.16;
+// Puffing: particles born on a strong pulse rise higher and detach as tongues.
+const int PUFF_CYCLES = 11;
+const float PUFF_AMOUNT = 0.20;
+// Squares shrink over their life in whole pixels, from their start size down to 1.
+const float SHRINK_EXPONENT = 2.2;
+// Soot below this temperature stops glowing, so the particle disappears.
+const float BURNOUT_TEMPERATURE = 0.20;
+// Hot bands lag in blue so every severity hue heats through yellow-white.
+const vec3 HOT_BIAS = vec3(1.0, 1.0, 0.6);
+// Distance LOD. Particle density drops after 16 blocks and settles at 32.
 const float PARTICLE_LOD_START = 16.0;
 const float PARTICLE_LOD_END = 32.0;
 const float SPARK_FADE_START = 20.0;
 const float SPARK_FADE_END = 24.0;
-const float SMOKE_FADE_START = 24.0;
-const float SMOKE_FADE_END = 32.0;
-const float MIN_RED_COUNT = 16.0;
-const float MIN_ORANGE_COUNT = 14.0;
-const float MIN_YELLOW_COUNT = 14.0;
-const float MIN_GLOW_COUNT = 10.0;
-const float MIN_SPARK_COUNT = 10.0;
-const float FAR_RED_COUNT = 4.0;
-const float FAR_ORANGE_COUNT = 3.0;
-const float FAR_YELLOW_COUNT = 3.0;
-const float FAR_GLOW_COUNT = 1.0;
-const vec2 SPARK_COUNT_RAMP = vec2(3.50, 5.0);
-// Spark motion tuning. Sparks deliberately do not use the flame width envelope.
-const vec2 SPARK_ASPECT = vec2(1.0, 1.0);
-const vec2 SPARK_SIZE_RANGE = vec2(0.040, 0.055);
-const vec2 SPARK_EMITTER_HALF_WIDTH_RANGE = vec2(0.10, 0.32);
-const vec2 SPARK_PLUME_SPREAD_RANGE = vec2(0.10, 0.48);
-const float SPARK_SPREAD_LIFE_EXPONENT = 1.15;
-const vec2 SPARK_RISE_RANGE = vec2(1.40, 5.20);
-const float SPARK_RISE_DECELERATION = 0.12;
-const float SPARK_CYCLE = 1.40;
-const float SPARK_LIFETIME = 0.90;
-const int SPARK_BURST_COUNT = 4;
-const int SPARKS_PER_BURST = 16;
-const float SPARK_BURST_JITTER = 0.04;
-const int SPARK_CYCLES_PER_PERIOD = 5;
-const float PARTICLE_CLOCK_PERIOD = 7.0;
-const float DEFAULT_PARTICLE_CYCLE = 1.0;
-const float ORANGE_PARTICLE_CYCLE = 0.70;
-const float FAST_PARTICLE_SPEED = 2.0;
-const int RED_CYCLES_PER_PERIOD = 7;
-const int ORANGE_CYCLES_PER_PERIOD = 10;
-const int FAST_CYCLES_PER_PERIOD = 14;
-const vec2 SPARK_PLUME_TEMPORAL_HARMONICS = vec2(1.0, 3.0);
-const vec2 SPARK_PLUME_VERTICAL_PHASE = vec2(2.30, -4.10);
-const vec2 SPARK_PLUME_WEIGHTS = vec2(0.75, 0.25);
-const vec2 SPARK_PLUME_DRIFT_RANGE = vec2(0.06, 0.22);
-const float SPARK_PLUME_LIFE_EXPONENT = 1.25;
-const float SPARK_INDIVIDUAL_DRIFT = 0.035;
-const vec2 PARTICLE_ASPECT = vec2(0.80, 1.12);
-const float GLOW_QUAD_SCALE = 2.40;
-const float GLOW_BODY_RADIUS = 0.44;
+const float MIN_OUTER_COUNT = 16.0;
+const float MIN_BODY_COUNT = 14.0;
+const float MIN_CORE_COUNT = 14.0;
+const float MIN_SPARK_COUNT = 3.0;
+const float FAR_OUTER_COUNT = 4.0;
+const float FAR_BODY_COUNT = 3.0;
+const float FAR_CORE_COUNT = 3.0;
+// Sparks are lofted by the plume, slowed by drag, then drift and twinkle out.
+const vec2 SPARK_DURATION = vec2(0.9, 1.6);
+const vec2 SPARK_SPAWN_HEIGHT = vec2(0.25, 0.60);
+const vec2 SPARK_LAUNCH_SPEED = vec2(1.3, 2.2);
+const float SPARK_DRIFT_SPEED = 0.30;
+const float SPARK_DRAG_TIME = 0.45;
+const float SPARK_LATERAL_SPEED = 0.30;
+const float SPARK_WOBBLE = 0.05;
+const float SPARK_POP_LIFE = 0.08;
+const float SPARK_TWINKLE_START = 0.60;
+const float SPARK_TWINKLE_RATE = 14.0;
+const float SPARK_TWINKLE_OFF = 0.40;
 const float LABEL_GLYPH_ASPECT = 0.75;
 out vec2 localCoord;
 out vec4 vertexColor;
 flat out int primitiveKind;
 flat out int labelValue;
 flat out int labelChars;
-flat out float flameStrength;
-flat out float particleRandom;
-flat out int particleLayer;
-flat out float particleOpacity;
-flat out float particleLife;
+flat out float particlePixels;
 struct FlameMarker {
     vec3 position;
     vec3 previousPosition;
@@ -108,6 +111,11 @@ struct FlameMarker {
     int labelLow;
     int labelHigh;
     float labelStrength;
+};
+struct Particle {
+    vec2 center;
+    float pixels;
+    vec4 color;
 };
 FlameMarker markerAt(int markerIndex) {
     int base = markerIndex * MARKER_TEXELS;
@@ -136,28 +144,17 @@ float smoothRange(float start, float end, float value) {
 float severity(float strength) {
     return smoothRange(1.0, 5.0, strength);
 }
-float flameWidthEnvelope(float life, float strength) {
-    float level = severity(strength);
-    float baseWidth = mix(GREEN_BASE_WIDTH, PURPLE_BASE_WIDTH, level);
-    float tipWidth = mix(GREEN_TIP_WIDTH, PURPLE_TIP_WIDTH, level);
-    float heightAmount = smoothRange(WIDTH_TAPER_START, WIDTH_TAPER_END, life);
-    return mix(baseWidth, tipWidth, heightAmount);
+float flamePixelsTall(float strength) {
+    return mix(FLAME_PIXELS_TALL.x, FLAME_PIXELS_TALL.y, severity(strength));
 }
-float lateralSway(float life, float randomValue, float strength) {
-    const float PI = 3.14159265;
-    const float TAU = 6.28318530;
-    float phase = life * TAU + randomValue * PI;
-    float amplitude = mix(0.025, 0.10, severity(strength)) * life;
-    return sin(phase) * amplitude;
+float flamePixelsWide(float strength) {
+    return mix(FLAME_PIXELS_WIDE.x, FLAME_PIXELS_WIDE.y, severity(strength));
 }
-float particleScale(float strength) {
-    return mix(0.42, 1.15, severity(strength));
-}
-float riseDistance(float strength) {
-    return mix(0.48, 3.0, pow(severity(strength), 0.82));
+float pixelWorldSize(float strength) {
+    return mix(PIXEL_WORLD_SIZE.x, PIXEL_WORLD_SIZE.y, severity(strength));
 }
 float flameHeight(float strength) {
-    return riseDistance(strength) + particleScale(strength) * 0.5;
+    return flamePixelsTall(strength) * pixelWorldSize(strength);
 }
 float flameViewportScale(vec4 viewPosition, float height) {
     vec4 clipPosition = ProjMat * viewPosition;
@@ -166,52 +163,43 @@ float flameViewportScale(vec4 viewPosition, float height) {
     return min(1.0, maximumHeight / projectedHeight);
 }
 int layerForParticle(int particleIndex) {
-    if (particleIndex < ORANGE_PARTICLE_START) return 0;
-    if (particleIndex < YELLOW_PARTICLE_START) return 1;
-    if (particleIndex < GLOW_PARTICLE_START) return 2;
-    if (particleIndex < SPARK_PARTICLE_START) return 3;
+    if (particleIndex < BODY_PARTICLE_START) return OUTER_LAYER;
+    if (particleIndex < CORE_PARTICLE_START) return BODY_LAYER;
+    if (particleIndex < SPARK_PARTICLE_START) return CORE_LAYER;
     return SPARK_LAYER;
 }
 int layerStart(int layer) {
-    if (layer == 0) return 0;
-    if (layer == 1) return ORANGE_PARTICLE_START;
-    if (layer == 2) return YELLOW_PARTICLE_START;
-    if (layer == 3) return GLOW_PARTICLE_START;
+    if (layer == OUTER_LAYER) return 0;
+    if (layer == BODY_LAYER) return BODY_PARTICLE_START;
+    if (layer == CORE_LAYER) return CORE_PARTICLE_START;
     return SPARK_PARTICLE_START;
 }
 int layerCapacity(int layer) {
-    if (layer == 0) return RED_PARTICLE_COUNT;
-    if (layer == 1) return ORANGE_PARTICLE_COUNT;
-    if (layer == 2) return YELLOW_PARTICLE_COUNT;
-    if (layer == 3) return GLOW_PARTICLE_COUNT;
+    if (layer == OUTER_LAYER) return OUTER_PARTICLE_COUNT;
+    if (layer == BODY_LAYER) return BODY_PARTICLE_COUNT;
+    if (layer == CORE_LAYER) return CORE_PARTICLE_COUNT;
     return SPARK_PARTICLE_COUNT;
 }
 float minimumParticles(int layer) {
-    if (layer == 0) return MIN_RED_COUNT;
-    if (layer == 1) return MIN_ORANGE_COUNT;
-    if (layer == 2) return MIN_YELLOW_COUNT;
-    if (layer == 3) return MIN_GLOW_COUNT;
+    if (layer == OUTER_LAYER) return MIN_OUTER_COUNT;
+    if (layer == BODY_LAYER) return MIN_BODY_COUNT;
+    if (layer == CORE_LAYER) return MIN_CORE_COUNT;
     return MIN_SPARK_COUNT;
 }
 float farParticles(int layer) {
-    if (layer == 0) return FAR_RED_COUNT;
-    if (layer == 1) return FAR_ORANGE_COUNT;
-    if (layer == 2) return FAR_YELLOW_COUNT;
-    return FAR_GLOW_COUNT;
+    if (layer == OUTER_LAYER) return FAR_OUTER_COUNT;
+    if (layer == BODY_LAYER) return FAR_BODY_COUNT;
+    return FAR_CORE_COUNT;
 }
 int visibleParticles(int layer, float strength, float distanceToCamera) {
-    float countAmount = layer == SPARK_LAYER ? smoothRange(
-            SPARK_COUNT_RAMP.x, SPARK_COUNT_RAMP.y, strength)
-            : severity(strength);
-    float nearCount = mix(minimumParticles(layer), float(layerCapacity(layer)), countAmount);
+    float nearCount = mix(minimumParticles(layer), float(layerCapacity(layer)),
+            severity(strength));
     if (layer == SPARK_LAYER) {
-        float sparkLod = smoothRange(PARTICLE_LOD_START, SPARK_FADE_END,
+        float sparkRemaining = 1.0 - smoothRange(PARTICLE_LOD_START, SPARK_FADE_END,
                 distanceToCamera);
-        float sparkRemaining = 1.0 - sparkLod;
         return int(floor(nearCount * sparkRemaining * sparkRemaining + 0.5));
     }
-    float lodAmount = smoothRange(PARTICLE_LOD_START, PARTICLE_LOD_END,
-            distanceToCamera);
+    float lodAmount = smoothRange(PARTICLE_LOD_START, PARTICLE_LOD_END, distanceToCamera);
     float fastLod = 1.0 - (1.0 - lodAmount) * (1.0 - lodAmount);
     return int(floor(mix(nearCount, farParticles(layer), fastLod) + 0.5));
 }
@@ -222,7 +210,7 @@ bool selectedSlot(int slot, int count, int capacity) {
 }
 bool selectedParticleSlot(int layer, int slot, int count) {
     int capacity = layerCapacity(layer);
-    if (layer != 2) return selectedSlot(slot, count, capacity);
+    if (layer != CORE_LAYER) return selectedSlot(slot, count, capacity);
     if (slot == 0) return count > 0;
     return count > 1 && selectedSlot(slot - 1, count - 1, capacity - 1);
 }
@@ -234,67 +222,185 @@ uint hashParticleSeed(uint value) {
     value ^= value >> 16;
     return value;
 }
-float signedHash(uint seed) {
-    uint randomBits = hashParticleSeed(seed) & 0x00FFFFFFu;
-    return float(randomBits) / 8388607.5 - 1.0;
+float random01(uint seed, uint salt) {
+    uint bits = hashParticleSeed(seed ^ (salt * 0x27D4EB2Fu)) & 0x00FFFFFFu;
+    return float(bits) / 16777215.0;
 }
-float randomSigned(int phaseWord, int particleIndex, int generation) {
-    uint seed = uint(phaseWord);
+uint particleSeed(int phaseWord, int particleIndex, int generation) {
+    uint seed = uint(phaseWord) * 0x632BE5ABu;
     seed ^= uint(particleIndex) * 0x9E3779B9u;
     seed ^= uint(generation) * 0x85EBCA6Bu;
-    return signedHash(seed);
+    return hashParticleSeed(seed);
 }
-float sparkPlumeCenter(float life, int phaseWord) {
-    const float TAU = 6.28318530;
-    float clockPhase = ParticleTime / PARTICLE_CLOCK_PERIOD * TAU;
-    float markerPhase = float(phaseWord) / float(ParticlePhaseBase) * TAU;
-    vec2 flowPhase = clockPhase * SPARK_PLUME_TEMPORAL_HARMONICS
-            + vec2(markerPhase, markerPhase * -1.73)
-            + life * SPARK_PLUME_VERTICAL_PHASE;
-    float lifeRamp = pow(clamp(life, 0.0, 1.0), SPARK_PLUME_LIFE_EXPONENT);
-    return dot(sin(flowPhase), SPARK_PLUME_WEIGHTS) * lifeRamp;
+// Each slot owns a repeating emission window. Within it the particle is born after a
+// random delay and lives a random duration, so emission never looks metronomic.
+bool emitParticle(int cyclesPerPeriod, float offset, int phaseWord, int particleIndex,
+        vec2 durationSeconds, out float life, out float age, out float birth,
+        out uint seed) {
+    float cycle = PARTICLE_CLOCK_PERIOD / float(cyclesPerPeriod);
+    float clock = ParticleTime + offset * cycle;
+    float window = floor(clock / cycle);
+    int generation = int(window) + ParticleEpoch * cyclesPerPeriod;
+    seed = particleSeed(phaseWord, particleIndex, generation);
+    float duration = min(mix(durationSeconds.x, durationSeconds.y, random01(seed, 11u)),
+            cycle);
+    float delay = (cycle - duration) * random01(seed, 12u);
+    age = clock - window * cycle - delay;
+    life = age / duration;
+    birth = ParticleTime - age;
+    return age >= 0.0 && age < duration;
 }
-float sparkIndividualDrift(float life, float randomValue) {
-    const float TAU = 6.28318530;
-    return sin(life * 3.14159265 + randomValue * TAU)
-            * life * SPARK_INDIVIDUAL_DRIFT;
+float markerPhase(int phaseWord) {
+    return float(phaseWord) / float(ParticlePhaseBase);
 }
-float sparkSlotOffset(int slot, int phaseWord) {
-    int burst = slot / SPARKS_PER_BURST;
-    float burstOffset = float(burst) * SPARK_CYCLE / float(SPARK_BURST_COUNT);
-    uint seed = uint(phaseWord) ^ uint(slot) * 0x27D4EB2Fu;
-    return burstOffset + signedHash(seed) * SPARK_BURST_JITTER;
+float clockAngle(int cycles, float time) {
+    return time / PARTICLE_CLOCK_PERIOD * float(cycles) * TAU;
 }
-int cyclesPerParticlePeriod(int layer) {
-    if (layer == 1) return ORANGE_CYCLES_PER_PERIOD;
-    if (layer == 2 || layer == 3) return FAST_CYCLES_PER_PERIOD;
-    if (layer == SPARK_LAYER) return SPARK_CYCLES_PER_PERIOD;
-    return RED_CYCLES_PER_PERIOD;
+// Lateral offset of the flame axis at a height (0 = base, 1 = tip), in flame widths.
+float flameWave(float height, int phaseWord) {
+    float phase = markerPhase(phaseWord) * TAU;
+    float primary = sin(clockAngle(WAVE_CYCLES, ParticleTime) - height * WAVE_TRAVEL + phase);
+    float secondary = sin(clockAngle(WAVE_CYCLES_SECONDARY, ParticleTime)
+            - height * WAVE_TRAVEL * 1.7 + phase * 2.3);
+    float growth = pow(clamp(height, 0.0, 1.4), 1.3);
+    return (primary * 0.7 + secondary * 0.3) * growth * WAVE_AMPLITUDE;
 }
-bool particleState(int layer, int slot, int phaseWord,
-        out float life, out float elapsed, out int generation) {
-    float simulationSpeed = layer == 2 || layer == 3 ? FAST_PARTICLE_SPEED : 1.0;
-    float cycle = layer == 1 ? ORANGE_PARTICLE_CYCLE
-            : (layer == SPARK_LAYER ? SPARK_CYCLE : DEFAULT_PARTICLE_CYCLE);
-    float lifetime = layer == 1 ? 0.62
-            : (layer == SPARK_LAYER ? SPARK_LIFETIME : 1.0);
-    float phase = float(phaseWord) / float(ParticlePhaseBase);
-    float emitterOffset = fract(phase + float(layer) * 0.319) * cycle;
-    float slotInterval = cycle / float(layerCapacity(layer));
-    float slotOffset = layer == SPARK_LAYER
-            ? sparkSlotOffset(slot, phaseWord) : float(slot) * slotInterval;
-    float clock = ParticleTime * simulationSpeed + emitterOffset
-            - slotOffset;
-    float generationValue = floor(clock / cycle);
-    elapsed = clock - generationValue * cycle;
-    life = elapsed / lifetime;
-    generation = int(generationValue)
-            + ParticleEpoch * cyclesPerParticlePeriod(layer);
-    return elapsed < lifetime;
+vec3 heatColor(vec3 base, float exposure) {
+    vec3 bias = exposure > 1.0 ? HOT_BIAS : vec3(1.0);
+    return min(pow(base, vec3(1.4)) * exposure * bias, vec3(1.0));
+}
+// Five flat heat bands. Overexposing the severity tint pushes it through yellow toward
+// white like a hot flame; cooler bands shift toward red like cooling soot.
+vec3 flamePalette(vec3 base, float temperature) {
+    if (temperature >= 0.86) return mix(heatColor(base, 6.0), vec3(1.0), 0.55);
+    if (temperature >= 0.70) return heatColor(base, 2.6);
+    if (temperature >= 0.52) return heatColor(base, 1.6);
+    if (temperature >= 0.36) return heatColor(base, 1.0) * vec3(1.0, 0.92, 0.90);
+    return heatColor(base, 0.70) * vec3(1.0, 0.72, 0.62);
+}
+int layerCyclesPerPeriod(int layer) {
+    if (layer == OUTER_LAYER) return OUTER_CYCLES_PER_PERIOD;
+    if (layer == BODY_LAYER) return BODY_CYCLES_PER_PERIOD;
+    return CORE_CYCLES_PER_PERIOD;
+}
+float layerSpawnWidth(int layer) {
+    if (layer == OUTER_LAYER) return 0.30;
+    if (layer == BODY_LAYER) return 0.22;
+    return 0.14;
+}
+vec2 layerRise(int layer) {
+    if (layer == OUTER_LAYER) return vec2(0.80, 1.05);
+    if (layer == BODY_LAYER) return vec2(0.60, 0.90);
+    return vec2(0.25, 0.45);
+}
+float layerSize(int layer) {
+    if (layer == OUTER_LAYER) return 0.46;
+    if (layer == BODY_LAYER) return 0.40;
+    return 0.32;
+}
+float layerHeat(int layer) {
+    if (layer == OUTER_LAYER) return 0.56;
+    if (layer == BODY_LAYER) return 0.76;
+    return 0.89;
+}
+float layerCooling(int layer) {
+    if (layer == OUTER_LAYER) return 0.42;
+    if (layer == BODY_LAYER) return 0.46;
+    return 0.30;
+}
+bool flameParticle(int layer, int slot, FlameMarker marker, float strength,
+        float distanceToCamera, out Particle particle) {
+    if (!selectedParticleSlot(layer, slot,
+            visibleParticles(layer, strength, distanceToCamera))) {
+        return false;
+    }
+    float tall = flamePixelsTall(strength);
+    float wide = flamePixelsWide(strength);
+    if (layer == CORE_LAYER && slot == 0) {
+        // Anchored ember bed: a steady hot block resting on the base.
+        float pixels = max(1.0, floor(wide * 0.30 + 0.5));
+        particle = Particle(vec2(0.0, pixels * 0.5), pixels,
+                vec4(flamePalette(marker.color, 0.80), 1.0));
+        return true;
+    }
+    float offset = fract(markerPhase(marker.phaseWord) + float(layer) * 0.319
+            + float(slot) / float(layerCapacity(layer)));
+    int cycles = layerCyclesPerPeriod(layer);
+    float cycle = PARTICLE_CLOCK_PERIOD / float(cycles);
+    float life;
+    float age;
+    float birth;
+    uint seed;
+    if (!emitParticle(cycles, offset, marker.phaseWord, layerStart(layer) + slot,
+            vec2(0.75, 1.0) * cycle, life, age, birth, seed)) {
+        return false;
+    }
+    float temperature = layerHeat(layer) + (random01(seed, 5u) - 0.5) * 0.12
+            - layerCooling(layer) * life;
+    if (temperature < BURNOUT_TEMPERATURE) {
+        return false;
+    }
+    float spread = (random01(seed, 1u) + random01(seed, 2u) - 1.0)
+            * wide * layerSpawnWidth(layer);
+    float puff = 1.0 + PUFF_AMOUNT * sin(clockAngle(PUFF_CYCLES, birth)
+            + markerPhase(marker.phaseWord) * TAU);
+    vec2 riseRange = layerRise(layer);
+    float rise = tall * mix(riseRange.x, riseRange.y, random01(seed, 3u)) * puff;
+    float y = rise * life * (RISE_LINEAR + (1.0 - RISE_LINEAR) * life);
+    float startPixels = wide * layerSize(layer) * mix(0.85, 1.15, random01(seed, 4u));
+    float pixels = max(1.0, floor(mix(startPixels, 1.0, pow(life, SHRINK_EXPONENT)) + 0.5));
+    float x = spread * (1.0 - NECKING * life) + wide * flameWave(y / tall, marker.phaseWord);
+    particle = Particle(vec2(x, y + pixels * 0.5), pixels,
+            vec4(flamePalette(marker.color, temperature), 1.0));
+    return true;
+}
+bool sparkParticle(int slot, FlameMarker marker, float strength, float distanceToCamera,
+        out Particle particle) {
+    if (!selectedSlot(slot, visibleParticles(SPARK_LAYER, strength, distanceToCamera),
+            SPARK_PARTICLE_COUNT)) {
+        return false;
+    }
+    float tall = flamePixelsTall(strength);
+    float wide = flamePixelsWide(strength);
+    // Each spark slot gets its own cadence so sparks never leave in synchronized bursts.
+    uint slotSeed = hashParticleSeed(uint(marker.phaseWord) * 0x632BE5ABu
+            ^ uint(slot) * 0x27D4EB2Fu);
+    int cycles = SPARK_MIN_CYCLES_PER_PERIOD
+            + int(slotSeed % uint(SPARK_CYCLE_VARIANTS));
+    float life;
+    float age;
+    float birth;
+    uint seed;
+    if (!emitParticle(cycles, random01(slotSeed, 7u), marker.phaseWord,
+            SPARK_PARTICLE_START + slot, SPARK_DURATION, life, age, birth, seed)) {
+        return false;
+    }
+    if (life > SPARK_TWINKLE_START
+            && random01(seed, uint(floor(age * SPARK_TWINKLE_RATE)) + 32u) < SPARK_TWINKLE_OFF) {
+        return false;
+    }
+    float drag = SPARK_DRAG_TIME * (1.0 - exp(-age / SPARK_DRAG_TIME));
+    float launch = mix(SPARK_LAUNCH_SPEED.x, SPARK_LAUNCH_SPEED.y, random01(seed, 3u)) * tall;
+    float drift = SPARK_DRIFT_SPEED * tall;
+    float y = tall * mix(SPARK_SPAWN_HEIGHT.x, SPARK_SPAWN_HEIGHT.y, random01(seed, 2u))
+            + drift * age + (launch - drift) * drag;
+    float x = (random01(seed, 1u) * 2.0 - 1.0) * wide * 0.22
+            + (random01(seed, 4u) * 2.0 - 1.0) * SPARK_LATERAL_SPEED * tall * drag
+            + sin(TAU * 1.3 * age + random01(seed, 5u) * TAU) * SPARK_WOBBLE * tall * age;
+    float pixels = life < SPARK_POP_LIFE && random01(seed, 6u) > 0.5 ? 2.0 : 1.0;
+    float temperature = 0.95 - 0.45 * life;
+    float alpha = 1.0 - smoothRange(SPARK_FADE_START, SPARK_FADE_END, distanceToCamera);
+    particle = Particle(vec2(x, y), pixels,
+            vec4(flamePalette(marker.color, temperature), alpha));
+    return true;
 }
 void hidePrimitive() {
-    particleOpacity = 0.0;
+    vertexColor = vec4(0.0);
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+}
+vec2 snapToPixelGrid(vec2 center, float pixels) {
+    vec2 corner = floor(center - pixels * 0.5 + 0.5);
+    return mix(center, corner + pixels * 0.5, PIXEL_SNAP);
 }
 void renderLabelVertex(vec4 viewPosition, float distanceToCamera, FlameMarker marker) {
     float labelStrength = marker.labelStrength * MaxFlameStrength;
@@ -318,89 +424,29 @@ void renderLabelVertex(vec4 viewPosition, float distanceToCamera, FlameMarker ma
     clipPosition.xy += pixelOffset * 2.0 / ScreenSize * clipPosition.w;
     gl_Position = clipPosition;
 }
-vec2 sparkOffset(float elapsed, vec2 randomValues, int phaseWord) {
-    float amount = severity(flameStrength);
-    float life = elapsed / SPARK_LIFETIME;
-    float plumeDrift = sparkPlumeCenter(life, phaseWord)
-            * mix(SPARK_PLUME_DRIFT_RANGE.x, SPARK_PLUME_DRIFT_RANGE.y, amount);
-    float emitterWidth = mix(SPARK_EMITTER_HALF_WIDTH_RANGE.x, SPARK_EMITTER_HALF_WIDTH_RANGE.y, amount);
-    float spread = randomValues.y * mix(SPARK_PLUME_SPREAD_RANGE.x,
-            SPARK_PLUME_SPREAD_RANGE.y, amount)
-            * pow(life, SPARK_SPREAD_LIFE_EXPONENT);
-    float x = randomValues.x * emitterWidth + spread + plumeDrift + sparkIndividualDrift(life, randomValues.y);
-    float riseScale = 1.0 - SPARK_RISE_DECELERATION * life;
-    float y = elapsed * mix(SPARK_RISE_RANGE.x, SPARK_RISE_RANGE.y, amount) * riseScale;
-    return vec2(x, y);
-}
-void renderParticleVertex(vec4 viewPosition, float distanceToCamera, int particleIndex, int phaseWord) {
-    particleLayer = layerForParticle(particleIndex);
-    bool smokePass = RenderPass == 2;
-    bool spark = particleLayer == SPARK_LAYER;
-    bool anchoredCore = particleLayer == 2
-            && particleIndex == YELLOW_PARTICLE_START;
-    int expectedPass = particleLayer == 3 ? 1 : (spark ? SPARK_PASS : 0);
-    int slot = particleIndex - layerStart(particleLayer);
-    int count = visibleParticles(particleLayer, flameStrength, distanceToCamera);
-    if ((smokePass && (particleLayer != 1 || distanceToCamera >= SMOKE_FADE_END))
-            || (!smokePass && RenderPass != expectedPass)
-            || !selectedParticleSlot(particleLayer, slot, count)) {
-        hidePrimitive();
-        return;
+void renderParticleVertex(vec4 viewPosition, float distanceToCamera, int particleIndex,
+        FlameMarker marker, float strength) {
+    int layer = layerForParticle(particleIndex);
+    int slot = particleIndex - layerStart(layer);
+    Particle particle;
+    bool alive = false;
+    if (RenderPass == SPARK_PASS) {
+        alive = layer == SPARK_LAYER
+                && sparkParticle(slot, marker, strength, distanceToCamera, particle);
+    } else if (RenderPass == FLAME_PASS) {
+        alive = layer != SPARK_LAYER
+                && flameParticle(layer, slot, marker, strength, distanceToCamera, particle);
     }
-    float elapsed;
-    int generation;
-    bool alive = particleState(particleLayer, slot, phaseWord,
-            particleLife, elapsed, generation);
     if (!alive) {
         hidePrimitive();
         return;
     }
-    if (anchoredCore) {
-        particleLife = 0.25;
-        generation = 0;
-    }
-    particleRandom = randomSigned(phaseWord, particleIndex, generation);
-    float scale = particleScale(flameStrength);
-    float size = spark ? mix(SPARK_SIZE_RANGE.x, SPARK_SIZE_RANGE.y, severity(flameStrength))
-            : (particleLayer == 0 ? 0.86
-            : (particleLayer == 1 ? 0.68
-            : (particleLayer == 2 ? 0.42 : 0.32))) * scale;
-    float smokeExpansion = mix(1.0, 1.24,
-            smoothRange(0.42, 1.0, particleLife));
-    float quadScale = particleLayer == 3 ? GLOW_QUAD_SCALE
-            : (smokePass ? smokeExpansion : 1.0);
-    float viewportScale = flameViewportScale(viewPosition, flameHeight(flameStrength));
-    float widthEnvelope = spark ? 1.0
-            : flameWidthEnvelope(particleLife, flameStrength);
-    vec2 offset;
-    if (spark) {
-        vec2 sparkRandoms = vec2(particleRandom,
-                randomSigned(phaseWord, particleIndex + SPARK_PARTICLE_COUNT, generation));
-        offset = sparkOffset(elapsed, sparkRandoms, phaseWord);
-    } else {
-        float sway = anchoredCore ? 0.0
-                : lateralSway(particleLife, particleRandom, flameStrength);
-        float rise = anchoredCore ? 0.0
-                : elapsed * riseDistance(flameStrength);
-        offset = vec2((particleRandom * 0.04 + sway) * scale * widthEnvelope, rise);
-    }
-    float visibleRadius = particleLayer == 2 ? 0.22
-            : (particleLayer == 3 ? GLOW_BODY_RADIUS : (spark ? 0.50 : 0.36));
-    float baseGap = particleLayer == 1 ? 0.08
-            : (particleLayer == 2 ? 0.18
-            : (particleLayer == 3 ? 0.12 : (spark ? 0.03 : 0.0)));
-    float anchorRadius = particleLayer == 3
-            ? visibleRadius : quadScale * visibleRadius;
-    vec2 aspect = spark ? SPARK_ASPECT : PARTICLE_ASPECT;
-    offset.y += size * aspect.y * (anchorRadius + baseGap);
-    vec2 quadOffset = (localCoord - 0.5) * size * aspect * quadScale;
-    quadOffset.x *= widthEnvelope;
-    viewPosition.xy += (offset + quadOffset) * viewportScale;
-    particleOpacity = spark
-            ? 1.0 - smoothRange(SPARK_FADE_START, SPARK_FADE_END, distanceToCamera)
-            : (smokePass
-            ? 1.0 - smoothRange(SMOKE_FADE_START, SMOKE_FADE_END, distanceToCamera)
-            : 1.0);
+    float scale = pixelWorldSize(strength)
+            * flameViewportScale(viewPosition, flameHeight(strength));
+    vec2 center = snapToPixelGrid(particle.center, particle.pixels);
+    viewPosition.xy += (center + (localCoord - 0.5) * particle.pixels) * scale;
+    vertexColor = vec4(particle.color.rgb, particle.color.a * vertexColor.a);
+    particlePixels = particle.pixels;
     gl_Position = ProjMat * viewPosition;
 }
 void main() {
@@ -419,15 +465,11 @@ void main() {
     primitiveKind = label ? 1 : 0;
     labelValue = 0;
     labelChars = 0;
-    flameStrength = marker.packedStrength / StrengthWordScale;
-    particleRandom = 0.0;
-    particleLayer = 0;
-    particleOpacity = 1.0;
-    particleLife = 0.0;
+    particlePixels = 1.0;
     if (label) {
         renderLabelVertex(viewPosition, distanceToCamera, marker);
         return;
     }
-    renderParticleVertex(viewPosition, distanceToCamera,
-            ParticleStart + slot, marker.phaseWord);
+    renderParticleVertex(viewPosition, distanceToCamera, ParticleStart + slot, marker,
+            marker.packedStrength / StrengthWordScale);
 }

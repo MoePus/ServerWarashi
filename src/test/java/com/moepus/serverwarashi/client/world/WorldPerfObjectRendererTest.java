@@ -23,40 +23,24 @@ class WorldPerfObjectRendererTest {
     }
 
     @Test
-    void drawsGpuParticlesInFiveBatchesWithOrangeReusedForSmoke() {
+    void drawsFlameSquaresThenSparksThenLabels() {
         assertEquals(PerfReportLimits.MAX_WORLD_HOTSPOT_ENTRIES,
                 WorldPerfObjectBuffers.MAX_MARKER_COUNT);
         assertEquals(4, WorldPerfObjectBuffers.TEXELS_PER_MARKER);
         assertEquals(2, WorldPerfObjectBuffers.Source.values().length);
         assertArrayEquals(new WorldPerfObjectBuffers.Batch[]{
-                        WorldPerfObjectBuffers.Batch.SMOKE,
-                        WorldPerfObjectBuffers.Batch.NORMAL,
-                        WorldPerfObjectBuffers.Batch.GLOW,
+                        WorldPerfObjectBuffers.Batch.FLAME,
                         WorldPerfObjectBuffers.Batch.SPARK,
                         WorldPerfObjectBuffers.Batch.LABEL
                 }, WorldPerfObjectBuffers.Batch.values());
-        assertEquals(40, WorldPerfObjectBuffers.Batch.SMOKE.instancesFor(2));
-        assertEquals(128, WorldPerfObjectBuffers.Batch.NORMAL.instancesFor(2));
-        assertEquals(32, WorldPerfObjectBuffers.Batch.GLOW.instancesFor(2));
-        assertEquals(128, WorldPerfObjectBuffers.Batch.SPARK.instancesFor(2));
+        assertEquals(128, WorldPerfObjectBuffers.Batch.FLAME.instancesFor(2));
+        assertEquals(24, WorldPerfObjectBuffers.Batch.SPARK.instancesFor(2));
         assertEquals(2, WorldPerfObjectBuffers.Batch.LABEL.instancesFor(2));
-        assertEquals(24, WorldPerfObjectBuffers.Batch.SMOKE.particleStart());
-        assertEquals(64, WorldPerfObjectBuffers.Batch.GLOW.particleStart());
-        assertEquals(80, WorldPerfObjectBuffers.Batch.SPARK.particleStart());
-    }
-
-    @Test
-    void compositesBodyWithPremultipliedAlphaAndEmissionAdditively() {
-        assertEquals(WorldPerfObjectBuffers.BlendMode.PREMULTIPLIED,
-                WorldPerfObjectBuffers.Batch.SMOKE.blendMode());
-        assertEquals(WorldPerfObjectBuffers.BlendMode.PREMULTIPLIED,
-                WorldPerfObjectBuffers.Batch.NORMAL.blendMode());
-        assertEquals(WorldPerfObjectBuffers.BlendMode.ADDITIVE,
-                WorldPerfObjectBuffers.Batch.GLOW.blendMode());
-        assertEquals(WorldPerfObjectBuffers.BlendMode.ADDITIVE,
-                WorldPerfObjectBuffers.Batch.SPARK.blendMode());
-        assertEquals(WorldPerfObjectBuffers.BlendMode.PREMULTIPLIED,
-                WorldPerfObjectBuffers.Batch.LABEL.blendMode());
+        assertEquals(0, WorldPerfObjectBuffers.Batch.FLAME.particleStart());
+        assertEquals(64, WorldPerfObjectBuffers.Batch.SPARK.particleStart());
+        assertEquals(0, WorldPerfObjectBuffers.Batch.FLAME.renderPass());
+        assertEquals(1, WorldPerfObjectBuffers.Batch.SPARK.renderPass());
+        assertEquals(2, WorldPerfObjectBuffers.Batch.LABEL.renderPass());
     }
 
     @Test

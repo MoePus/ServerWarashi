@@ -6,17 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WorldFlameParticleLayoutTest {
     @Test
-    void reservesOneHundredFortyFourSlotsWithSparksAsTheLargestLayer() {
-        assertEquals(24, WorldFlameParticleLayout.RED_PARTICLE_COUNT);
-        assertEquals(20, WorldFlameParticleLayout.ORANGE_PARTICLE_COUNT);
-        assertEquals(20, WorldFlameParticleLayout.YELLOW_PARTICLE_COUNT);
-        assertEquals(16, WorldFlameParticleLayout.GLOW_PARTICLE_COUNT);
-        assertEquals(64, WorldFlameParticleLayout.SPARK_PARTICLE_COUNT);
-        assertEquals(24, WorldFlameParticleLayout.ORANGE_PARTICLE_START);
-        assertEquals(44, WorldFlameParticleLayout.YELLOW_PARTICLE_START);
-        assertEquals(64, WorldFlameParticleLayout.GLOW_PARTICLE_START);
-        assertEquals(80, WorldFlameParticleLayout.SPARK_PARTICLE_START);
-        assertEquals(64, WorldFlameParticleLayout.NORMAL_PARTICLE_COUNT);
+    void reservesSixtyFourFlameSlotsFollowedByTwelveSparks() {
+        assertEquals(24, WorldFlameParticleLayout.OUTER_PARTICLE_COUNT);
+        assertEquals(20, WorldFlameParticleLayout.BODY_PARTICLE_COUNT);
+        assertEquals(20, WorldFlameParticleLayout.CORE_PARTICLE_COUNT);
+        assertEquals(12, WorldFlameParticleLayout.SPARK_PARTICLE_COUNT);
+        assertEquals(24, WorldFlameParticleLayout.BODY_PARTICLE_START);
+        assertEquals(44, WorldFlameParticleLayout.CORE_PARTICLE_START);
+        assertEquals(64, WorldFlameParticleLayout.SPARK_PARTICLE_START);
+        assertEquals(64, WorldFlameParticleLayout.FLAME_PARTICLE_COUNT);
     }
 
     @Test

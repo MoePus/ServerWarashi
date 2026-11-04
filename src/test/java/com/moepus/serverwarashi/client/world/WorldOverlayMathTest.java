@@ -77,6 +77,5 @@ class WorldOverlayMathTest {
     void atlasContainsEveryShaderGlyphCell() {
         assertEquals(17 * 16, WorldGlyphAtlas.atlasWidth());
         assertEquals(12.0F, WorldPerfObjectRenderer.LABEL_PIXELS);
-        assertEquals(64, WorldFlameNoiseTexture.SIZE);
     }
 }

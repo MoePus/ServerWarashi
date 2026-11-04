@@ -53,6 +53,9 @@ class WorldPerfShaderResourceTest {
         assertEquals("Position", root.getAsJsonArray("attributes").get(0).getAsString());
         assertEquals(1, root.getAsJsonArray("attributes").size());
         assertTrue(hasSampler(root, "MarkerData"));
+        assertTrue(hasSampler(root, "Sampler0"));
+        assertFalse(hasSampler(root, "Sampler1"));
+        assertFalse(hasUniform(root, "AnimationTime"));
     }
 
     @Test
@@ -68,101 +71,69 @@ class WorldPerfShaderResourceTest {
         assertTrue(vertex.contains("ParticleStart + slot"));
         assertTrue(vertex.contains("mix(marker.previousPosition, marker.position"));
         assertTrue(vertex.contains("clamp(PartialTick, 0.0, 1.0)"));
-        assertEquals(WorldFlameParticleLayout.RED_PARTICLE_COUNT,
-                shaderIntConstant(vertex, "RED_PARTICLE_COUNT"));
-        assertEquals(WorldFlameParticleLayout.ORANGE_PARTICLE_COUNT,
-                shaderIntConstant(vertex, "ORANGE_PARTICLE_COUNT"));
-        assertEquals(WorldFlameParticleLayout.YELLOW_PARTICLE_COUNT,
-                shaderIntConstant(vertex, "YELLOW_PARTICLE_COUNT"));
-        assertEquals(WorldFlameParticleLayout.GLOW_PARTICLE_COUNT,
-                shaderIntConstant(vertex, "GLOW_PARTICLE_COUNT"));
+        assertEquals(WorldFlameParticleLayout.OUTER_PARTICLE_COUNT,
+                shaderIntConstant(vertex, "OUTER_PARTICLE_COUNT"));
+        assertEquals(WorldFlameParticleLayout.BODY_PARTICLE_COUNT,
+                shaderIntConstant(vertex, "BODY_PARTICLE_COUNT"));
+        assertEquals(WorldFlameParticleLayout.CORE_PARTICLE_COUNT,
+                shaderIntConstant(vertex, "CORE_PARTICLE_COUNT"));
         assertEquals(WorldFlameParticleLayout.SPARK_PARTICLE_COUNT,
                 shaderIntConstant(vertex, "SPARK_PARTICLE_COUNT"));
-        assertTrue(vertex.contains("float slotInterval = cycle / float(layerCapacity(layer));"));
-        assertTrue(vertex.contains("ParticleEpoch * cyclesPerParticlePeriod(layer)"));
+        assertEquals(WorldPerfObjectBuffers.Batch.FLAME.renderPass(),
+                shaderIntConstant(vertex, "FLAME_PASS"));
+        assertEquals(WorldPerfObjectBuffers.Batch.SPARK.renderPass(),
+                shaderIntConstant(vertex, "SPARK_PASS"));
+        assertEquals(WorldPerfObjectBuffers.Batch.LABEL.renderPass(),
+                shaderIntConstant(vertex, "LABEL_PASS"));
+        assertTrue(vertex.contains("int(window) + ParticleEpoch * cyclesPerPeriod"));
         assertFalse(vertex.contains("in ivec2 UV2;"));
         assertFalse(vertex.contains("particleIndex * ParticlePhaseBase"));
     }
 
     @Test
-    void objectShaderAppliesLodEnvelopeAndCoherentPlumeSparks() throws Exception {
+    void objectShaderDrawsGridSnappedPixelSquaresWithDistanceLod() throws Exception {
         String vertex = resource("world_perf_object.vsh");
-        String fragment = resource("world_perf_object.fsh");
         assertEquals(16.0D, shaderFloatConstant(vertex, "PARTICLE_LOD_START"));
         assertEquals(32.0D, shaderFloatConstant(vertex, "PARTICLE_LOD_END"));
         assertEquals(WorldOverlayMath.SPARK_FADE_START,
                 shaderFloatConstant(vertex, "SPARK_FADE_START"));
         assertEquals(WorldOverlayMath.SPARK_FADE_END,
                 shaderFloatConstant(vertex, "SPARK_FADE_END"));
-        assertEquals(24.0D, shaderFloatConstant(vertex, "SMOKE_FADE_START"));
-        assertEquals(32.0D, shaderFloatConstant(vertex, "SMOKE_FADE_END"));
-        assertTrue(vertex.contains("const float MIN_RED_COUNT = 16.0;"));
-        assertTrue(vertex.contains("const float MIN_ORANGE_COUNT = 14.0;"));
-        assertTrue(vertex.contains("const float MIN_YELLOW_COUNT = 14.0;"));
-        assertTrue(vertex.contains("const float MIN_GLOW_COUNT = 10.0;"));
-        assertTrue(vertex.contains("const float MIN_SPARK_COUNT = 10.0;"));
-        assertEquals(4.0D, shaderFloatConstant(vertex, "FAR_RED_COUNT"));
-        assertEquals(3.0D, shaderFloatConstant(vertex, "FAR_ORANGE_COUNT"));
-        assertEquals(3.0D, shaderFloatConstant(vertex, "FAR_YELLOW_COUNT"));
-        assertEquals(1.0D, shaderFloatConstant(vertex, "FAR_GLOW_COUNT"));
+        assertEquals(16.0D, shaderFloatConstant(vertex, "MIN_OUTER_COUNT"));
+        assertEquals(14.0D, shaderFloatConstant(vertex, "MIN_BODY_COUNT"));
+        assertEquals(14.0D, shaderFloatConstant(vertex, "MIN_CORE_COUNT"));
+        assertEquals(3.0D, shaderFloatConstant(vertex, "MIN_SPARK_COUNT"));
+        assertEquals(4.0D, shaderFloatConstant(vertex, "FAR_OUTER_COUNT"));
+        assertEquals(3.0D, shaderFloatConstant(vertex, "FAR_BODY_COUNT"));
+        assertEquals(3.0D, shaderFloatConstant(vertex, "FAR_CORE_COUNT"));
         assertTrue(vertex.contains("float fastLod = 1.0 - (1.0 - lodAmount)"));
         assertTrue(vertex.contains("nearCount * sparkRemaining * sparkRemaining"));
-        assertTrue(vertex.contains("distanceToCamera >= SMOKE_FADE_END"));
-        assertTrue(vertex.indexOf("!selectedParticleSlot")
-                < vertex.indexOf("bool alive = particleState"));
-        assertTrue(vertex.contains("const vec2 SPARK_COUNT_RAMP = vec2(3.50, 5.0);"));
-        assertTrue(vertex.contains("const float GREEN_BASE_WIDTH = 1.5;"));
-        assertTrue(vertex.contains("const float GREEN_TIP_WIDTH = 0.8;"));
-        assertTrue(vertex.contains("const float PURPLE_BASE_WIDTH = 2.4;"));
-        assertTrue(vertex.contains("const float PURPLE_TIP_WIDTH = 1.0;"));
-        assertTrue(vertex.contains("float flameWidthEnvelope("));
-        assertTrue(vertex.contains("float widthEnvelope = spark ? 1.0"));
-        assertTrue(vertex.contains("const vec2 SPARK_ASPECT = vec2(1.0, 1.0);"));
-        assertTrue(vertex.contains("const float SPARK_CYCLE = 1.40;"));
-        assertTrue(vertex.contains("const float SPARK_LIFETIME = 0.90;"));
-        assertTrue(vertex.contains("const int SPARK_BURST_COUNT = 4;"));
-        assertTrue(vertex.contains("const int SPARKS_PER_BURST = 16;"));
-        assertTrue(vertex.contains("const int SPARK_CYCLES_PER_PERIOD = 5;"));
-        assertEquals(WorldFlameParticleLayout.SPARK_PARTICLE_COUNT,
-                shaderIntConstant(vertex, "SPARK_BURST_COUNT")
-                        * shaderIntConstant(vertex, "SPARKS_PER_BURST"));
-        assertTrue(vertex.contains("float sparkPlumeCenter("));
-        assertTrue(vertex.contains("float sparkSlotOffset("));
-        assertTrue(vertex.contains("SPARK_PLUME_TEMPORAL_HARMONICS"));
-        assertTrue(vertex.contains("SPARK_PLUME_WEIGHTS"));
-        assertTrue(vertex.contains("SPARK_EMITTER_HALF_WIDTH_RANGE"));
-        assertTrue(vertex.contains("SPARK_PLUME_SPREAD_RANGE"));
-        assertTrue(vertex.contains("SPARK_SPREAD_LIFE_EXPONENT"));
-        assertTrue(vertex.contains("offset = sparkOffset("));
-        assertFalse(vertex.contains("brownianMotion"));
-        assertFalse(vertex.contains("SPARK_BROWNIAN"));
-        assertTrue(fragment.contains("void renderSparkParticle()"));
-        assertTrue(fragment.contains("if (particleLayer == 4)"));
-        assertTrue(fragment.contains("const float SPARK_CORE_RADIUS = 0.20;"));
-        assertTrue(fragment.contains("const float SPARK_HALO_ENERGY = 0.03;"));
-        assertTrue(fragment.contains("const float SPARK_WHITE_MIX = 0.72;"));
-        assertTrue(fragment.contains("fragColor = vec4(sparkColor * energy, 0.0)"));
+        // LOD culling happens before any per-particle hashing or motion.
+        assertTrue(vertex.indexOf("if (!selectedParticleSlot(")
+                < vertex.indexOf("if (!emitParticle("));
+        // One flame pixel at the lowest severity is one block texel.
+        assertTrue(vertex.contains("const vec2 PIXEL_WORLD_SIZE = vec2(0.0625, "));
+        assertEquals(1.0D, shaderFloatConstant(vertex, "PIXEL_SNAP"));
+        // Squares scale equally on both axes, so they are never stretched.
+        assertTrue(vertex.contains("(center + (localCoord - 0.5) * particle.pixels) * scale"));
+        assertTrue(vertex.contains("vec2 corner = floor(center - pixels * 0.5 + 0.5);"));
+        assertTrue(vertex.contains("if (temperature < BURNOUT_TEMPERATURE)"));
     }
 
     @Test
-    void objectFragmentKeepsSmokeAndSdfGlowContracts() throws Exception {
+    void objectFragmentDrawsFlatPremultipliedSquares() throws Exception {
         String fragment = resource("world_perf_object.fsh");
-        assertTrue(fragment.contains("struct ParticleShape"));
-        assertTrue(fragment.contains("ParticleShape particleShape("));
-        assertTrue(fragment.contains("void renderGlowParticle("));
-        assertTrue(fragment.contains("void renderSmokeParticle("));
-        assertTrue(fragment.contains("vec3 graySmoke = vec3(0.285, 0.290, 0.295);"));
-        assertTrue(fragment.contains("fragColor = vec4(smokeColor * alpha, alpha)"));
-        assertTrue(fragment.contains("const float CORE_GLOW_ENERGY = 0.09;"));
-        assertTrue(fragment.contains("exp2(-NEAR_GLOW_FALLOFF * outsideDistance)"));
-        assertTrue(fragment.contains("exp2(-FAR_GLOW_FALLOFF * outsideDistance)"));
-        assertTrue(fragment.contains("smoothstep(0.42, 0.50, quadRadius)"));
-        assertFalse(fragment.contains("radialHalo"));
-        assertFalse(fragment.contains("float severity()"));
+        assertTrue(fragment.contains("void renderParticle()"));
+        assertTrue(fragment.contains("const float CHIP_CORNERS_FROM = 4.0;"));
+        assertTrue(fragment.contains("fragColor = vec4(vertexColor.rgb * alpha, alpha);"));
+        assertFalse(fragment.contains("Sampler1"));
+        assertFalse(fragment.contains("AnimationTime"));
+        assertFalse(fragment.contains("renderGlowParticle"));
+        assertFalse(fragment.contains("renderSmokeParticle"));
     }
 
     @Test
-    void objectGlowDoesNotDeclareAPostProcess() {
+    void objectOverlayDoesNotDeclareAPostProcess() {
         assertNull(WorldPerfShaderResourceTest.class.getResource(
                 "/assets/serverwarashi/shaders/post/world_perf_bloom.json"));
     }
@@ -183,6 +154,15 @@ class WorldPerfShaderResourceTest {
     private static boolean hasSampler(JsonObject root, String name) {
         for (var sampler : root.getAsJsonArray("samplers")) {
             if (name.equals(sampler.getAsJsonObject().get("name").getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasUniform(JsonObject root, String name) {
+        for (var uniform : root.getAsJsonArray("uniforms")) {
+            if (name.equals(uniform.getAsJsonObject().get("name").getAsString())) {
                 return true;
             }
         }

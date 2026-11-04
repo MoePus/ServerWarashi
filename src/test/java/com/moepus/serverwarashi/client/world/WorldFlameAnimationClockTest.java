@@ -8,21 +8,12 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldFlameAnimationClockTest {
     @Test
-    void sevenSecondWrapIsContinuousForEveryShaderParticleCycle() throws IOException {
+    void sevenSecondWrapIsContinuousForEveryShaderEmissionCadence() throws IOException {
         String shader = shader();
-        float defaultCycle = shaderFloat(shader, "DEFAULT_PARTICLE_CYCLE");
-        float fastSpeed = shaderFloat(shader, "FAST_PARTICLE_SPEED");
-        Cycle red = new Cycle(1.0F, defaultCycle,
-                shaderInt(shader, "RED_CYCLES_PER_PERIOD"));
-        Cycle orange = new Cycle(1.0F, shaderFloat(shader, "ORANGE_PARTICLE_CYCLE"),
-                shaderInt(shader, "ORANGE_CYCLES_PER_PERIOD"));
-        Cycle fast = new Cycle(fastSpeed, defaultCycle,
-                shaderInt(shader, "FAST_CYCLES_PER_PERIOD"));
-        Cycle spark = new Cycle(1.0F, shaderFloat(shader, "SPARK_CYCLE"),
-                shaderInt(shader, "SPARK_CYCLES_PER_PERIOD"));
         WorldFlameAnimationClock.Snapshot before = WorldFlameAnimationClock.sample(139L, 1.0F);
         WorldFlameAnimationClock.Snapshot after = WorldFlameAnimationClock.sample(140L, 0.0F);
 
@@ -32,23 +23,29 @@ class WorldFlameAnimationClockTest {
         assertEquals(0.0F, after.particleSeconds());
         assertEquals(0, before.particleEpoch());
         assertEquals(1, after.particleEpoch());
-        assertEquals(generation(before, red), generation(after, red));
-        assertEquals(generation(before, orange), generation(after, orange));
-        assertEquals(generation(before, fast), generation(after, fast));
-        assertEquals(generation(before, spark), generation(after, spark));
+        // emitParticle derives every cycle from the period, so any whole cycle count wraps cleanly.
+        assertTrue(shader.contains(
+                "float cycle = PARTICLE_CLOCK_PERIOD / float(cyclesPerPeriod);"));
+        assertTrue(shader.contains("int(window) + ParticleEpoch * cyclesPerPeriod"));
+        int sparkMinimum = shaderInt(shader, "SPARK_MIN_CYCLES_PER_PERIOD");
+        int sparkVariants = shaderInt(shader, "SPARK_CYCLE_VARIANTS");
+        int[] cadences = {
+                shaderInt(shader, "OUTER_CYCLES_PER_PERIOD"),
+                shaderInt(shader, "BODY_CYCLES_PER_PERIOD"),
+                shaderInt(shader, "CORE_CYCLES_PER_PERIOD"),
+                sparkMinimum,
+                sparkMinimum + sparkVariants - 1
+        };
+        for (int cyclesPerPeriod : cadences) {
+            assertEquals(generation(before, cyclesPerPeriod), generation(after, cyclesPerPeriod),
+                    "cycles per period " + cyclesPerPeriod);
+        }
     }
 
-    @Test
-    void keepsNoiseOnItsIndependentTwentyMinuteClock() {
-        assertEquals(1_199.95F,
-                WorldFlameAnimationClock.sample(23_999L, 0.0F).noiseSeconds(), 0.001F);
-        assertEquals(0.0F,
-                WorldFlameAnimationClock.sample(24_000L, 0.0F).noiseSeconds());
-    }
-
-    private static int generation(WorldFlameAnimationClock.Snapshot clock, Cycle cycle) {
-        return (int) Math.floor(clock.particleSeconds() * cycle.speed() / cycle.duration())
-                + clock.particleEpoch() * cycle.cyclesPerPeriod();
+    private static int generation(WorldFlameAnimationClock.Snapshot clock, int cyclesPerPeriod) {
+        float cycle = WorldFlameAnimationClock.PARTICLE_PERIOD_TICKS / 20.0F / cyclesPerPeriod;
+        return (int) Math.floor(clock.particleSeconds() / cycle)
+                + clock.particleEpoch() * cyclesPerPeriod;
     }
 
     private static String shader() throws IOException {
@@ -76,8 +73,5 @@ class WorldFlameAnimationClockTest {
             throw new AssertionError("Missing shader constant " + name);
         }
         return matcher.group(1);
-    }
-
-    private record Cycle(float speed, float duration, int cyclesPerPeriod) {
     }
 }

@@ -27,9 +27,7 @@ import java.util.List;
 final class WorldPerfObjectRenderer {
     private static final long STATIC_REFRESH_TICKS = 20L;
     private static final WorldPerfObjectBuffers.Batch[] DRAW_ORDER = {
-            WorldPerfObjectBuffers.Batch.SMOKE,
-            WorldPerfObjectBuffers.Batch.NORMAL,
-            WorldPerfObjectBuffers.Batch.GLOW,
+            WorldPerfObjectBuffers.Batch.FLAME,
             WorldPerfObjectBuffers.Batch.SPARK,
             WorldPerfObjectBuffers.Batch.LABEL
     };
@@ -245,9 +243,7 @@ final class WorldPerfObjectRenderer {
     private void draw(RenderLevelStageEvent event, ShaderInstance shader) {
         Minecraft minecraft = Minecraft.getInstance();
         int previousGlyphTexture = RenderSystem.getShaderTexture(0);
-        int previousNoiseTexture = RenderSystem.getShaderTexture(1);
         RenderSystem.setShaderTexture(0, WorldGlyphAtlas.textureId());
-        RenderSystem.setShaderTexture(1, WorldFlameNoiseTexture.textureId());
         setFrameUniforms(event, shader, minecraft);
         RenderSystem.enableBlend();
         RenderSystem.disableDepthTest();
@@ -261,7 +257,6 @@ final class WorldPerfObjectRenderer {
             RenderSystem.defaultBlendFunc();
             RenderSystem.disableBlend();
             RenderSystem.setShaderTexture(0, previousGlyphTexture);
-            RenderSystem.setShaderTexture(1, previousNoiseTexture);
         }
     }
 
@@ -303,7 +298,6 @@ final class WorldPerfObjectRenderer {
         long gameTime = minecraft.level == null ? 0L : minecraft.level.getGameTime();
         WorldFlameAnimationClock.Snapshot clock = WorldFlameAnimationClock.sample(
                 gameTime, event.getPartialTick().getGameTimeDeltaPartialTick(false));
-        shader.safeGetUniform("AnimationTime").set(clock.noiseSeconds());
         shader.safeGetUniform("ParticleTime").set(clock.particleSeconds());
         shader.safeGetUniform("ParticleEpoch").set(clock.particleEpoch());
     }

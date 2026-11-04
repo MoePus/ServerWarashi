@@ -103,10 +103,18 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
         ShaderInstance shader = context.shader();
         setDrawUniforms(batch, context, markerBase);
         shader.setSampler("Sampler0", RenderSystem.getShaderTexture(0));
-        shader.setSampler("Sampler1", RenderSystem.getShaderTexture(1));
         shader.apply();
-        batch.applyBlend();
+        applyPremultipliedBlend();
         drawInstances(target, shader, batch.instancesFor(drawMarkerCount));
+    }
+
+    /** Pixel squares and labels all composite as premultiplied alpha. */
+    private static void applyPremultipliedBlend() {
+        RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
     }
 
     private void drawInstances(MarkerBuffer target, ShaderInstance shader, int instanceCount) {
@@ -293,26 +301,19 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
     }
 
     enum Batch {
-        SMOKE(2, WorldFlameParticleLayout.ORANGE_PARTICLE_START,
-                WorldFlameParticleLayout.ORANGE_PARTICLE_COUNT, BlendMode.PREMULTIPLIED),
-        NORMAL(0, 0, WorldFlameParticleLayout.NORMAL_PARTICLE_COUNT,
-                BlendMode.PREMULTIPLIED),
-        GLOW(1, WorldFlameParticleLayout.GLOW_PARTICLE_START,
-                WorldFlameParticleLayout.GLOW_PARTICLE_COUNT, BlendMode.ADDITIVE),
-        SPARK(4, WorldFlameParticleLayout.SPARK_PARTICLE_START,
-                WorldFlameParticleLayout.SPARK_PARTICLE_COUNT, BlendMode.ADDITIVE),
-        LABEL(3, 0, 1, BlendMode.PREMULTIPLIED);
+        FLAME(0, 0, WorldFlameParticleLayout.FLAME_PARTICLE_COUNT),
+        SPARK(1, WorldFlameParticleLayout.SPARK_PARTICLE_START,
+                WorldFlameParticleLayout.SPARK_PARTICLE_COUNT),
+        LABEL(2, 0, 1);
 
         private final int renderPass;
         private final int particleStart;
         private final int slotsPerMarker;
-        private final BlendMode blendMode;
 
-        Batch(int renderPass, int particleStart, int slotsPerMarker, BlendMode blendMode) {
+        Batch(int renderPass, int particleStart, int slotsPerMarker) {
             this.renderPass = renderPass;
             this.particleStart = particleStart;
             this.slotsPerMarker = slotsPerMarker;
-            this.blendMode = blendMode;
         }
 
         int instancesFor(int markers) {
@@ -329,32 +330,6 @@ final class WorldPerfObjectBuffers implements AutoCloseable {
 
         int slotsPerMarker() {
             return slotsPerMarker;
-        }
-
-        BlendMode blendMode() {
-            return blendMode;
-        }
-
-        private void applyBlend() {
-            blendMode.apply();
-        }
-    }
-
-    enum BlendMode {
-        PREMULTIPLIED(GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA),
-        ADDITIVE(GlStateManager.DestFactor.ONE);
-
-        private final GlStateManager.DestFactor colorDestination;
-
-        BlendMode(GlStateManager.DestFactor colorDestination) {
-            this.colorDestination = colorDestination;
-        }
-
-        private void apply() {
-            RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
-            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, colorDestination,
-                    GlStateManager.SourceFactor.ONE,
-                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
         }
     }
 
